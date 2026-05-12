@@ -41,9 +41,10 @@
     {% endfor %}
 
     <div class="sticky-panel" style="position:sticky; bottom:0; z-index:10; background: rgba(255,255,255,0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-                border-top-left-radius: 20px; border-top-right-radius: 20px;
-                padding: 1rem 0;
-                box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
+                border-radius: 20px;                            /* полное скругление */
+                margin: 0 0.5rem 0.5rem 0.5rem;                /* отступы от краёв экрана */
+                padding: 1rem 1.5rem;                           /* больше воздуха внутри */
+                box-shadow: 0 -4px 12px rgba(0,0,0,0.08);      /* чуть выразительнее тень */
                 transition: all 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
                 display:flex; justify-content:space-between; align-items:center;">
       <div style="display: flex; gap: 0.8rem;">
@@ -58,7 +59,7 @@
       </div>
       <a href="{{ url_for('client_briefs', client_id=brief.client_id) }}" class="btn btn-secondary">Назад</a>
     </div>
-    </form>  <!-- ВАЖНО: закрывающий тег формы -->
+    </form>  
   
   <script>
   (function() {
