@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Новый клиент{% endblock %}
+{% block content %}
+<h2 class="mb-4">+ Добавить клиента</h2>
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+            <div class="mb-3">
+                <label for="name" class="form-label">Название компании / ИП / Самозанятый</label>
+                <input type="text" class="form-control" id="name" name="name" required autofocus>
+            </div>
+            <button type="submit" class="btn btn-primary">Создать</button>
+            <a href="{{ url_for('index') }}" class="btn btn-link text-muted">Отмена</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

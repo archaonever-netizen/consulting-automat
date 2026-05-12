@@ -1,0 +1,25 @@
+# models.py
+from flask_sqlalchemy import SQLAlchemy
+from datetime import datetime
+
+db = SQLAlchemy()
+
+class Client(db.Model):
+    """Модель для хранения информации о клиенте."""
+    __tablename__ = 'clients'
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    briefs = db.relationship('Brief', backref='client', lazy=True, cascade="all, delete-orphan")
+
+class Brief(db.Model):
+    """Модель для хранения данных анкет из блока 'Входной брифинг'."""
+    __tablename__ = 'briefs'
+    id = db.Column(db.Integer, primary_key=True)
+    brief_type = db.Column(db.String(50), nullable=False)  # 'briefing', 'point_a', 'docs'
+    status = db.Column(db.String(20), default='Не заполнено')  # 'Не заполнено', 'В работе', 'Заполнено'
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # Здесь будут храниться ответы на анкету в формате JSON
+    answers = db.Column(db.JSON, nullable=True)
