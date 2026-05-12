@@ -58,4 +58,26 @@
       </div>
       <a href="{{ url_for('client_briefs', client_id=brief.client_id) }}" class="btn btn-secondary">Назад</a>
     </div>
+    </form>  <!-- ВАЖНО: закрывающий тег формы -->
+  
+  <script>
+  (function() {
+    const panel = document.querySelector('.sticky-panel');
+    if (!panel) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.intersectionRatio < 1) {
+          panel.classList.add('is-floating');
+        } else {
+          panel.classList.remove('is-floating');
+        }
+      },
+      { threshold: [0, 1] }
+    );
+
+    observer.observe(panel);
+  })();
+  </script>
+{% endblock %}
 {% endblock %}
