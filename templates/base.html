@@ -51,5 +51,40 @@
 
   <!-- JavaScript -->
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <!-- Модальное окно подтверждения удаления -->
+  <div id="deleteModal" class="modal-overlay" style="display: none;">
+    <div class="modal-card">
+      <h3 class="modal-title">Подтверждение удаления</h3>
+      <p class="modal-text" id="deleteModalMessage"></p>
+      <div class="modal-actions">
+        <form id="deleteForm" method="POST" action="">
+          <button type="button" class="btn btn-secondary" onclick="closeDeleteModal()">Отмена</button>
+          <button type="submit" class="btn btn-danger">Удалить</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Скрипт для модального окна -->
+  <script>
+    function showDeleteModal(clientId, clientName) {
+      const modal = document.getElementById('deleteModal');
+      const message = document.getElementById('deleteModalMessage');
+      const form = document.getElementById('deleteForm');
+      message.textContent = 'Вы точно уверены, что хотите удалить клиента «' + clientName + '»?';
+      form.action = '/client/' + clientId + '/delete';
+      modal.style.display = 'flex';
+    }
+    function closeDeleteModal() {
+      document.getElementById('deleteModal').style.display = 'none';
+    }
+    // Закрытие по клику вне карточки
+    window.addEventListener('click', function(e) {
+      const modal = document.getElementById('deleteModal');
+      if (e.target === modal) {
+        modal.style.display = 'none';
+      }
+    });
+  </script>
 </body>
 </html>
