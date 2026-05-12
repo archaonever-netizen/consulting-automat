@@ -8,7 +8,7 @@
 }
 
 :root {
-  /* Цвета */
+  /* Цвета – без изменений */
   --bg: #F5F5F7;
   --card-bg: #FFFFFF;
   --text-primary: #1D1D1F;
@@ -36,8 +36,17 @@
   --transition: all 0.2s cubic-bezier(0.2, 0.9, 0.4, 1);
   --transition-spring: all 0.4s cubic-bezier(0.2, 0.9, 0.4, 1);
 
-  /* Типографика */
-  --font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* === НОВАЯ ТИПОГРАФИКА === */
+  --font-display: 'Manrope', sans-serif;   /* заголовки */
+  --font-body: 'Inter', sans-serif;        /* текст, UI */
+
+  /* Масштабы (desktop) */
+  --text-hero: 5rem;        /* ~80px */
+  --text-h1: 3.5rem;        /* 56px */
+  --text-h2: 2.5rem;        /* 40px */
+  --text-h3: 1.75rem;       /* 28px */
+  --text-body: 1.125rem;    /* 18px */
+  --text-small: 0.875rem;   /* 14px */
 }
 
 html {
@@ -47,12 +56,69 @@ html {
 }
 
 body {
-  font-family: var(--font);
+  font-family: var(--font-body);
   background-color: var(--bg);
   color: var(--text-primary);
-  line-height: 1.5;
+  line-height: 1.65;
+  letter-spacing: -0.01em;
   min-height: 100vh;
 }
+
+/* === Заголовки === */
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+  line-height: 0.95;
+  margin-bottom: 0.5em;
+}
+
+h1 { font-size: var(--text-h1); }
+h2 { font-size: var(--text-h2); }
+h3 { font-size: var(--text-h3); }
+
+/* Hero-заголовок (для главной) */
+.hero-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--text-hero);
+  line-height: 0.9;
+  letter-spacing: -0.05em;
+  margin-bottom: 0.3em;
+}
+
+/* Заголовок страницы */
+.page-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: var(--text-h1);
+  letter-spacing: -0.04em;
+  line-height: 1.0;
+  margin-bottom: 0.5rem;
+}
+
+/* Подзаголовок */
+.section-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: var(--text-h2);
+  letter-spacing: -0.03em;
+}
+
+/* Базовый текст */
+p, .body-text {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+.small-text {
+  font-size: var(--text-small);
+  color: var(--text-secondary);
+}
+
+/* === Остальные компоненты (без изменений) === */
 
 img, svg {
   display: block;
@@ -83,13 +149,6 @@ a:hover {
   margin-bottom: 2rem;
 }
 
-.page-title {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  letter-spacing: -0.02em;
-}
-
 /* === Карточка === */
 .card {
   background: var(--card-bg);
@@ -104,7 +163,6 @@ a:hover {
   transform: translateY(-2px);
 }
 
-/* Сетка карточек */
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -130,6 +188,7 @@ a:hover {
   text-decoration: none;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
+  font-family: var(--font-body);
 }
 
 .btn:active {
@@ -204,6 +263,7 @@ a:hover {
   font-weight: 500;
   font-size: 0.9rem;
   color: var(--text-secondary);
+  font-family: var(--font-body);
 }
 
 .form-input,
@@ -214,7 +274,7 @@ a:hover {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 1rem;
-  font-family: var(--font);
+  font-family: var(--font-body);
   background: var(--card-bg);
   color: var(--text-primary);
   transition: var(--transition);
@@ -244,6 +304,7 @@ a:hover {
   font-weight: 600;
   color: white;
   background: var(--accent);
+  font-family: var(--font-body);
 }
 .badge.success {
   background: var(--success);
@@ -278,6 +339,7 @@ a:hover {
   color: var(--text-primary);
   pointer-events: auto;
   animation: toastSlideDown 0.3s cubic-bezier(0.2, 0.9, 0.4, 1);
+  font-family: var(--font-body);
 }
 .toast.success {
   border-left: 4px solid var(--success);
@@ -344,7 +406,6 @@ a:hover {
   animation: fadeInUp 0.5s cubic-bezier(0.2, 0.9, 0.4, 1) both;
 }
 
-/* Каскадные задержки для карточек (stagger) */
 .stagger-1  { animation-delay: 0.05s; }
 .stagger-2  { animation-delay: 0.10s; }
 .stagger-3  { animation-delay: 0.15s; }
@@ -368,11 +429,14 @@ a:hover {
 
 /* === Медиазапросы === */
 @media (max-width: 768px) {
+  :root {
+    --text-hero: 3.5rem;
+    --text-h1: 2.5rem;
+    --text-h2: 2rem;
+    --text-h3: 1.5rem;
+  }
   .page-wrapper {
     padding: 1.5rem 1rem;
-  }
-  .page-title {
-    font-size: 1.6rem;
   }
   .card-grid {
     grid-template-columns: 1fr;
@@ -385,6 +449,11 @@ a:hover {
 }
 
 @media (max-width: 480px) {
+  :root {
+    --text-hero: 2.5rem;
+    --text-h1: 2rem;
+    --text-h2: 1.5rem;
+  }
   .btn {
     padding: 0.7rem 1.2rem;
     font-size: 0.9rem;
