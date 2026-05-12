@@ -168,9 +168,15 @@ def generate_pdf(brief_id):
     brief = Brief.query.get_or_404(brief_id)
     questions_data = get_brief_questions(brief.brief_type)
     answers = brief.answers or {}
-    
+
     pdf = FPDF()
-    pdf.add_font('DejaVu', '', '/opt/render/project/src/fonts/DejaVuSans.ttf', uni=True) # Путь к шрифту
+    # Путь к шрифту относительно текущего файла app.py
+    font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'DejaVuSans.ttf')
+    if os.path.exists(font_path):
+        pdf.add_font('DejaVu', '', font_path, uni=True)
+    else:
+        return "Ошибка: шрифт DejaVuSans.ttf не найден в папке fonts. Добавьте его в репозиторий.", 500
+
     pdf.add_page()
     pdf.set_font('DejaVu', '', 10)
     
