@@ -15,7 +15,7 @@
       {% for client in clients %}
         <div class="card animate-in stagger-{{ loop.index if loop.index <= 20 else 20 }}">
           <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <h3 style="font-weight: 600; font-size: 1.1rem;">{{ client.name }}</h3>
+            <h3 style="font-weight: 700; font-size: 1.5rem; margin-bottom: 0.25rem;">{{ client.name }}</h3>
             <span class="badge">Активен</span>
           </div>
           <p style="color: var(--text-secondary); margin: 0.5rem 0 1rem; font-size: 0.9rem;">
