@@ -47,13 +47,11 @@
     const form = e.target;
     if (form.dataset.noLoading) return;
 
-    // Определяем конкретную кнопку, вызвавшую отправку
     const submitter = e.submitter;
     if (submitter && submitter.type === 'submit') {
       submitter.classList.add('loading');
       submitter.disabled = true;
     } else {
-      // Если нет конкретной кнопки, добавляем на первую найденную
       const firstBtn = form.querySelector('button[type="submit"]');
       if (firstBtn) {
         firstBtn.classList.add('loading');
@@ -71,35 +69,32 @@
       return originalFetch.apply(this, args).finally(() => {
         loadingBar.classList.remove('active');
       });
-
-  // Скрытие splash screen после завершения анимации
-document.addEventListener('DOMContentLoaded', function() {
-  const splash = document.getElementById('splash-screen');
-  if (!splash) return;
-
-  // Последний анимируемый элемент (f-rings) завершает анимацию последним
-  const lastElement = splash.querySelector('.f-rings');
-  if (lastElement) {
-    lastElement.addEventListener('animationend', function(e) {
-      // Ждём окончания fillWhite или draw
-      if (e.animationName === 'fillWhite' || e.animationName === 'draw') {
-        setTimeout(() => {
-          splash.classList.add('fade-out');
-          setTimeout(() => {
-            splash.remove();
-          }, 800); // Длительность перехода opacity
-        }, 500);   // Небольшая задержка, чтобы логотип немного "повисел"
-      }
-    });
-  } else {
-    // Запасной вариант, если элемент не найден
-    setTimeout(() => {
-      splash.classList.add('fade-out');
-      setTimeout(() => splash.remove(), 800);
-    }, 3000);
-  }
-});
     };
   }
+
+  // --- Скрытие splash screen после завершения анимации ---
+  document.addEventListener('DOMContentLoaded', function() {
+    const splash = document.getElementById('splash-screen');
+    if (!splash) return;
+
+    const lastElement = splash.querySelector('.f-rings');
+    if (lastElement) {
+      lastElement.addEventListener('animationend', function(e) {
+        if (e.animationName === 'draw' || e.animationName === 'fillWhite') {
+          setTimeout(() => {
+            splash.classList.add('fade-out');
+            setTimeout(() => {
+              splash.remove();
+            }, 800);
+          }, 500);
+        }
+      });
+    } else {
+      setTimeout(() => {
+        splash.classList.add('fade-out');
+        setTimeout(() => splash.remove(), 800);
+      }, 3000);
+    }
+  });
 
 })();
