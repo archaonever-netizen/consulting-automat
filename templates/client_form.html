@@ -1,34 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Клиенты{% endblock %}
+{% block title %}Новый клиент{% endblock %}
 
 {% block content %}
-<div class="page-wrapper">
-  <div class="header">
-    <h1 class="page-title">Клиенты</h1>
-    <a href="{{ url_for('add_client') }}" class="btn btn-primary">
-      <span>+ Добавить клиента</span>
-    </a>
+<div class="page-wrapper" style="max-width: 600px;">
+  <h1 class="page-title">Новый клиент</h1>
+  <div class="card" style="margin-top: 1.5rem;">
+    <form method="POST" action="{{ url_for('add_client') }}">
+      <div class="form-group">
+        <label class="form-label" for="name">Название компании / ИП / Самозанятый</label>
+        <input type="text" id="name" name="name" class="form-input" required autofocus>
+      </div>
+      <div style="display: flex; gap: 1rem; justify-content: flex-end;">
+        <a href="{{ url_for('index') }}" class="btn btn-secondary">Отмена</a>
+        <button type="submit" class="btn btn-primary">
+          <span class="spinner"></span>
+          <span class="btn-text">Создать</span>
+        </button>
+      </div>
+    </form>
   </div>
-
-  {% if clients %}
-    <div class="card-grid">
-      {% for client in clients %}
-        <div class="card animate-in stagger-{{ loop.index if loop.index <= 20 else 20 }}">
-          <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-            <h3 style="font-weight: 700; font-size: 1.5rem; margin-bottom: 0.25rem;">{{ client.name }}</h3>
-            <span class="badge">Активен</span>
-          </div>
-          <p class="body-text" style="margin: 0.5rem 0 1rem;">
-            {{ client.company or 'Компания не указана' }}
-          </p>
-          <a href="{{ url_for('client_briefs', client_id=client.id) }}" class="btn btn-secondary" style="width: 100%;">
-            Анкеты
-          </a>
-        </div>
-      {% endfor %}
-    </div>
-  {% else %}
-    <p class="body-text">Клиентов пока нет.</p>
-  {% endif %}
 </div>
 {% endblock %}
