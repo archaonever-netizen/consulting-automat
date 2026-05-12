@@ -171,11 +171,19 @@ def generate_pdf(brief_id):
 
     pdf = FPDF()
     # Путь к шрифту относительно текущего файла app.py
-    font_path = os.path.join(os.path.dirname(__file__), 'fonts', 'DejaVuSans.ttf')
-    if os.path.exists(font_path):
-        pdf.add_font('DejaVu', '', font_path, uni=True)
-    else:
-        return "Ошибка: шрифт DejaVuSans.ttf не найден в папке fonts. Добавьте его в репозиторий.", 500
+    font_dir = os.path.dirname(font_path)  # папка fonts
+    font_regular = os.path.join(font_dir, 'DejaVuSans.ttf')
+    font_bold = os.path.join(font_dir, 'DejaVuSans-Bold.ttf')
+    font_italic = os.path.join(font_dir, 'DejaVuSans-Oblique.ttf')   # курсив
+
+    if not os.path.exists(font_regular):
+        return "Ошибка: шрифт DejaVuSans.ttf не найден в папке fonts.", 500
+
+    pdf.add_font('DejaVu', '', font_regular, uni=True)
+    if os.path.exists(font_bold):
+        pdf.add_font('DejaVu', 'B', font_bold, uni=True)
+    if os.path.exists(font_italic):
+        pdf.add_font('DejaVu', 'I', font_italic, uni=True)
 
     pdf.add_page()
     pdf.set_font('DejaVu', '', 10)
