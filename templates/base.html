@@ -14,6 +14,32 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
+  <!-- Splash Screen -->
+  <div id="splash-screen">
+    <div class="splash-logo">
+      <svg viewBox="0 0 740 168" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <!-- Ш левая часть -->
+        <path class="sh-left" d="M0 0H48V128H94L132 92V128L92 168H0V0Z" />
+        <!-- Ш средняя -->
+        <path class="sh-mid" d="M148 0H196V168H104L144 128H148V0Z" />
+        <!-- Ш соединительная -->
+        <path class="sh-connect" d="M92 168L144 128H182L128 168H92Z" />
+        <!-- Е тело -->
+        <path class="e-body" d="M0 0H170L126 40H48V64H140V104H48V128H170V168H0V0Z" transform="translate(250 0)" />
+        <!-- Е вырез -->
+        <path class="e-cut" d="M120 0H170L126 40H76L120 0Z" transform="translate(250 0)" />
+        <!-- Синий акцент (ромб внутри Е) -->
+        <path class="e-accent" d="M84 88H132L108 112H60L84 88Z" transform="translate(250 0)" />
+        <!-- Ф стебель -->
+        <rect class="f-stem" x="544" y="-10" width="36" height="188" rx="2" />
+        <!-- Ф кольца -->
+        <path class="f-rings" fill-rule="evenodd" clip-rule="evenodd"
+          d="M92 0C40 0 0 36 0 84C0 132 40 168 92 168C144 168 184 132 184 84C184 36 144 0 92 0ZM92 40C63 40 40 59 40 84C40 109 63 128 92 128C121 128 144 109 144 84C144 59 121 40 92 40Z"
+          transform="translate(470 0)" />
+      </svg>
+    </div>
+  </div>
+  
   <!-- Индикатор загрузки -->
   <div class="loading-bar" id="loadingBar"></div>
 
