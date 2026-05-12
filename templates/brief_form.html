@@ -65,18 +65,30 @@
     const panel = document.querySelector('.sticky-panel');
     if (!panel) return;
 
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.intersectionRatio < 1) {
-          panel.classList.add('is-floating');
-        } else {
-          panel.classList.remove('is-floating');
-        }
-      },
-      { threshold: [0, 1] }
-    );
+    let ticking = false;
 
-    observer.observe(panel);
+    function updateSticky() {
+      const rect = panel.getBoundingClientRect();
+      // Если расстояние от нижней границы панели до низа окна меньше высоты самой панели – она «прилипла»
+      const isSticky = (window.innerHeight - rect.bottom) < rect.height;
+
+      if (isSticky) {
+        panel.classList.add('is-floating');
+      } else {
+        panel.classList.remove('is-floating');
+      }
+      ticking = false;
+    }
+
+    window.addEventListener('scroll', function() {
+      if (!ticking) {
+        requestAnimationFrame(updateSticky);
+        ticking = true;
+      }
+    }, { passive: true });
+
+    // Проверяем сразу после загрузки
+    updateSticky();
   })();
   </script>
 {% endblock %}
