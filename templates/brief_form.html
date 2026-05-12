@@ -59,8 +59,9 @@
       </div>
       <a href="{{ url_for('client_briefs', client_id=brief.client_id) }}" class="btn btn-secondary">Назад</a>
     </div>
-    </form>  
+        </form>  
   
+  <!-- Анимация sticky-панели -->
   <script>
   (function() {
     const panel = document.querySelector('.sticky-panel');
@@ -70,9 +71,7 @@
 
     function updateSticky() {
       const rect = panel.getBoundingClientRect();
-      // Если расстояние от нижней границы панели до низа окна меньше высоты самой панели – она «прилипла»
       const isSticky = (window.innerHeight - rect.bottom) < rect.height;
-
       if (isSticky) {
         panel.classList.add('is-floating');
       } else {
@@ -88,8 +87,71 @@
       }
     }, { passive: true });
 
-    // Проверяем сразу после загрузки
     updateSticky();
   })();
   </script>
+
+  <!-- Автосохранение анкеты (без кнопки "Сохранить") -->
+  <script>
+  (function() {
+    const form = document.getElementById('briefForm');
+    if (!form) return;
+
+    let saveTimer;
+    const BRIEF_ID = '{{ brief.id }}';
+
+    function getFormData() {
+      const sections = [];
+      const sectionCards = form.querySelectorAll('.card');
+      sectionCards.forEach(card => {
+        const titleEl = card.querySelector('div[style*="font-weight: 600"]');
+        const title = titleEl ? titleEl.textContent.trim() : '';
+        const fields = [];
+        const textareas = card.querySelectorAll('textarea');
+        textareas.forEach(ta => {
+          fields.push({ name: ta.getAttribute('name'), value: ta.value });
+        });
+        sections.push({ title, fields });
+      });
+      return { sections };
+    }
+
+    function autosave() {
+      const data = getFormData();
+      fetch(`/brief/${BRIEF_ID}/autosave`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      })
+      .then(response => response.json())
+      .then(result => {
+        if (result.status === 'ok') {
+          const badge = document.querySelector('.badge');
+          if (badge) {
+            badge.textContent = result.brief_status;
+            badge.className = 'badge ' + (result.brief_status === 'Заполнено' ? 'success' : '');
+          }
+        }
+      })
+      .catch(error => console.error('Autosave error:', error));
+    }
+
+    form.addEventListener('input', function(e) {
+      if (e.target.tagName === 'TEXTAREA') {
+        clearTimeout(saveTimer);
+        saveTimer = setTimeout(autosave, 2000);
+      }
+    });
+
+    window.addEventListener('beforeunload', function(e) {
+      if (saveTimer) {
+        clearTimeout(saveTimer);
+        autosave();
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
+  })();
+  </script>
+{% endblock %}
 {% endblock %}
