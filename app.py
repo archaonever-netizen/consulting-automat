@@ -297,5 +297,41 @@ def update_brief_status(brief_id):
         db.session.commit()
     return redirect(url_for('brief_form', brief_id=brief.id))
 
+@app.route('/brief/<int:brief_id>/autosave', methods=['POST'])
+def autosave_brief(brief_id):
+    """Автосохранение анкеты (без изменения статуса на 'Заполнено')."""
+    brief = Brief.query.get_or_404(brief_id)
+    data = request.get_json()
+    if not data:
+        return jsonify({'error': 'No data'}), 400
+
+    answers = {}
+    for section in data.get('sections', []):
+        for field_obj in section.get('fields', []):
+            key = f"{section['title']}||{field_obj['name']}"
+            value = field_obj.get('value', '')
+            if value.strip():
+                answers[key] = value
+
+    brief.answers = answers
+    # Определяем статус: если все поля заполнены → "Заполнено", иначе "В работе"
+    all_fields_filled = True
+    for section in get_brief_questions(brief.brief_type).get('sections', []):
+        for field in section['fields']:
+            key = f"{section['title']}||{field}"
+            if not answers.get(key):  # если нет ответа или пустая строка
+                all_fields_filled = False
+                break
+        if not all_fields_filled:
+            break
+
+    if all_fields_filled:
+        brief.status = 'Заполнено'
+    else:
+        brief.status = 'В работе'
+
+    db.session.commit()
+    return jsonify({'status': 'ok', 'brief_status': brief.status})
+
 if __name__ == '__main__':
     app.run(debug=True)
