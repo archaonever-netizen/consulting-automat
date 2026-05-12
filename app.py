@@ -142,6 +142,24 @@ def add_client():
         return redirect(url_for('index'))
     return render_template('client_form.html')
 
+@app.route('/client/<int:client_id>/edit', methods=['GET', 'POST'])
+def edit_client(client_id):
+    """Редактирование имени клиента."""
+    client = Client.query.get_or_404(client_id)
+    if request.method == 'POST':
+        client.name = request.form['name']
+        db.session.commit()
+        return redirect(url_for('index'))
+    return render_template('client_form.html', client=client, edit_mode=True)
+
+@app.route('/client/<int:client_id>/delete', methods=['POST'])
+def delete_client(client_id):
+    """Удаление клиента и всех его анкет."""
+    client = Client.query.get_or_404(client_id)
+    db.session.delete(client)
+    db.session.commit()
+    return redirect(url_for('index'))
+
 @app.route('/client/<int:client_id>')
 def client_briefs(client_id):
     """Страница со списком анкет выбранного клиента."""
