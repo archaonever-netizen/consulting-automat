@@ -24,6 +24,11 @@
   {% block content %}{% endblock %}
 
   <!-- JavaScript -->
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+      <script id="flash-data" type="application/json">{{ messages|tojson }}</script>
+    {% endif %}
+  {% endwith %}
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
