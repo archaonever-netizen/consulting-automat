@@ -1,4 +1,5 @@
 # app.py
+# app.py
 import os
 import json
 from flask import Flask, render_template, request, redirect, url_for, jsonify
@@ -7,14 +8,21 @@ from fpdf import FPDF
 
 # --- Настройка приложения ---
 app = Flask(__name__)
-# Путь к файлу базы данных. Render.com хранит данные в '/opt/render/project/src/'
-db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'app.db')
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
+# Подключение к PostgreSQL, если задана переменная окружения DATABASE_URL (Render)
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    # Render даёт URL с 'postgres://', SQLAlchemy требует 'postgresql://'
+    database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    # Запасной вариант для локального запуска (SQLite)
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'instance', 'app.db')
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
-# Создаем папку instance, если ее нет
-os.makedirs('instance', exist_ok=True)
 with app.app_context():
     db.create_all()
 
