@@ -1,31 +1,31 @@
 {% extends "base.html" %}
 {% block title %}{{ client.name }} — Анкеты{% endblock %}
+
 {% block content %}
-<h2 class="mb-4">📋 {{ client.name }}</h2>
-<p class="text-muted mb-4">Выберите анкету для заполнения или просмотра.</p>
-<div class="row row-cols-1 row-cols-md-3 g-4">
+<div class="page-wrapper">
+  <div class="header">
+    <h1 class="page-title">{{ client.name }}</h1>
+  </div>
+  <p class="text-secondary" style="margin-bottom: 1.5rem;">Выберите анкету для заполнения или просмотра.</p>
+
+  <div class="card-grid">
     {% for brief in briefs %}
-    <div class="col">
-        <div class="card h-100">
-            <div class="card-body d-flex flex-column">
-                <h5 class="card-title">{{ brief.name }}</h5>
-                <p class="card-text small text-muted flex-grow-1">{{ brief.desc }}</p>
-                <div class="d-flex justify-content-between align-items-center mt-3">
-                    <span class="badge 
-                        {% if brief.status == 'Заполнено' %} bg-success 
-                        {% elif brief.status == 'В работе' %} bg-warning text-dark 
-                        {% else %} bg-secondary {% endif %}">
-                        {{ brief.status }}
-                    </span>
-                    <a href="{{ url_for('brief_form', brief_id=brief.id) }}" class="btn btn-sm btn-outline-primary">Открыть</a>
-                </div>
-            </div>
-            <div class="card-footer bg-transparent border-top-0">
-                <small class="text-muted">Изменено: {{ brief.updated_at or 'ещё нет' }}</small>
-            </div>
+      <div class="card animate-in stagger-{{ loop.index if loop.index <= 20 else 20 }}">
+        <h3 style="font-weight: 600; font-size: 1.1rem;">{{ brief.name }}</h3>
+        <p style="color: var(--text-secondary); margin: 0.5rem 0 1rem; font-size: 0.9rem;">{{ brief.desc }}</p>
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="badge {% if brief.status == 'Заполнено' %} success {% elif brief.status == 'В работе' %} {% else %} danger {% endif %}">
+            {{ brief.status }}
+          </span>
+          <a href="{{ url_for('brief_form', brief_id=brief.id) }}" class="btn btn-secondary">Открыть</a>
         </div>
-    </div>
+        <div style="margin-top: 0.8rem; font-size: 0.8rem; color: var(--text-secondary);">
+          Изменено: {{ brief.updated_at or 'ещё нет' }}
+        </div>
+      </div>
     {% endfor %}
+  </div>
+
+  <a href="{{ url_for('index') }}" class="btn btn-secondary" style="margin-top: 1.5rem;">← Назад к списку клиентов</a>
 </div>
-<a href="{{ url_for('index') }}" class="btn btn-link mt-4">← Назад к списку клиентов</a>
 {% endblock %}
