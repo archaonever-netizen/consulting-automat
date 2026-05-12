@@ -281,7 +281,7 @@ def generate_pdf(brief_id):
         pdf.ln(4)
 
     # Отправляем PDF клиенту
-    pdf_output = pdf.output(dest='S').encode('latin-1')
+    pdf_output = bytes(pdf.output())
     response = make_response(pdf_output)
     response.headers['Content-Type'] = 'application/pdf'
     response.headers['Content-Disposition'] = f'inline; filename=brief_{brief_id}.pdf'
