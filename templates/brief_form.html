@@ -27,7 +27,7 @@
   <form method="POST" id="briefForm">
     {% for section in questions.sections %}
     <div class="card animate-in stagger-{{ loop.index if loop.index <= 20 else 20 }}" style="margin-bottom: 1.5rem;">
-      <div style="font-weight: 600; font-size: 1rem; margin-bottom: 1rem; color: var(--text-primary);">
+      <div style="font-family: var(--font-display); font-weight: 800; font-size: 1.25rem; margin-bottom: 1rem; color: var(--text-primary); letter-spacing: -0.03em;">
         {{ section.title }}
       </div>
       {% for field in section.fields %}
@@ -98,7 +98,7 @@
       const sections = [];
       const sectionCards = form.querySelectorAll('.card');
       sectionCards.forEach(card => {
-        const titleEl = card.querySelector('div[style*="font-weight: 600"]');
+        const titleEl = card.querySelector('div[style*="font-weight: 800"]');
         const title = titleEl ? titleEl.textContent.trim() : '';
         const fields = [];
         const textareas = card.querySelectorAll('textarea');
