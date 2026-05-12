@@ -1,44 +1,47 @@
 {% extends "base.html" %}
 {% block title %}Анкета — {{ questions.title }}{% endblock %}
-{% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>📝 {{ questions.title }}</h2>
-    <div>
-        <span class="badge 
-            {% if brief.status == 'Заполнено' %} bg-success 
-            {% elif brief.status == 'В работе' %} bg-warning text-dark 
-            {% else %} bg-secondary {% endif %} me-2">
-            {{ brief.status }}
-        </span>
-        <a href="{{ url_for('generate_pdf', brief_id=brief.id) }}" class="btn btn-sm btn-outline-danger" target="_blank">PDF</a>
-    </div>
-</div>
 
-<form method="POST" id="briefForm">
+{% block content %}
+<div class="page-wrapper" style="max-width: 800px;">
+  <div class="header" style="justify-content: space-between; align-items: center;">
+    <h1 class="page-title">📝 {{ questions.title }}</h1>
+    <div style="display: flex; gap: 0.5rem; align-items: center;">
+      <span class="badge {% if brief.status == 'Заполнено' %} success {% elif brief.status == 'В работе' %} {% else %} danger {% endif %}">
+        {{ brief.status }}
+      </span>
+      <a href="{{ url_for('generate_pdf', brief_id=brief.id) }}" class="btn btn-secondary" target="_blank">PDF</a>
+    </div>
+  </div>
+
+  <form method="POST" id="briefForm">
     {% for section in questions.sections %}
-    <div class="card mb-4">
-        <div class="card-header bg-light">
-            <strong>{{ section.title }}</strong>
-        </div>
-        <div class="card-body">
-            {% for field in section.fields %}
-            {% set key = section.title + '||' + field %}
-            <div class="mb-3">
-                <label for="{{ key }}" class="form-label">{{ field }}</label>
-                <!-- Используем textarea для возможности свободного ввода -->
-                <textarea class="form-control" id="{{ key }}" name="{{ key }}" rows="2">{{ brief.answers.get(key, '') if brief.answers else '' }}</textarea>
-            </div>
-            {% endfor %}
-        </div>
+    <div class="card" style="margin-bottom: 1.5rem;">
+      <div style="font-weight: 600; font-size: 1rem; margin-bottom: 1rem; color: var(--text-primary);">
+        {{ section.title }}
+      </div>
+      {% for field in section.fields %}
+      {% set key = section.title + '||' + field %}
+      <div class="form-group">
+        <label class="form-label" for="{{ key }}">{{ field }}</label>
+        <textarea class="form-textarea" id="{{ key }}" name="{{ key }}" rows="2">{{ brief.answers.get(key, '') if brief.answers else '' }}</textarea>
+      </div>
+      {% endfor %}
     </div>
     {% endfor %}
 
-    <div class="d-flex justify-content-between align-items-center mb-5">
-        <div>
-            <button type="submit" class="btn btn-primary">💾 Сохранить</button>
-            <button type="submit" name="complete" class="btn btn-success ms-2">✅ Сохранить и завершить</button>
-        </div>
-        <a href="{{ url_for('client_briefs', client_id=brief.client_id) }}" class="btn btn-link text-muted">← Назад к анкетам</a>
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem;">
+      <div style="display: flex; gap: 0.8rem;">
+        <button type="submit" class="btn btn-primary">
+          <span class="spinner"></span>
+          <span class="btn-text">💾 Сохранить</span>
+        </button>
+        <button type="submit" name="complete" class="btn btn-primary" style="background: var(--success); box-shadow: none;">
+          <span class="spinner"></span>
+          <span class="btn-text">✅ Сохранить и завершить</span>
+        </button>
+      </div>
+      <a href="{{ url_for('client_briefs', client_id=brief.client_id) }}" class="btn btn-secondary">← Назад к анкетам</a>
     </div>
-</form>
+  </form>
+</div>
 {% endblock %}
