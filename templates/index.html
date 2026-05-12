@@ -21,9 +21,11 @@
           <p style="color: var(--text-secondary); margin: 0.5rem 0 1rem; font-size: 0.9rem;">
             Создан: {{ client.created_at.strftime('%d.%m.%Y') }}
           </p>
-          <a href="{{ url_for('client_briefs', client_id=client.id) }}" class="btn btn-secondary" style="width: 100%;">
-            Анкеты
-          </a>
+          <div style="display: flex; gap: 0.5rem; margin-top: 0.5rem;">
+            <a href="{{ url_for('client_briefs', client_id=client.id) }}" class="btn btn-secondary" style="flex: 1;">Анкеты</a>
+            <a href="{{ url_for('edit_client', client_id=client.id) }}" class="btn btn-secondary" style="flex: 1;">✎</a>
+            <button type="button" class="btn btn-danger" onclick="showDeleteModal('{{ client.id }}', '{{ client.name | e }}')" style="flex: 1;">🗑</button>
+          </div>
         </div>
       {% endfor %}
     </div>
