@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-wrapper" style="max-width: 800px;">
   <div class="header" style="justify-content: space-between; align-items: center;">
-    <h1 class="page-title">📝 {{ questions.title }}</h1>
+    <h1 class="page-title">{{ questions.title }}</h1>
     <div style="display: flex; gap: 0.5rem; align-items: center;">
       <span class="badge {% if brief.status == 'Заполнено' %} success {% elif brief.status == 'В работе' %} {% else %} danger {% endif %}">
         {{ brief.status }}
@@ -33,11 +33,11 @@
       <div style="display: flex; gap: 0.8rem;">
         <button type="submit" class="btn btn-primary">
           <span class="spinner"></span>
-          <span class="btn-text">💾 Сохранить</span>
+          <span class="btn-text">Сохранить</span>
         </button>
         <button type="submit" name="complete" class="btn btn-primary" style="background: var(--success); box-shadow: none;">
           <span class="spinner"></span>
-          <span class="btn-text">✅ Сохранить и завершить</span>
+          <span class="btn-text">Сохранить и завершить</span>
         </button>
       </div>
       <a href="{{ url_for('client_briefs', client_id=brief.client_id) }}" class="btn btn-secondary">← Назад к анкетам</a>
