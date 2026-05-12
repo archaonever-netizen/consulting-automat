@@ -5,16 +5,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Шеф-консалтинг{% endblock %}</title>
 
-  <!-- Шрифт Inter -->
+  <!-- Шрифты: Manrope (заголовки) + Inter (текст) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 
-  <!-- Новый CSS -->
+  <!-- Стили -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-  <!-- Индикатор загрузки (прогресс-бар) -->
+  <!-- Индикатор загрузки -->
   <div class="loading-bar" id="loadingBar"></div>
 
   <!-- Контейнер для уведомлений -->
@@ -24,11 +24,6 @@
   {% block content %}{% endblock %}
 
   <!-- JavaScript -->
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <script id="flash-data" type="application/json">{{ messages|tojson }}</script>
-    {% endif %}
-  {% endwith %}
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
 </body>
 </html>
