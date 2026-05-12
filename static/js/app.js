@@ -72,11 +72,22 @@
     };
   }
 
-  // --- Скрытие splash screen после завершения анимации ---
+  // --- Splash screen (показывается только один раз за сессию) ---
   document.addEventListener('DOMContentLoaded', function() {
     const splash = document.getElementById('splash-screen');
     if (!splash) return;
 
+    // Если в этой же вкладке splash уже был показан, сразу скрываем
+    if (sessionStorage.getItem('splash_shown')) {
+      splash.classList.add('fade-out');
+      setTimeout(() => splash.remove(), 800);
+      return;
+    }
+
+    // Запоминаем, что в текущей сессии splash показан
+    sessionStorage.setItem('splash_shown', 'true');
+
+    // Основная логика скрытия после анимации
     const lastElement = splash.querySelector('.f-rings');
     if (lastElement) {
       lastElement.addEventListener('animationend', function(e) {
@@ -90,10 +101,11 @@
         }
       });
     } else {
+      // Запасной вариант: скрыть через 3.5 секунды
       setTimeout(() => {
         splash.classList.add('fade-out');
         setTimeout(() => splash.remove(), 800);
-      }, 3000);
+      }, 3500);
     }
   });
 
