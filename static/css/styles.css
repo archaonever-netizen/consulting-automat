@@ -460,5 +460,116 @@ a:hover {
   }
   .card {
     padding: 1.2rem;
+
+    /* ========== SPLASH SCREEN ========== */
+#splash-screen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #1D1D1F;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100000;
+  transition: opacity 0.8s cubic-bezier(0.2, 0.9, 0.4, 1);
+}
+
+#splash-screen.fade-out {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.splash-logo {
+  width: min(80%, 500px);
+  max-height: 50vh;
+}
+
+/* Все части логотипа скрыты и готовы к проявлению */
+.splash-logo path,
+.splash-logo rect {
+  stroke: #FFFFFF;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  fill: transparent;
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: draw 1.2s cubic-bezier(0.2, 0.9, 0.4, 1) forwards;
+}
+
+/* Синий акцент не рисуется, а «вспыхивает» */
+.splash-logo .e-accent {
+  stroke: #2563EB;
+  stroke-width: 2.5;
+  fill: #2563EB;
+  stroke-dasharray: none;
+  stroke-dashoffset: 0;
+  opacity: 0;
+  transform: scale(0.5);
+  transform-origin: center;
+  animation: accentFlash 1s 0.8s cubic-bezier(0.2, 0.9, 0.4, 1) forwards;
+}
+
+/* Заполнение белым после рисования */
+.splash-logo .sh-left,
+.splash-logo .sh-mid,
+.splash-logo .sh-connect,
+.splash-logo .e-body,
+.splash-logo .e-cut,
+.splash-logo .f-stem,
+.splash-logo .f-rings {
+  animation:
+    draw 1.2s cubic-bezier(0.2, 0.9, 0.4, 1) forwards,
+    fillWhite 0.6s 1.2s ease forwards;
+}
+
+/* Задержки для последовательного появления букв */
+.sh-left { animation-delay: 0.2s, 0.2s; }
+.sh-mid  { animation-delay: 0.35s, 0.35s; }
+.sh-connect { animation-delay: 0.5s, 0.5s; }
+.e-body  { animation-delay: 0.7s, 0.7s; }
+.e-cut   { animation-delay: 0.85s, 0.85s; }
+.f-stem  { animation-delay: 1.0s, 1.0s; }
+.f-rings { animation-delay: 1.15s, 1.15s; }
+
+@keyframes draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes fillWhite {
+  to {
+    fill: #FFFFFF;
+    stroke: transparent;
+  }
+}
+
+@keyframes accentFlash {
+  0% {
+    opacity: 0;
+    transform: scale(0.3);
+    filter: drop-shadow(0 0 0 rgba(37, 99, 235, 0));
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.2);
+    filter: drop-shadow(0 0 20px rgba(37, 99, 235, 0.8));
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+    filter: drop-shadow(0 0 10px rgba(37, 99, 235, 0.3));
+  }
+}
+
+/* Адаптивность для маленьких экранов */
+@media (max-width: 480px) {
+  .splash-logo {
+    width: 90%;
+  }
+}
   }
 }
