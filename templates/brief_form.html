@@ -13,6 +13,17 @@
     </div>
   </div>
 
+  <style>
+    .sticky-panel {
+      transition: transform 0.4s cubic-bezier(0.2, 0.9, 0.4, 1),
+                  box-shadow 0.4s cubic-bezier(0.2, 0.9, 0.4, 1);
+    }
+    .sticky-panel.is-floating {
+      transform: translateY(-6px);
+      box-shadow: 0 -8px 20px rgba(0,0,0,0.08);
+    }
+  </style>
+
   <form method="POST" id="briefForm">
     {% for section in questions.sections %}
     <div class="card animate-in stagger-{{ loop.index if loop.index <= 20 else 20 }}" style="margin-bottom: 1.5rem;">
@@ -29,8 +40,7 @@
     </div>
     {% endfor %}
 
-    <div style="position:sticky; bottom:0; z-index:10;
-                background: rgba(255,255,255,0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    <div class="sticky-panel" style="position:sticky; bottom:0; z-index:10; background: rgba(255,255,255,0.75); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
                 border-top-left-radius: 20px; border-top-right-radius: 20px;
                 padding: 1rem 0;
                 box-shadow: 0 -4px 12px rgba(0,0,0,0.05);
