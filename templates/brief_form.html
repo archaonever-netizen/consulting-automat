@@ -29,7 +29,8 @@
     </div>
     {% endfor %}
 
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 1.5rem;">
+    <div style="position:sticky; bottom:0; z-index:10; background:var(--bg); padding:1rem 0; border-top:1px solid var(--border);
+                display:flex; justify-content:space-between; align-items:center;">
       <div style="display: flex; gap: 0.8rem;">
         <button type="submit" class="btn btn-primary">
           <span class="spinner"></span>
@@ -40,8 +41,6 @@
           <span class="btn-text">Сохранить и завершить</span>
         </button>
       </div>
-      <a href="{{ url_for('client_briefs', client_id=brief.client_id) }}" class="btn btn-secondary">← Назад к анкетам</a>
+      <a href="{{ url_for('client_briefs', client_id=brief.client_id) }}" class="btn btn-secondary">Назад</a>
     </div>
-  </form>
-</div>
 {% endblock %}
