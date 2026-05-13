@@ -5,6 +5,15 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{% block title %}Шеф-консалтинг{% endblock %}</title>
 
+  <!-- Мгновенное скрытие splash при наличии флага сессии -->
+  <script>
+    if (sessionStorage.getItem('splash_shown')) {
+      var style = document.createElement('style');
+      style.textContent = '#splash-screen { display: none !important; }';
+      document.head.appendChild(style);
+    }
+  </script>
+
   <!-- Шрифты: Manrope (заголовки) + Inter (текст) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
