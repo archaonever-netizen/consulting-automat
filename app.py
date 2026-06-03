@@ -1,6 +1,7 @@
 # app.py
 import os
 import json
+from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response
 from models import db, Client, Brief
 from fpdf import FPDF
@@ -134,10 +135,92 @@ def get_brief_questions(brief_type):
 # -------------------------------------------------------------------
 
 @app.route('/')
-def index():
-    """Главная страница: список всех клиентов."""
+def home():
+    """Главная — сводка ШЕФ, focus-list, pulse."""
+    palette = ['#1D1D1F','#2563EB','#16A34A','#7C3AED','#0891B2','#DB2777','#EA580C']
+
     clients = Client.query.order_by(Client.created_at.desc()).all()
-    return render_template('index.html', clients=clients)
+
+    # Приветствие по времени суток
+    hour = datetime.now().hour
+    if hour < 5:    greet = 'Доброй ночи'
+    elif hour < 12: greet = 'Доброе утро'
+    elif hour < 18: greet = 'Добрый день'
+    else:           greet = 'Добрый вечер'
+
+    # Дата по-русски
+    months   = ['января','февраля','марта','апреля','мая','июня',
+                'июля','августа','сентября','октября','ноября','декабря']
+    weekdays = ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье']
+    now = datetime.now()
+    date_str = f"{weekdays[now.weekday()]}, {now.day} {months[now.month - 1]}"
+
+    # Агрегаты по брифам
+    client_count      = len(clients)
+    total_briefs_done = 0
+    focus_items       = []
+    resume_items      = []
+
+    for client in clients:
+        briefs_map = {b.brief_type: b for b in client.briefs}
+        done = sum(1 for b in briefs_map.values() if b.status == 'Заполнено')
+        total_briefs_done += done
+
+        parts    = client.name.split()
+        initials = (parts[0][0] + (parts[1][0] if len(parts) > 1 else '')).upper()
+        color    = palette[client.id % len(palette)]
+
+        # В фокусе: клиенты с незавершёнными брифами
+        if done < 3:
+            focus_items.append({
+                'client':   client,
+                'done':     done,
+                'total':    3,
+                'initials': initials,
+                'color':    color,
+            })
+
+        # Для блока «Продолжить» — последний изменённый бриф
+        last_brief = None
+        for b in client.briefs:
+            if b.updated_at and (last_brief is None or b.updated_at > last_brief.updated_at):
+                last_brief = b
+        if last_brief and last_brief.updated_at:
+            resume_items.append({
+                'client':   client,
+                'snip':     f'Анкета «{last_brief.brief_type}» — статус: {last_brief.status}',
+                'updated':  last_brief.updated_at,
+                'initials': initials,
+                'color':    color,
+            })
+
+    # Focus: сначала с наименьшим числом заполненных → топ-3
+    focus_items.sort(key=lambda x: x['done'])
+    focus_items = focus_items[:3]
+
+    # Resume: последние 3 по дате изменения
+    resume_items.sort(key=lambda x: x['updated'], reverse=True)
+    resume_items = resume_items[:3]
+
+    avg_health = round(total_briefs_done / max(client_count * 3, 1) * 100)
+
+    return render_template('home.html',
+        greet=greet,
+        date_str=date_str,
+        client_count=client_count,
+        total_briefs_done=total_briefs_done,
+        total_briefs=client_count * 3,
+        avg_health=avg_health,
+        focus_items=focus_items,
+        resume_items=resume_items,
+    )
+
+
+@app.route('/clients')
+def clients():
+    """Картотека клиентов."""
+    client_list = Client.query.order_by(Client.created_at.desc()).all()
+    return render_template('index.html', clients=client_list)
 
 @app.route('/add_client', methods=['GET', 'POST'])
 def add_client():
@@ -147,7 +230,7 @@ def add_client():
         client = Client(name=name)
         db.session.add(client)
         db.session.commit()
-        return redirect(url_for('index'))
+        return redirect(url_for('clients'))
     return render_template('client_form.html')
 
 @app.route('/client/<int:client_id>/edit', methods=['GET', 'POST'])
@@ -157,7 +240,7 @@ def edit_client(client_id):
     if request.method == 'POST':
         client.name = request.form['name']
         db.session.commit()
-        return redirect(url_for('index'))
+        return redirect(url_for('clients'))
     return render_template('client_form.html', client=client, edit_mode=True)
 
 @app.route('/client/<int:client_id>/delete', methods=['POST'])
@@ -166,7 +249,7 @@ def delete_client(client_id):
     client = Client.query.get_or_404(client_id)
     db.session.delete(client)
     db.session.commit()
-    return redirect(url_for('index'))
+    return redirect(url_for('clients'))
 
 @app.route('/client/<int:client_id>')
 def client_briefs(client_id):

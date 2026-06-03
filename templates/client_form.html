@@ -11,7 +11,7 @@
         <input type="text" id="name" name="name" class="form-input" value="{% if edit_mode %}{{ client.name }}{% endif %}" required autofocus>
       </div>
       <div style="display: flex; gap: 1rem; justify-content: flex-end;">
-        <a href="{{ url_for('index') }}" class="btn btn-secondary">Отмена</a>
+        <a href="{{ url_for('clients') }}" class="btn btn-secondary">Отмена</a>
         <button type="submit" class="btn btn-primary">
           <span class="spinner"></span>
           <span class="btn-text">{% if edit_mode %}Сохранить{% else %}Создать{% endif %}</span>
