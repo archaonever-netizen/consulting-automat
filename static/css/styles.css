@@ -276,6 +276,110 @@ a:hover { color: var(--accent-hover); }
 .modal-actions form { display: flex; gap: .75rem; justify-content: flex-end; }
 
 /* ============================================================
+   ЭТАП 3 — КЛИЕНТЫ (views.css → Flask/Jinja)
+   ============================================================ */
+
+/* ---- Stats strip ---- */
+.stats-strip { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-bottom: 22px; }
+.stat { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; box-shadow: var(--shadow-sm); }
+.stat .k { font-size: 12px; font-weight: 700; color: var(--ink-3); letter-spacing: .01em; display: flex; align-items: center; gap: 7px; }
+.stat .k svg { color: var(--ink-4); }
+.stat .v { font-family: var(--font-display); font-size: 26px; font-weight: 700; margin-top: 9px; letter-spacing: var(--disp-tracking); }
+.stat .v small { font-size: 15px; color: var(--ink-4); font-weight: 700; }
+.stat .d { font-size: 12px; font-weight: 700; margin-top: 4px; }
+.up { color: var(--success); }
+.down { color: var(--danger); }
+.flat { color: var(--ink-4); }
+
+/* ---- Toolbar (search + segments + view-toggle) ---- */
+.toolbar { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.search { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 200px; max-width: 360px; background: var(--card-bg); border: 1px solid var(--border-2); border-radius: var(--radius-md); padding: 9px 13px; color: var(--ink-3); }
+.search input { border: none; outline: none; background: transparent; flex: 1; font-size: 14px; color: var(--text-primary); font-family: var(--font-body); }
+.search svg { flex: 0 0 auto; }
+.seg { display: flex; gap: 2px; background: var(--card-bg); border: 1px solid var(--border-2); border-radius: var(--radius-md); padding: 3px; }
+.seg button { padding: 7px 13px; border-radius: 9px; font-size: 13px; font-weight: 700; color: var(--text-secondary); border: none; background: none; cursor: pointer; transition: var(--transition); white-space: nowrap; }
+.seg button.on { background: var(--accent-weak); color: var(--accent-ink); }
+.seg button:hover:not(.on) { background: var(--surface-2); color: var(--text-primary); }
+.view-toggle { display: flex; gap: 2px; margin-left: auto; background: var(--card-bg); border: 1px solid var(--border-2); border-radius: var(--radius-md); padding: 3px; }
+.view-toggle button { width: 34px; height: 30px; border-radius: 8px; display: grid; place-items: center; color: var(--ink-3); border: none; background: none; cursor: pointer; transition: var(--transition); }
+.view-toggle button.on { background: var(--accent-weak); color: var(--accent-ink); }
+.view-toggle button:hover:not(.on) { background: var(--surface-2); color: var(--text-primary); }
+
+/* ---- Brand avatar (45° cut) — big-av variants ---- */
+.big-av { width: 64px; height: 64px; border-radius: 18px; border-top-right-radius: 4px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 20px; flex: 0 0 auto; position: relative; overflow: hidden; }
+.big-av::before { content: ''; position: absolute; inset: 0; background: linear-gradient(150deg, rgba(255,255,255,.16), rgba(255,255,255,0) 55%); }
+.big-av::after { content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 18px 18px 0; border-color: transparent var(--accent) transparent transparent; }
+.big-av.av-md { width: 48px; height: 48px; border-radius: 14px; border-top-right-radius: 3px; font-size: 16px; }
+.big-av.av-md::after { border-width: 0 14px 14px 0; }
+.big-av.av-sm { width: 40px; height: 40px; border-radius: 11px; border-top-right-radius: 3px; font-size: 14px; }
+.big-av.av-sm::after { border-width: 0 12px 12px 0; }
+
+/* ---- Clients grid ---- */
+.clients-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(345px,1fr)); gap: 16px; }
+.client-card { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; box-shadow: var(--shadow-sm); cursor: pointer; transition: var(--transition-spring); position: relative; }
+.client-card:hover { border-color: var(--border-2); box-shadow: var(--shadow-lg); transform: translateY(-3px); }
+.cc-top { display: flex; gap: 13px; align-items: flex-start; }
+.cc-id { min-width: 0; flex: 1; }
+.cc-name { font-family: var(--font-display); font-size: 16px; font-weight: 700; letter-spacing: -.02em; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.cc-name > span:first-child { white-space: nowrap; }
+.cc-meta { font-size: 13px; color: var(--ink-3); margin-top: 3px; font-weight: 500; }
+.cc-actions { display: flex; gap: 4px; opacity: 0; transition: opacity .15s; flex: 0 0 auto; }
+.client-card:hover .cc-actions { opacity: 1; }
+.cc-actions a, .cc-actions button { width: 32px; height: 32px; border-radius: 9px; display: grid; place-items: center; color: var(--ink-3); border: 1px solid var(--border); background: var(--card-bg); transition: var(--transition); text-decoration: none; cursor: pointer; }
+.cc-actions a:hover, .cc-actions button:hover { color: var(--text-primary); border-color: var(--ink-4); }
+.cc-actions .del:hover { color: var(--danger); border-color: var(--danger); }
+
+/* ---- Health ring (SVG inline) ---- */
+.health-ring { width: 50px; height: 50px; flex: 0 0 auto; }
+.health-ring circle { fill: none; stroke-linecap: round; transition: stroke-dashoffset .6s var(--ease-out); }
+.health-ring .track { stroke: var(--surface-2); stroke-width: 3.5; }
+.health-ring .fill { stroke-width: 3.5; transform-origin: center; transform: rotate(-90deg); }
+.health-ring .fill.up   { stroke: var(--success); }
+.health-ring .fill.flat { stroke: var(--ink-4); }
+.health-ring .fill.down { stroke: var(--danger); }
+.health-ring .fill.warn { stroke: var(--amber); }
+.health-ring text { font-family: var(--font-display); font-weight: 800; font-size: 11px; fill: var(--text-primary); dominant-baseline: middle; text-anchor: middle; }
+.health-ring text small { font-size: 8px; }
+
+.cc-health { display: flex; align-items: center; gap: 13px; margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--border); }
+.health-info { min-width: 0; }
+.health-info b { font-size: 13.5px; font-weight: 800; white-space: nowrap; }
+.health-info span { font-size: 11.5px; color: var(--ink-3); display: block; font-weight: 600; margin-top: 2px; }
+
+.cc-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 14px; font-size: 12px; color: var(--ink-3); font-weight: 600; }
+.brief-dots { display: flex; gap: 5px; align-items: center; }
+.bd { width: 9px; height: 9px; border-radius: 3px; }
+.bd.done { background: var(--success); }
+.bd.work { background: var(--amber); }
+.bd.none { background: var(--border-2); }
+
+/* ---- Clients table view ---- */
+.clients-table { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; box-shadow: var(--shadow-sm); }
+.ct-row { display: grid; grid-template-columns: 2.2fr 1fr 1fr 0.8fr; align-items: center; gap: 16px; padding: 14px 20px; border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s; text-decoration: none; color: inherit; }
+.ct-row:last-child { border-bottom: none; }
+.ct-row:hover { background: var(--surface-2); }
+.ct-row.head { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); cursor: default; background: var(--surface-2); }
+.ct-row.head:hover { background: var(--surface-2); }
+.ct-client { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.ct-client b { font-size: 14.5px; font-weight: 700; }
+.ct-client span { font-size: 12.5px; color: var(--ink-3); display: block; }
+.ct-health { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+
+/* ---- Responsive ---- */
+@media (max-width: 1100px) { .stats-strip { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 820px) {
+  .stats-strip { grid-template-columns: repeat(2,1fr); gap: 10px; }
+  .clients-grid { grid-template-columns: 1fr; }
+  .toolbar { gap: 8px; }
+  .seg { overflow-x: auto; }
+  .ct-row { grid-template-columns: 1fr 1fr; }
+  .ct-row > :nth-child(n+3) { display: none; }
+}
+@media (max-width: 480px) {
+  .stats-strip { grid-template-columns: 1fr 1fr; }
+}
+
+/* ============================================================
    ЭТАП 2 — HOME VIEW (home.css → Flask/Jinja)
    ============================================================ */
 

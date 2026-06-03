@@ -218,9 +218,65 @@ def home():
 
 @app.route('/clients')
 def clients():
-    """Картотека клиентов."""
-    client_list = Client.query.order_by(Client.created_at.desc()).all()
-    return render_template('index.html', clients=client_list)
+    """Картотека клиентов — с агрегированными данными для UI."""
+    palette = ['#1D1D1F','#2563EB','#16A34A','#7C3AED','#0891B2','#DB2777','#EA580C']
+
+    def brief_state(b):
+        if b is None: return 'none'
+        if b.status == 'Заполнено': return 'done'
+        if b.status == 'В работе': return 'work'
+        return 'none'
+
+    raw = Client.query.order_by(Client.created_at.desc()).all()
+    total_briefs_done = 0
+    client_data = []
+
+    for c in raw:
+        bmap = {b.brief_type: b for b in c.briefs}
+        done = sum(1 for b in bmap.values() if b.status == 'Заполнено')
+        total_briefs_done += done
+
+        parts    = c.name.split()
+        initials = (parts[0][0] + (parts[1][0] if len(parts) > 1 else '')).upper()
+        color    = palette[c.id % len(palette)]
+        health   = round(done / 3 * 100)
+
+        if health == 100:   health_label, health_cls = 'Хорошее',   'up'
+        elif health >= 67:  health_label, health_cls = 'В порядке', 'up'
+        elif health >= 33:  health_label, health_cls = 'В работе',  'warn'
+        elif done > 0:      health_label, health_cls = 'Внимание',  'down'
+        else:               health_label, health_cls = 'Нет данных','flat'
+
+        # stroke-dasharray для SVG-кольца: r=18 → C ≈ 113.1
+        circ = 113.1
+        filled  = round(health / 100 * circ, 1)
+        empty   = round(circ - filled, 1)
+
+        client_data.append(dict(
+            id=c.id, name=c.name,
+            created_at=c.created_at,
+            initials=initials, color=color,
+            done=done, total=3,
+            health=health,
+            health_label=health_label, health_cls=health_cls,
+            ring_filled=filled, ring_empty=empty,
+            bd_briefing=brief_state(bmap.get('briefing')),
+            bd_point_a=brief_state(bmap.get('point_a')),
+            bd_docs=brief_state(bmap.get('docs')),
+        ))
+
+    total_count    = len(raw)
+    avg_health     = round(total_briefs_done / max(total_count * 3, 1) * 100)
+    clients_active = sum(1 for c in client_data if c['done'] > 0)
+
+    return render_template('index.html',
+        clients=client_data,
+        total_count=total_count,
+        clients_active=clients_active,
+        total_briefs_done=total_briefs_done,
+        total_briefs=total_count * 3,
+        avg_health=avg_health,
+    )
 
 @app.route('/add_client', methods=['GET', 'POST'])
 def add_client():
