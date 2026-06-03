@@ -14,19 +14,24 @@
     }
   </script>
 
-  <!-- Шрифты: Manrope (заголовки) + Inter (текст) -->
+  <!-- Шрифты: Manrope (заголовки/интерфейс) + Inter (текст) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 
   <!-- Favicon монограмма ШЕФ -->
   <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/mono.svg') }}">
 
   <!-- Стили -->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+
+  {% block head %}{% endblock %}
 </head>
 <body>
-  <!-- Splash Screen -->
+
+  <!-- ======================================================
+       Splash Screen (первый визит в сессии)
+       ====================================================== -->
   <div id="splash-screen">
     <div class="splash-logo">
       <svg viewBox="0 -18 720 236" xmlns="http://www.w3.org/2000/svg" aria-label="ШЕФ" role="img">
@@ -43,26 +48,40 @@
           <path d="M268 150H438L478 200H268Z"/>
           <!-- Ф -->
           <path d="M585 -12H627V212H585Z"/>
-          <path fill-rule="evenodd" clip-rule="evenodd" d="M508 100A98 82 0 1 0 704 100A98 82 0 1 0 508 100ZM554 100A52 42 0 1 0 658 100A52 42 0 1 0 554 100Z"/>
+          <path fill-rule="evenodd" clip-rule="evenodd"
+                d="M508 100A98 82 0 1 0 704 100A98 82 0 1 0 508 100ZM554 100A52 42 0 1 0 658 100A52 42 0 1 0 554 100Z"/>
         </g>
-        <!-- синий наконечник, завершающий среднюю перекладину «Е» — всегда #2563EB -->
         <path class="accent" d="M352 78H404L364 128H312Z" fill="#2563EB"/>
       </svg>
     </div>
   </div>
-  
-  <!-- Индикатор загрузки -->
-  <div class="loading-bar" id="loadingBar"></div>
 
-  <!-- Контейнер для уведомлений -->
-  <div id="toastContainer" class="toast-container"></div>
+  <!-- ======================================================
+       App Shell: сайдбар + основной контент
+       ====================================================== -->
+  <div class="app">
 
-  <!-- Основная навигация (обёртка в page-wrapper внутри блоков) -->
-  {% block content %}{% endblock %}
+    {% include '_sidebar.html' %}
 
-  <!-- JavaScript -->
+    <main class="main" id="mainContent">
+
+      <!-- Индикатор загрузки (position: fixed — работает из любого контейнера) -->
+      <div class="loading-bar" id="loadingBar"></div>
+
+      <!-- Контейнер для уведомлений -->
+      <div id="toastContainer" class="toast-container"></div>
+
+      {% block content %}{% endblock %}
+
+    </main>
+  </div><!-- /.app -->
+
+  <!-- ======================================================
+       Скрипты
+       ====================================================== -->
   <script src="{{ url_for('static', filename='js/app.js') }}"></script>
-    <!-- Модальное окно подтверждения удаления -->
+
+  <!-- Модальное окно подтверждения удаления -->
   <div id="deleteModal" class="modal-overlay" style="display: none;">
     <div class="modal-card">
       <h3 class="modal-title">Подтверждение удаления</h3>
@@ -76,7 +95,6 @@
     </div>
   </div>
 
-  <!-- Скрипт для модального окна -->
   <script>
     function showDeleteModal(clientId, clientName) {
       const modal = document.getElementById('deleteModal');
@@ -89,13 +107,13 @@
     function closeDeleteModal() {
       document.getElementById('deleteModal').style.display = 'none';
     }
-    // Закрытие по клику вне карточки
     window.addEventListener('click', function(e) {
       const modal = document.getElementById('deleteModal');
-      if (e.target === modal) {
-        modal.style.display = 'none';
-      }
+      if (e.target === modal) modal.style.display = 'none';
     });
   </script>
+
+  {% block scripts %}{% endblock %}
+
 </body>
 </html>

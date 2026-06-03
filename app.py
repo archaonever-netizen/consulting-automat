@@ -28,6 +28,14 @@ db.init_app(app)
 with app.app_context():
     db.create_all()
 
+@app.context_processor
+def inject_nav():
+    """Счётчик клиентов для бейджа в сайдбаре."""
+    try:
+        return dict(nav_client_count=Client.query.count())
+    except Exception:
+        return dict(nav_client_count=0)
+
 # -------------------------------------------------------------------
 # Вспомогательные функции для структуры анкет
 # -------------------------------------------------------------------
