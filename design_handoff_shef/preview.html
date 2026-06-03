@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Превью · ШЕФ-редизайн на consulting-automat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="integration/styles.css">
+  <style>
+    /* только для превью — лёгкие пояснительные плашки + мини-шапка */
+    .preview-note { max-width: 1180px; margin: 1.5rem auto 0; padding: 0 1.5rem; }
+    .preview-note .eyebrow { margin-bottom: 0; }
+    .app-brandbar { max-width: 1180px; margin: 0 auto; padding: 1.1rem 1.5rem 0; display: flex; }
+    .app-brandbar .brand { display: inline-flex; align-items: center; gap: 10px; }
+    .app-brandbar .brand .shef-mono { width: 30px; height: 30px; }
+    .app-brandbar .brand b { font-family: var(--font-display); font-weight: 800; font-size: 1rem; letter-spacing: -.02em; color: var(--text-primary); }
+    .briefs-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 1rem; margin-top: 1rem; }
+    @media (max-width:768px){ .briefs-row { grid-template-columns: 1fr; } }
+    .brief-card h3 { font-size: 1.1rem; margin-bottom: .35rem; }
+    .brief-card p { font-size: .85rem; color: var(--text-secondary); line-height: 1.5; margin: .25rem 0 1rem; min-height: 42px; }
+    .brief-foot { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+    .icon { width: 17px; height: 17px; }
+  </style>
+</head>
+<body>
+
+  <header class="app-brandbar">
+    <span class="brand">
+      <span class="shef-mono"><svg viewBox="-20 -18 268 236"><g fill="#fff"><path d="M0 0H46V200H0Z"/><path d="M91 0H137V200H91Z"/><path d="M182 0H228V200H182Z"/><path d="M0 156H228V200H0Z"/></g><path d="M188 156H228L184 200H144Z" fill="#2563EB"/></svg></span>
+      <b>ШЕФ</b>
+    </span>
+  </header>
+
+  <div class="preview-note"><span class="eyebrow">Превью · ваша разметка + новый styles.css</span></div>
+
+  <!-- ============ index.html ============ -->
+  <div class="page-wrapper">
+    <div class="header">
+      <h1 class="page-title">Картотека клиентов</h1>
+      <a href="#" class="btn btn-primary"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>Добавить клиента</a>
+    </div>
+
+    <div class="card-grid">
+      <!-- карточка с аватаром-срезом 45° + статус-бейдж + иконки вместо эмодзи -->
+      <div class="card animate-in stagger-1">
+        <div style="display:flex;gap:13px;align-items:flex-start">
+          <div class="client-av">ТС</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <h3 style="font-weight:800;font-size:1.25rem;margin:0">ТехноСтрой</h3>
+              <span class="badge pill-blue">Активен</span>
+            </div>
+            <p style="color:var(--text-secondary);margin:.35rem 0 0;font-size:.85rem">Создан: 14.05.2026</p>
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:1.1rem">
+          <a href="#" class="btn btn-secondary" style="flex:1">Анкеты</a>
+          <a href="#" class="btn btn-secondary btn-icon" title="Изменить"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></a>
+          <a href="#" class="btn btn-danger btn-icon" title="Удалить"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg></a>
+        </div>
+      </div>
+
+      <div class="card animate-in stagger-2">
+        <div style="display:flex;gap:13px;align-items:flex-start">
+          <div class="client-av blue">СП</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <h3 style="font-weight:800;font-size:1.25rem;margin:0">Северная Пекарня</h3>
+              <span class="badge pill-blue">Активен</span>
+            </div>
+            <p style="color:var(--text-secondary);margin:.35rem 0 0;font-size:.85rem">Создан: 09.05.2026</p>
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:1.1rem">
+          <a href="#" class="btn btn-secondary" style="flex:1">Анкеты</a>
+          <a href="#" class="btn btn-secondary btn-icon" title="Изменить"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></a>
+          <a href="#" class="btn btn-danger btn-icon" title="Удалить"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg></a>
+        </div>
+      </div>
+
+      <div class="card animate-in stagger-3">
+        <div style="display:flex;gap:13px;align-items:flex-start">
+          <div class="client-av green">Г78</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+              <h3 style="font-weight:800;font-size:1.25rem;margin:0">Гараж 78</h3>
+              <span class="badge pill-blue">Активен</span>
+            </div>
+            <p style="color:var(--text-secondary);margin:.35rem 0 0;font-size:.85rem">Создан: 02.05.2026</p>
+          </div>
+        </div>
+        <div style="display:flex;gap:.5rem;margin-top:1.1rem">
+          <a href="#" class="btn btn-secondary" style="flex:1">Анкеты</a>
+          <a href="#" class="btn btn-secondary btn-icon" title="Изменить"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></a>
+          <a href="#" class="btn btn-danger btn-icon" title="Удалить"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/></svg></a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ briefs_list.html ============ -->
+    <div style="margin-top:2.75rem">
+      <div class="eyebrow" style="margin-bottom:.5rem">Анкеты · ТехноСтрой</div>
+      <h2 class="section-title" style="font-size:1.6rem;margin-bottom:.25rem">Входной брифинг</h2>
+    </div>
+    <div class="briefs-row">
+      <div class="card brief-card">
+        <span class="shef-byline" style="margin-bottom:.6rem"><span class="shef-mono xs"><svg viewBox="-20 -18 268 236"><g fill="#fff"><path d="M0 0H46V200H0Z"/><path d="M91 0H137V200H91Z"/><path d="M182 0H228V200H182Z"/><path d="M0 156H228V200H0Z"/></g><path d="M188 156H228L184 200H144Z" fill="#2563EB"/></svg></span>ШЕФ</span>
+        <h3>Брифинг «Бизнес-портрет»</h3>
+        <p>Основная анкета для сбора формальной информации о бизнесе.</p>
+        <div class="brief-foot">
+          <span class="badge pill-green"><span class="led"></span>Заполнено</span>
+          <a href="#" class="btn btn-secondary btn-sm">Открыть</a>
+        </div>
+      </div>
+      <div class="card brief-card">
+        <span class="shef-byline" style="margin-bottom:.6rem"><span class="shef-mono xs"><svg viewBox="-20 -18 268 236"><g fill="#fff"><path d="M0 0H46V200H0Z"/><path d="M91 0H137V200H91Z"/><path d="M182 0H228V200H182Z"/><path d="M0 156H228V200H0Z"/></g><path d="M188 156H228L184 200H144Z" fill="#2563EB"/></svg></span>ШЕФ</span>
+        <h3>Точка А</h3>
+        <p>Глубинное интервью для выявления реальных проблем и целей.</p>
+        <div class="brief-foot">
+          <span class="badge pill-amber">В работе</span>
+          <a href="#" class="btn btn-secondary btn-sm">Открыть</a>
+        </div>
+      </div>
+      <div class="card brief-card">
+        <span class="shef-byline" style="margin-bottom:.6rem"><span class="shef-mono xs"><svg viewBox="-20 -18 268 236"><g fill="#fff"><path d="M0 0H46V200H0Z"/><path d="M91 0H137V200H91Z"/><path d="M182 0H228V200H182Z"/><path d="M0 156H228V200H0Z"/></g><path d="M188 156H228L184 200H144Z" fill="#2563EB"/></svg></span>ШЕФ</span>
+        <h3>Документация бизнеса</h3>
+        <p>Чек-лист для сбора документов и проверки наличия артефактов.</p>
+        <div class="brief-foot">
+          <span class="badge pill-gray">Не заполнено</span>
+          <a href="#" class="btn btn-secondary btn-sm">Открыть</a>
+        </div>
+      </div>
+    </div>
+
+    <!-- ============ форма (фрагмент) ============ -->
+    <div class="card" style="margin-top:1.75rem;max-width:560px">
+      <div class="eyebrow" style="margin-bottom:1rem">Раздел 1 · Общая информация</div>
+      <div class="form-group">
+        <label class="form-label">Название компании</label>
+        <input class="form-input" type="text" value="ООО «ТехноСтрой»">
+      </div>
+      <div class="form-group" style="margin-bottom:1rem">
+        <label class="form-label">Вид деятельности (ОКВЭД)</label>
+        <input class="form-input" type="text" placeholder="Например: 41.20 — строительство зданий">
+      </div>
+      <div style="display:flex;gap:.6rem;justify-content:flex-end">
+        <a href="#" class="btn btn-secondary">Сохранить</a>
+        <a href="#" class="btn btn-primary">Сохранить и завершить</a>
+      </div>
+    </div>
+  </div>
+
+</body>
+</html>
