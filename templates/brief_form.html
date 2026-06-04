@@ -101,7 +101,7 @@
       const sections = [];
       const sectionCards = form.querySelectorAll('.card');
       sectionCards.forEach(card => {
-        const titleEl = card.querySelector('div[style*="font-weight: 800"]');
+        const titleEl = card.querySelector('.section-title');
         const title = titleEl ? titleEl.textContent.trim() : '';
         const fields = [];
         const textareas = card.querySelectorAll('textarea');
