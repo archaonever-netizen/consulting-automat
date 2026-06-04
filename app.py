@@ -1,8 +1,9 @@
 # app.py
 import os
 import json
+import random
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response
+from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session
 from models import db, Client, Brief
 from fpdf import FPDF
 
@@ -24,6 +25,7 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.secret_key = os.environ.get('SECRET_KEY', 'shef-dev-secret-key-change-in-prod')
 db.init_app(app)
 
 with app.app_context():
@@ -309,45 +311,111 @@ def delete_client(client_id):
 
 @app.route('/client/<int:client_id>')
 def client_briefs(client_id):
-    """Страница со списком анкет выбранного клиента."""
+    """Детальная карточка клиента с вкладками (Обзор, Брифы, …)."""
     client = Client.query.get_or_404(client_id)
-    # Собираем существующие анкеты
-    briefs_map = {}
-    for brief in client.briefs:
-        briefs_map[brief.brief_type] = brief
+    palette = ['#1D1D1F','#2563EB','#16A34A','#7C3AED','#0891B2','#DB2777','#EA580C']
 
     all_brief_types = [
         {'key': 'briefing',
          'name': 'Брифинг "Бизнес-портрет"',
-         'desc': 'Основная анкета для сбора формальной информации о бизнесе.'},
+         'desc': 'Основная анкета для сбора формальной информации о бизнесе клиента.'},
         {'key': 'point_a',
          'name': 'Точка А',
-         'desc': 'Глубинное интервью для выявления реальных проблем и целей.'},
+         'desc': 'Глубинное интервью: реальные боли, цели и ресурсы бизнеса.'},
         {'key': 'docs',
-         'name': 'Документация бизнеса',
-         'desc': 'Чек-лист для сбора документов и проверки наличия ключевых артефактов.'}
+         'name': 'Документация',
+         'desc': 'Чек-лист сбора документов и ключевых артефактов бизнеса.'},
     ]
-    # Создаём отсутствующие анкеты (если их ещё нет в базе)
+
+    # Гарантируем наличие всех трёх анкет
+    briefs_map = {b.brief_type: b for b in client.briefs}
     for bt in all_brief_types:
         if bt['key'] not in briefs_map:
-            new_brief = Brief(brief_type=bt['key'], client_id=client.id)
-            db.session.add(new_brief)
-            briefs_map[bt['key']] = new_brief
+            nb = Brief(brief_type=bt['key'], client_id=client.id)
+            db.session.add(nb)
+            briefs_map[bt['key']] = nb
     db.session.commit()
 
-    # Формируем удобный список для шаблона
-    briefs = []
+    done = sum(1 for b in briefs_map.values() if b.status == 'Заполнено')
+    total = 3
+
+    parts    = client.name.split()
+    initials = (parts[0][0] + (parts[1][0] if len(parts) > 1 else '')).upper()
+    color    = palette[client.id % len(palette)]
+    health   = round(done / total * 100)
+
+    if health == 100:   health_label, health_cls = 'Хорошее',   'up'
+    elif health >= 67:  health_label, health_cls = 'В порядке', 'up'
+    elif health >= 33:  health_label, health_cls = 'В работе',  'warn'
+    elif done > 0:      health_label, health_cls = 'Внимание',  'down'
+    else:               health_label, health_cls = 'Нет данных','flat'
+
+    if health >= 70:    spark_color, health_state = '#16A34A', 'Хорошее состояние'
+    elif health >= 45:  spark_color, health_state = '#C2740B', 'Требует внимания'
+    elif health > 0:    spark_color, health_state = '#DC2626', 'Зона риска'
+    else:               spark_color, health_state = '#BFC0C7', 'Нет данных'
+
+    circ = 113.1
+    ring_filled = round(health / 100 * circ, 1)
+    ring_empty  = round(circ - ring_filled, 1)
+
+    # Список брифов для вкладки «Брифы»
+    briefs_list = []
     for bt in all_brief_types:
-        brief = Brief.query.filter_by(client_id=client.id, brief_type=bt['key']).first()
-        briefs.append({
+        b = Brief.query.filter_by(client_id=client.id, brief_type=bt['key']).first()
+        briefs_list.append({
             'type': bt['key'],
             'name': bt['name'],
             'desc': bt['desc'],
-            'status': brief.status,
-            'id': brief.id,
-            'updated_at': brief.updated_at.strftime('%d.%m.%Y %H:%M') if brief.updated_at else None
+            'status': b.status,
+            'id': b.id,
+            'updated_at': b.updated_at.strftime('%d.%m.%Y %H:%M') if b.updated_at else None,
         })
-    return render_template('briefs_list.html', client=client, briefs=briefs)
+
+    # Активность: последние изменения брифов
+    events = []
+    for b in client.briefs:
+        if b.updated_at:
+            bname = next((x['name'] for x in all_brief_types if x['key'] == b.brief_type), b.brief_type)
+            events.append({
+                'kind': 'doc',
+                'time': b.updated_at.strftime('%d.%m.%Y %H:%M'),
+                'text': f'Анкета «{bname}» — {b.status}',
+                'ts': b.updated_at,
+            })
+    events.sort(key=lambda x: x['ts'], reverse=True)
+    activity = events[:5]
+    if not activity:
+        activity = [{'kind': 'doc', 'time': '—', 'text': 'Активности пока нет'}]
+
+    # Рекомендуемые шаги (B3 — статика пока брифы не заполнены полностью)
+    steps = []
+    for bt in all_brief_types:
+        b = briefs_map.get(bt['key'])
+        if b and b.status != 'Заполнено':
+            steps.append({'title': f'Заполнить «{bt["name"]}»',
+                          'desc': bt['desc']})
+    if not steps:
+        steps = [
+            {'title': 'Обсудить результаты анализа',
+             'desc': 'Все брифы заполнены — ИИ готов сформировать полный план.'},
+            {'title': 'Сформировать стратегический план',
+             'desc': 'Откройте чат и запросите план действий по клиенту.'},
+        ]
+
+    client_data = dict(
+        id=client.id, name=client.name,
+        created_at=client.created_at,
+        initials=initials, color=color,
+        done=done, total=total,
+        health=health, health_label=health_label, health_cls=health_cls,
+        health_state=health_state, spark_color=spark_color,
+        ring_filled=ring_filled, ring_empty=ring_empty,
+        briefs_list=briefs_list,
+        activity=activity,
+        steps=steps,
+    )
+    return render_template('client_detail.html', client=type('C', (), client_data))
 
 @app.route('/brief/<int:brief_id>', methods=['GET', 'POST'])
 def brief_form(brief_id):
@@ -497,6 +565,143 @@ def autosave_brief(brief_id):
 
     db.session.commit()
     return jsonify({'status': 'ok', 'brief_status': brief.status})
+
+# -------------------------------------------------------------------
+# Этап 5 — Чаты с ИИ
+# -------------------------------------------------------------------
+
+_AI_REPLIES = [
+    'Готовлю ответ на основе данных клиентов и заполненных брифов. '
+    'Вот что я вижу: ключевые показатели стабильны, но есть зоны роста '
+    'в маржинальности и конверсии. Хотите, я разложу это по шагам?',
+
+    'Проанализировал доступные данные. Рекомендую начать с диверсификации '
+    'клиентской базы и оптимизации воронки продаж — это даст самый быстрый '
+    'эффект на горизонте квартала.',
+
+    'Понял задачу. Я могу подготовить детальный план, собрать отчёт или '
+    'открыть нужный раздел. С чего начнём?',
+
+    'Хороший вопрос. Основной риск здесь — концентрация выручки на 2–3 '
+    'ключевых клиентах. Если потеряете хотя бы одного, это сразу скажется '
+    'на денежном потоке. Предлагаю разработать стратегию удержания.',
+
+    'Для формирования полного плана мне нужны данные из анкет. '
+    'Заполните брифы клиента — и я выдам конкретные рекомендации с '
+    'приоритетами и сроками.',
+]
+
+_CHAT_SUGGESTIONS = [
+    {'text': 'Проанализируй бриф клиента',
+     'icon_path': '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8"/><path d="M8 17h5"/>'},
+    {'text': 'Какие риски у бизнеса?',
+     'icon_path': '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>'},
+    {'text': 'Сформируй план действий',
+     'icon_path': '<path d="M20 6 9 17l-5-5"/>'},
+    {'text': 'Покажи финансовые инсайты',
+     'icon_path': '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>'},
+]
+
+
+@app.route('/chat')
+def chat():
+    """Чат с ИИ (UI-заглушка, B2)."""
+    hour = datetime.now().hour
+    if hour < 5:    greet = 'Доброй ночи'
+    elif hour < 12: greet = 'Доброе утро'
+    elif hour < 18: greet = 'Добрый день'
+    else:           greet = 'Добрый вечер'
+
+    messages = session.get('chat_messages', [
+        {'role': 'ai',
+         'time': '10:00',
+         'text': 'Привет, Алексей! Я здесь, чтобы помочь принимать лучшие решения '
+                 'и расти быстрее. Что хотите сделать?'},
+    ])
+    return render_template('chat.html',
+        greet=greet,
+        messages=messages,
+        suggestions=_CHAT_SUGGESTIONS,
+    )
+
+
+@app.route('/chat/send', methods=['POST'])
+def chat_send():
+    """Принимает сообщение пользователя, добавляет в сессию, возвращает мок-ответ ИИ."""
+    data = request.get_json()
+    if not data or not data.get('text', '').strip():
+        return jsonify({'error': 'empty'}), 400
+
+    text = data['text'].strip()
+    now = datetime.now().strftime('%H:%M')
+
+    msgs = session.get('chat_messages', [
+        {'role': 'ai', 'time': '10:00',
+         'text': 'Привет, Алексей! Я здесь, чтобы помочь принимать лучшие решения.'},
+    ])
+    msgs.append({'role': 'user', 'time': now, 'text': text})
+    reply = random.choice(_AI_REPLIES)
+    msgs.append({'role': 'ai', 'time': now, 'text': reply})
+    # Храним последние 40 сообщений
+    session['chat_messages'] = msgs[-40:]
+    session.modified = True
+
+    return jsonify({'reply': reply})
+
+
+# -------------------------------------------------------------------
+# Этап 6 — Заглушки разделов
+# -------------------------------------------------------------------
+
+_EMPTY_SECTIONS = {
+    'analytics': {
+        'title': 'Аналитика',
+        'subtitle': 'Сквозные показатели, динамика выручки и воронка продаж появятся здесь после заполнения брифов.',
+        'icon': '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>',
+    },
+    'tasks': {
+        'title': 'Задачи',
+        'subtitle': 'Создавайте задачи вручную или дайте ИИ сформировать план действий.',
+        'icon': '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+    },
+    'templates': {
+        'title': 'Шаблоны',
+        'subtitle': 'Готовые шаблоны анкет, отчётов и стратегических планов появятся здесь.',
+        'icon': '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 9h17"/><path d="M9 9v11.5"/>',
+    },
+    'knowledge': {
+        'title': 'База знаний',
+        'subtitle': 'Методики, фреймворки и кейсы консалтинга будут доступны здесь.',
+        'icon': '<path d="M5 4.5A2 2 0 0 1 7 3h12v15H7a2 2 0 0 0-2 2Z"/><path d="M5 4.5V19a2 2 0 0 0 2 2h12"/>',
+    },
+    'settings': {
+        'title': 'Настройки',
+        'subtitle': 'Управляйте профилем, уведомлениями и интеграциями.',
+        'icon': '<circle cx="12" cy="12" r="3"/><path d="M19.4 12a7.4 7.4 0 0 0-.1-1.2l2-1.5-2-3.4-2.3 1a7.3 7.3 0 0 0-2-1.2l-.3-2.5H8.3L8 5.7a7.3 7.3 0 0 0-2 1.2l-2.3-1-2 3.4 2 1.5a7.4 7.4 0 0 0 0 2.4l-2 1.5 2 3.4 2.3-1a7.3 7.3 0 0 0 2 1.2l.3 2.5h3.4l.3-2.5a7.3 7.3 0 0 0 2-1.2l2.3 1 2-3.4-2-1.5c.1-.4.1-.8.1-1.2Z"/>',
+    },
+}
+
+
+@app.route('/analytics')
+def analytics():
+    return render_template('empty_section.html', section=_EMPTY_SECTIONS['analytics'])
+
+@app.route('/tasks')
+def tasks():
+    return render_template('empty_section.html', section=_EMPTY_SECTIONS['tasks'])
+
+@app.route('/templates')
+def templates_view():
+    return render_template('empty_section.html', section=_EMPTY_SECTIONS['templates'])
+
+@app.route('/knowledge')
+def knowledge():
+    return render_template('empty_section.html', section=_EMPTY_SECTIONS['knowledge'])
+
+@app.route('/settings')
+def settings():
+    return render_template('empty_section.html', section=_EMPTY_SECTIONS['settings'])
+
 
 if __name__ == '__main__':
     app.run(debug=True)

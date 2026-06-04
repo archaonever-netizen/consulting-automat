@@ -247,8 +247,7 @@
 function handleAsk(text) {
   const val = text || document.getElementById('askInput').value.trim();
   if (!val) return;
-  // Заглушка: пока перенаправляем на страницу клиентов (Этап 5 — реальный чат)
-  window.showToast && window.showToast('Чат с ШЕФ появится в следующем обновлении', 'info');
+  window.location.href = '{{ url_for("chat") }}';
 }
 </script>
 {% endblock %}

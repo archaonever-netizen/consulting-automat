@@ -11,8 +11,20 @@
                         'autosave_brief','generate_pdf'] -%}
 {%- if _ep == 'home' -%}
   {%- set _active = 'home' -%}
+{%- elif _ep in ['chat','chat_send'] -%}
+  {%- set _active = 'chat' -%}
 {%- elif _ep in _client_eps -%}
   {%- set _active = 'clients' -%}
+{%- elif _ep == 'analytics' -%}
+  {%- set _active = 'analytics' -%}
+{%- elif _ep == 'tasks' -%}
+  {%- set _active = 'tasks' -%}
+{%- elif _ep == 'templates_view' -%}
+  {%- set _active = 'templates' -%}
+{%- elif _ep == 'knowledge' -%}
+  {%- set _active = 'kb' -%}
+{%- elif _ep == 'settings' -%}
+  {%- set _active = 'settings' -%}
 {%- else -%}
   {%- set _active = '' -%}
 {%- endif -%}
@@ -41,14 +53,14 @@
   </div>
 
   <!-- Новый чат -->
-  <button class="sb-newchat" type="button">
+  <a href="{{ url_for('chat') }}" class="sb-newchat">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor"
          stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M12 5v14M5 12h14"/>
     </svg>
     <span class="sb-nc-label">Новый чат</span>
     <span class="kbd">⌘K</span>
-  </button>
+  </a>
 
   <!-- Навигация -->
   <nav class="sb-nav" aria-label="Главное меню">
@@ -65,13 +77,12 @@
     </a>
 
     {# chats #}
-    <a href="#" class="sb-navitem{% if _active == 'chats' %} active{% endif %}">
+    <a href="{{ url_for('chat') }}" class="sb-navitem{% if _active == 'chat' %} active{% endif %}">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 9.4 9.4 0 0 1-4-.9L3 20l1.4-4.5a8.38 8.38 0 0 1-.9-4A8.5 8.5 0 0 1 12 3a8.38 8.38 0 0 1 9 8.5Z"/>
       </svg>
       <span>Чаты с ИИ</span>
-      <span class="dot"></span>
     </a>
 
     {# clients #}
@@ -91,7 +102,7 @@
     </a>
 
     {# analytics #}
-    <a href="#" class="sb-navitem{% if _active == 'analytics' %} active{% endif %}">
+    <a href="{{ url_for('analytics') }}" class="sb-navitem{% if _active == 'analytics' %} active{% endif %}">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <path d="M4 20V10"/><path d="M10 20V4"/>
@@ -101,7 +112,7 @@
     </a>
 
     {# tasks #}
-    <a href="#" class="sb-navitem{% if _active == 'tasks' %} active{% endif %}">
+    <a href="{{ url_for('tasks') }}" class="sb-navitem{% if _active == 'tasks' %} active{% endif %}">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3.5" y="3.5" width="17" height="17" rx="4"/>
@@ -111,7 +122,7 @@
     </a>
 
     {# templates #}
-    <a href="#" class="sb-navitem{% if _active == 'templates' %} active{% endif %}">
+    <a href="{{ url_for('templates_view') }}" class="sb-navitem{% if _active == 'templates' %} active{% endif %}">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <rect x="3.5" y="3.5" width="17" height="17" rx="3"/>
@@ -121,7 +132,7 @@
     </a>
 
     {# knowledge base #}
-    <a href="#" class="sb-navitem{% if _active == 'kb' %} active{% endif %}">
+    <a href="{{ url_for('knowledge') }}" class="sb-navitem{% if _active == 'kb' %} active{% endif %}">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <path d="M5 4.5A2 2 0 0 1 7 3h12v15H7a2 2 0 0 0-2 2Z"/>
@@ -131,7 +142,7 @@
     </a>
 
     {# settings #}
-    <a href="#" class="sb-navitem{% if _active == 'settings' %} active{% endif %}">
+    <a href="{{ url_for('settings') }}" class="sb-navitem{% if _active == 'settings' %} active{% endif %}">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
            stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <circle cx="12" cy="12" r="3"/>
