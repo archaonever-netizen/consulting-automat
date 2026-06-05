@@ -622,7 +622,9 @@ a:hover { color: var(--accent-hover); }
 
 .sidebar.sb-collapsed .sb-foot { width: 100%; padding: 12px 0 8px; flex-direction: column; align-items: center; }
 .sidebar.sb-collapsed .sb-foot .grow { display: none; }
-.sidebar.sb-collapsed .sb-user { display: none; }
+.sidebar.sb-collapsed .sb-user { padding: 9px 0; justify-content: center; border: none; margin-top: 8px; }
+.sidebar.sb-collapsed .sb-user .sb-meta,
+.sidebar.sb-collapsed .sb-user .sb-chev { display: none; }
 
 .sidebar.sb-collapsed [title="Свернуть"] svg { transform: rotate(180deg); }
 
