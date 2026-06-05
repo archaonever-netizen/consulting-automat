@@ -4,4 +4,3 @@ fpdf2==2.8.7
 gunicorn==23.0.0
 psycopg[binary]>=3.0
 python-dotenv>=1.0.0
-anthropic>=0.42.0
