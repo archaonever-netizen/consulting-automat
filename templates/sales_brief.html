@@ -118,9 +118,9 @@
 <script>
   // Конфигурация метрик для расчётов и health проверки
   const metricsConfig = {
-    '1.1': { calcType: 'direct', threshold: 5, comparison: 'gte' },
+    '1.1': { calcType: 'growth_percent', threshold: 5, comparison: 'gte' },
     '1.2': { calcType: 'division_percent', threshold: 95, comparison: 'gte' },
-    '1.3': { calcType: 'direct', threshold: 0, comparison: 'gte' },
+    '1.3': { calcType: 'growth_percent', threshold: 0, comparison: 'gte' },
     '1.4': { calcType: 'division_reverse', threshold: 0.80, comparison: 'gte' },
     '1.5': { calcType: 'division_percent_reverse', threshold: 12, comparison: 'gte' },
     '1.6': { calcType: 'division_percent_reverse', threshold: 20, comparison: 'gte' },
@@ -161,6 +161,8 @@
         return nums.length >= 2 ? ((nums[1] / nums[0]) * 100).toFixed(1) : null;
       case 'subtraction':
         return nums.length >= 2 ? (nums[0] - nums[1]).toFixed(0) : null;
+      case 'growth_percent':
+        return nums.length >= 2 && nums[1] !== 0 ? (((nums[0] - nums[1]) / nums[1]) * 100).toFixed(1) : null;
       case 'date_diff': {
         if (values.length >= 2 && values[0] && values[1]) {
           const date1 = new Date(values[0]);
@@ -247,7 +249,7 @@
       const ct = metricsConfig[metricId].calcType;
       if (ct === 'division' || ct === 'division_reverse') {
         resultSpan.textContent = parseFloat(result).toFixed(2);
-      } else if (ct === 'division_percent' || ct === 'division_percent_reverse') {
+      } else if (ct === 'division_percent' || ct === 'division_percent_reverse' || ct === 'growth_percent') {
         resultSpan.textContent = result + '%';
       } else if (ct === 'yesno') {
         resultSpan.textContent = result === 'yes' ? 'Да' : 'Нет';
