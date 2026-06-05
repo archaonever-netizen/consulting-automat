@@ -33,7 +33,11 @@ app.secret_key = os.environ.get('SECRET_KEY', 'shef-dev-secret-key-change-in-pro
 db.init_app(app)
 
 with app.app_context():
-    db.create_all()
+    try:
+        db.create_all()
+    except Exception as e:
+        print(f"Warning: Could not create tables: {e}")
+        # Приложение продолжит работать даже если БД недоступна
 
 @app.context_processor
 def inject_nav():
