@@ -121,9 +121,9 @@
     '1.1': { calcType: 'direct', threshold: 5, comparison: 'gte' },
     '1.2': { calcType: 'division_percent', threshold: 95, comparison: 'gte' },
     '1.3': { calcType: 'direct', threshold: 0, comparison: 'gte' },
-    '1.4': { calcType: 'division', threshold: 0.80, comparison: 'gte' },
-    '1.5': { calcType: 'division_percent', threshold: 12, comparison: 'gte' },
-    '1.6': { calcType: 'division_percent', threshold: 20, comparison: 'gte' },
+    '1.4': { calcType: 'division_reverse', threshold: 0.80, comparison: 'gte' },
+    '1.5': { calcType: 'division_percent_reverse', threshold: 12, comparison: 'gte' },
+    '1.6': { calcType: 'division_percent_reverse', threshold: 20, comparison: 'gte' },
     '1.7': { calcType: 'date_diff', threshold: 60, comparison: 'lte' },
     '1.8': { calcType: 'division_percent', threshold: 40, comparison: 'lte' },
     '1.9': { calcType: 'yesno', threshold: 'yes', comparison: 'eq' },
@@ -152,8 +152,12 @@
       case 'direct':
         return nums[0];
       case 'division':
+        return nums.length >= 2 ? (nums[0] / nums[1]).toFixed(2) : null;
+      case 'division_reverse':
         return nums.length >= 2 ? (nums[1] / nums[0]).toFixed(2) : null;
       case 'division_percent':
+        return nums.length >= 2 ? ((nums[0] / nums[1]) * 100).toFixed(1) : null;
+      case 'division_percent_reverse':
         return nums.length >= 2 ? ((nums[1] / nums[0]) * 100).toFixed(1) : null;
       case 'subtraction':
         return nums.length >= 2 ? (nums[0] - nums[1]).toFixed(0) : null;
@@ -240,11 +244,12 @@
     const result = calculateMetricResult(metricId, values);
 
     if (result !== null && result !== '' && result !== undefined) {
-      if (metricsConfig[metricId].calcType === 'division') {
+      const ct = metricsConfig[metricId].calcType;
+      if (ct === 'division' || ct === 'division_reverse') {
         resultSpan.textContent = parseFloat(result).toFixed(2);
-      } else if (metricsConfig[metricId].calcType === 'division_percent') {
+      } else if (ct === 'division_percent' || ct === 'division_percent_reverse') {
         resultSpan.textContent = result + '%';
-      } else if (metricsConfig[metricId].calcType === 'yesno') {
+      } else if (ct === 'yesno') {
         resultSpan.textContent = result === 'yes' ? 'Да' : 'Нет';
       } else {
         resultSpan.textContent = result;
