@@ -461,15 +461,7 @@
   });
 
   function showAddBriefForm() {
-    const name = prompt('Название брифа:', 'Новый бриф');
-    if (name) {
-      const form = document.createElement('form');
-      form.method = 'POST';
-      form.action = '{{ url_for("add_brief", client_id=client.id) }}';
-      form.innerHTML = `<input type="hidden" name="name" value="${name}">`;
-      document.body.appendChild(form);
-      form.submit();
-    }
+    window.location.href = '{{ url_for("add_brief", client_id=client.id) }}';
   }
 </script>
 {% endblock %}

@@ -318,21 +318,33 @@ def add_client():
         return redirect(url_for('clients'))
     return render_template('client_form.html')
 
-@app.route('/client/<int:client_id>/brief/add', methods=['POST'])
+@app.route('/client/<int:client_id>/brief/add', methods=['GET', 'POST'])
 def add_brief(client_id):
     """Добавление нового брифа к клиенту."""
     client = Client.query.get_or_404(client_id)
-    brief_name = request.form.get('name', f'Бриф #{datetime.utcnow().timestamp()}')
 
-    brief = Brief(
-        brief_type=brief_name,
-        status='Не заполнено',
-        client_id=client_id
-    )
-    db.session.add(brief)
-    db.session.commit()
+    # Список доступных типов брифов
+    available_briefs = [
+        {'key': 'sales', 'name': 'Продажи', 'desc': '12 ключевых метрик по продажам и их Health показатели'},
+        {'key': 'briefing', 'name': 'Бизнес-портрет', 'desc': 'Основная анкета для сбора информации о бизнесе'},
+        {'key': 'point_a', 'name': 'Точка А', 'desc': 'Боль, цели и ресурсы компании'},
+        {'key': 'docs', 'name': 'Документация', 'desc': 'Организационная структура и процессы'},
+    ]
 
-    return redirect(url_for('client_briefs', client_id=client_id))
+    if request.method == 'POST':
+        brief_type = request.form.get('brief_type', 'sales')
+
+        brief = Brief(
+            brief_type=brief_type,
+            status='Не заполнено',
+            client_id=client_id
+        )
+        db.session.add(brief)
+        db.session.commit()
+
+        return redirect(url_for('client_briefs', client_id=client_id))
+
+    return render_template('add_brief.html', client=client, available_briefs=available_briefs)
 
 @app.route('/brief/<int:brief_id>/delete', methods=['POST'])
 def delete_brief(brief_id):
