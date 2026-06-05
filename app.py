@@ -141,18 +141,18 @@ def get_brief_questions(brief_type):
             'title': 'Брифинг "Продажи"',
             'type': 'sales',
             'metrics': [
-                {'id': '1.1', 'question': 'Фактическая выручка по продажам услуг (тыс. руб.) за последний квартал', 'input_hint': 'Данные из учётной системы', 'type': 'number', 'unit': 'тыс. руб.', 'health_threshold': 5, 'health_unit': '% рост год-к-году'},
-                {'id': '1.2', 'question': 'Процент выполнения квартального плана по выручке', 'input_hint': 'Факт / План', 'type': 'percent', 'unit': '%', 'health_threshold': 95, 'health_unit': '%'},
-                {'id': '1.3', 'question': 'Количество активных клиентов за последние 12 месяцев', 'input_hint': 'Из CRM: уникальные клиенты', 'type': 'number', 'unit': 'клиентов', 'health_threshold': 0, 'health_unit': '% прирост'},
-                {'id': '1.4', 'question': 'Коэффициент удержания клиентов (Retention Rate) за год', 'input_hint': 'Клиенты прошлого года / в текущем году', 'type': 'decimal', 'unit': '0.00–1.00', 'health_threshold': 0.80, 'health_unit': '≥80%'},
-                {'id': '1.5', 'question': 'Коэффициент конверсии «Лид → SQL» за квартал', 'input_hint': 'SQL / Лиды', 'type': 'percent', 'unit': '%', 'health_threshold': 12, 'health_unit': '%'},
-                {'id': '1.6', 'question': 'Коэффициент конверсии «SQL → Договор» за квартал', 'input_hint': 'Сделки / SQL', 'type': 'percent', 'unit': '%', 'health_threshold': 20, 'health_unit': '%'},
-                {'id': '1.7', 'question': 'Средняя длительность цикла продаж (дней) за квартал', 'input_hint': 'Дата закрытия - дата первого контакта', 'type': 'number', 'unit': 'дней', 'health_threshold': 60, 'health_unit': '≤60 дней'},
-                {'id': '1.8', 'question': 'Доля выручки от 5 крупнейших клиентов', 'input_hint': 'Топ-5 / Общая выручка', 'type': 'percent', 'unit': '%', 'health_threshold': 40, 'health_unit': '≤40%'},
-                {'id': '1.9', 'question': 'Наличие утверждённого регламента квалификации лидов', 'input_hint': 'Да / Нет', 'type': 'yesno', 'unit': 'Да/Нет', 'health_threshold': 'yes'},
-                {'id': '1.10', 'question': 'Дата последней актуализации коммерческих предложений', 'input_hint': 'Дата утверждения или \"нет\"', 'type': 'date', 'unit': 'Дата', 'health_threshold': '6m', 'health_unit': 'не старше 6 мес'},
-                {'id': '1.11', 'question': 'Процент менеджеров, выполнивших план продаж в квартале', 'input_hint': 'Менеджеры с Факт ≥ Квота', 'type': 'percent', 'unit': '%', 'health_threshold': 60, 'health_unit': '≥60%'},
-                {'id': '1.12', 'question': 'NPS по послепродажному обслуживанию (за 6 мес.)', 'input_hint': '%Промоутеров - %Критиков', 'type': 'number', 'unit': '-100 до +100', 'health_threshold': 50, 'health_unit': '>50'},
+                {'id': '1.1', 'question': 'Фактическая выручка по продажам услуг за последний квартал', 'inputs': [{'label': 'Выручка (тыс. руб.)', 'hint': 'Данные из учётной системы', 'type': 'number', 'unit': 'тыс. руб.'}], 'formula': 'Прямое значение из учётной системы', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Год-к-году рост ≥ 5%', 'health_unit': '% рост год-к-году'},
+                {'id': '1.2', 'question': 'Процент выполнения квартального плана по выручке', 'inputs': [{'label': 'Факт (тыс. руб.)', 'hint': 'Текущая выручка', 'type': 'number'}, {'label': 'План (тыс. руб.)', 'hint': 'Плановая выручка', 'type': 'number'}], 'formula': '(Факт / План) × 100%', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Выполнение плана ≥ 95%', 'health_unit': '%'},
+                {'id': '1.3', 'question': 'Количество активных клиентов за последние 12 месяцев', 'inputs': [{'label': 'Активные клиенты', 'hint': 'Уникальные клиенты из CRM', 'type': 'number', 'unit': 'чел.'}], 'formula': 'Подсчёт уникальных клиентов с активностью за 12 мес.', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Прирост по сравнению с предыдущим годом', 'health_unit': '% прирост'},
+                {'id': '1.4', 'question': 'Коэффициент удержания клиентов (Retention Rate) за год', 'inputs': [{'label': 'Клиенты прошлого года', 'hint': 'Количество клиентов год назад', 'type': 'number'}, {'label': 'Клиенты в текущем году', 'hint': 'Сколько из них вернулось', 'type': 'number'}], 'formula': '(Клиенты в текущем году / Клиенты прошлого года)', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Retention ≥ 0.80 (80%)', 'health_unit': '≥80%'},
+                {'id': '1.5', 'question': 'Коэффициент конверсии «Лид → SQL» за квартал', 'inputs': [{'label': 'Лидов получено', 'hint': 'Входящие заявки из всех каналов', 'type': 'number'}, {'label': 'Квалифицировано (SQL)', 'hint': 'Лиды, прошедшие квалификацию', 'type': 'number'}], 'formula': '(SQL / Лиды) × 100%', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Конверсия ≥ 12%', 'health_unit': '%'},
+                {'id': '1.6', 'question': 'Коэффициент конверсии «SQL → Договор» за квартал', 'inputs': [{'label': 'SQL получено', 'hint': 'Квалифицированные лиды', 'type': 'number'}, {'label': 'Сделок закрыто', 'hint': 'Подписанные договоры', 'type': 'number'}], 'formula': '(Сделки / SQL) × 100%', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Конверсия ≥ 20%', 'health_unit': '%'},
+                {'id': '1.7', 'question': 'Средняя длительность цикла продаж за квартал', 'inputs': [{'label': 'Дата первого контакта', 'hint': 'Дата первого действия продавца', 'type': 'date'}, {'label': 'Дата закрытия сделки', 'hint': 'Дата подписания договора', 'type': 'date'}], 'formula': 'Дата закрытия − Дата первого контакта (в днях)', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Цикл продаж ≤ 60 дней', 'health_unit': '≤60 дней'},
+                {'id': '1.8', 'question': 'Доля выручки от 5 крупнейших клиентов', 'inputs': [{'label': 'Выручка от Топ-5', 'hint': 'Сумма доходов от 5 главных клиентов', 'type': 'number', 'unit': 'тыс. руб.'}, {'label': 'Общая выручка', 'hint': 'Вся выручка за период', 'type': 'number', 'unit': 'тыс. руб.'}], 'formula': '(Топ-5 / Общая выручка) × 100%', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Доля ≤ 40% (диверсификация)', 'health_unit': '≤40%'},
+                {'id': '1.9', 'question': 'Наличие утверждённого регламента квалификации лидов', 'inputs': [{'label': 'Регламент', 'hint': 'Да / Нет', 'type': 'yesno'}], 'formula': 'Документ утверждён и в обороте', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Регламент должен быть = Да', 'health_unit': 'Документирован'},
+                {'id': '1.10', 'question': 'Дата последней актуализации коммерческих предложений', 'inputs': [{'label': 'Дата последней редакции', 'hint': 'Дата утверждения актуальных КП', 'type': 'date'}], 'formula': 'Дата утверждения или актуализации документа', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'КП должны быть актуальны (не старше 6 месяцев)', 'health_unit': 'не старше 6 мес'},
+                {'id': '1.11', 'question': 'Процент менеджеров, выполнивших план продаж в квартале', 'inputs': [{'label': 'Менеджеров выполнили план', 'hint': 'Факт ≥ Квота', 'type': 'number'}, {'label': 'Всего менеджеров', 'hint': 'Общее количество менеджеров', 'type': 'number'}], 'formula': '(Менеджеры с Факт ≥ Квота / Всего менеджеров) × 100%', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'Процент успеха ≥ 60%', 'health_unit': '≥60%'},
+                {'id': '1.12', 'question': 'NPS по послепродажному обслуживанию (за 6 мес.)', 'inputs': [{'label': 'Промоутеры (%)', 'hint': 'Оценка 9–10 баллов', 'type': 'number'}, {'label': 'Критики (%)', 'hint': 'Оценка 0–6 баллов', 'type': 'number'}], 'formula': 'NPS = %Промоутеров − %Критиков', 'responsible': 'Руководитель отдела продаж', 'health_algorithm': 'NPS > 50 (отличное обслуживание)', 'health_unit': '>50'},
             ],
             'responsible_list': ['Руководитель отдела продаж', 'Менеджер по продажам', 'Другое']
         }
@@ -473,21 +473,36 @@ def brief_form(brief_id):
         if request.method == 'POST':
             # Собираем метрики из формы
             metrics = {}
-            responsible = request.form.get('responsible', '')
+            has_data = False
 
             for metric in questions_data.get('metrics', []):
-                value = request.form.get(f"metric_{metric['id']}", '')
-                if value:
-                    metrics[metric['id']] = value
+                metric_id = metric['id']
+                input_count = len(metric.get('inputs', []))
+                metric_values = []
+
+                # Собираем все значения вводных данных для этого метрика
+                for i in range(input_count):
+                    value = request.form.get(f"metric_{metric_id}_{i}", '')
+                    if value:
+                        metric_values.append(value)
+                        has_data = True
+
+                # Получаем выбранного ответственного для этого метрика
+                responsible = request.form.get(f"responsible_{metric_id}", metric.get('responsible', ''))
+
+                if metric_values or responsible:
+                    metrics[metric_id] = {
+                        'values': metric_values,
+                        'responsible': responsible
+                    }
 
             # Сохраняем как answers JSON
             brief.answers = {
                 'metrics': metrics,
-                'responsible': responsible,
                 'last_updated': datetime.utcnow().isoformat()
             }
 
-            if metrics or responsible:
+            if has_data:
                 brief.status = 'В работе'
             else:
                 brief.status = 'Не заполнено'

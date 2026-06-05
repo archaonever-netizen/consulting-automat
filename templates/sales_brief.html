@@ -19,83 +19,76 @@
 
   <form method="POST" style="background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 20px;">
 
-    <!-- Таблица с метриками -->
-    <div style="overflow-x: auto; margin-bottom: 30px;">
-      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
-        <thead>
-          <tr style="background: #2563EB; color: white; font-weight: 600;">
-            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 40px;">№</th>
-            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 280px;">Вопрос</th>
-            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 150px;">Вводные</th>
-            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 150px;">Итоговый ответ</th>
-            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 120px;">Норма</th>
-            <th style="padding: 12px; text-align: center; border: 1px solid #2563EB; width: 80px;">Health</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for metric in brief_data.metrics %}
-          <tr style="border-bottom: 1px solid var(--border);">
-            <!-- № -->
-            <td style="padding: 12px; border: 1px solid var(--border); font-weight: 600; background: var(--bg-2); text-align: center;">
-              {{ metric.id }}
-            </td>
+    <!-- Метрики в виде карточек для лучшей читаемости -->
+    <div style="margin-bottom: 30px;">
+      {% for metric in brief_data.metrics %}
+      <div style="margin-bottom: 24px; padding: 20px; border: 1px solid var(--border); border-radius: 8px; background: var(--bg-2);">
 
-            <!-- Вопрос -->
-            <td style="padding: 12px; border: 1px solid var(--border); font-size: 12px;">
-              <strong>{{ metric.question }}</strong>
-              <div style="font-size: 11px; color: var(--ink-4); margin-top: 4px;">
-                {{ metric.input_hint }}
-              </div>
-            </td>
+        <!-- Номер и вопрос -->
+        <div style="margin-bottom: 16px;">
+          <span style="display: inline-block; background: #2563EB; color: white; padding: 4px 12px; border-radius: 4px; font-weight: 600; font-size: 12px; margin-right: 12px;">{{ metric.id }}</span>
+          <h4 style="display: inline; margin: 0; font-size: 14px;">{{ metric.question }}</h4>
+        </div>
 
-            <!-- Вводные (поле ввода) -->
-            <td style="padding: 12px; border: 1px solid var(--border);">
-              {% if metric.type == 'yesno' %}
-                <select name="metric_{{ metric.id }}" class="metric-input" data-metric-id="{{ metric.id }}" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
+        <!-- Вводные данные -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-weight: 600; font-size: 12px; margin-bottom: 8px; color: var(--ink-2);">Вводные данные</label>
+          <div style="display: grid; gap: 12px;">
+            {% for input_field in metric.inputs %}
+            <div>
+              <label style="display: block; font-size: 12px; font-weight: 500; margin-bottom: 4px;">{{ input_field.label }}</label>
+              <div style="font-size: 11px; color: var(--ink-4); margin-bottom: 6px;">{{ input_field.hint }}</div>
+              {% if input_field.type == 'yesno' %}
+                <select name="metric_{{ metric.id }}_{{ loop.index0 }}" class="metric-input" data-metric-id="{{ metric.id }}" style="padding: 8px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
                   <option value="">—</option>
                   <option value="yes">Да</option>
                   <option value="no">Нет</option>
                 </select>
-              {% elif metric.type == 'date' %}
-                <input type="date" name="metric_{{ metric.id }}" class="metric-input" data-metric-id="{{ metric.id }}" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
-              {% elif metric.type == 'decimal' %}
-                <input type="number" name="metric_{{ metric.id }}" class="metric-input" data-metric-id="{{ metric.id }}" min="0" max="1" step="0.01" placeholder="0.00" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
+              {% elif input_field.type == 'date' %}
+                <input type="date" name="metric_{{ metric.id }}_{{ loop.index0 }}" class="metric-input" data-metric-id="{{ metric.id }}" style="padding: 8px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
               {% else %}
-                <input type="number" name="metric_{{ metric.id }}" class="metric-input" data-metric-id="{{ metric.id }}" placeholder="0" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
+                <input type="number" name="metric_{{ metric.id }}_{{ loop.index0 }}" class="metric-input" data-metric-id="{{ metric.id }}" placeholder="0" style="padding: 8px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;" step="0.01">
               {% endif %}
-              <div style="font-size: 11px; color: var(--ink-4); margin-top: 4px;">{{ metric.unit }}</div>
-            </td>
+              {% if input_field.unit %}<div style="font-size: 11px; color: var(--ink-4); margin-top: 4px;">{{ input_field.unit }}</div>{% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
 
-            <!-- Итоговый ответ (вычисляется) -->
-            <td style="padding: 12px; border: 1px solid var(--border); background: var(--bg-2); font-weight: 600;">
-              <span id="result_{{ metric.id }}" style="display: block; padding: 6px; border-radius: 4px; background: white; border: 1px solid var(--border);">—</span>
-            </td>
+        <!-- Формула -->
+        <div style="margin-bottom: 16px; padding: 12px; background: white; border-radius: 6px; border-left: 3px solid #2563EB;">
+          <label style="display: block; font-weight: 600; font-size: 12px; margin-bottom: 6px; color: var(--ink-2);">Формула</label>
+          <p style="margin: 0; font-size: 12px; font-family: monospace; color: var(--ink-1);">{{ metric.formula }}</p>
+        </div>
 
-            <!-- Норма -->
-            <td style="padding: 12px; border: 1px solid var(--border); font-size: 12px; background: var(--ink-0);">
-              <strong style="color: #2563EB;">{{ metric.health_unit }}</strong>
-            </td>
+        <!-- Ответственный -->
+        <div style="margin-bottom: 16px;">
+          <label style="display: block; font-weight: 600; font-size: 12px; margin-bottom: 6px; color: var(--ink-2);">Ответственный</label>
+          <select name="responsible_{{ metric.id }}" style="padding: 8px; border: 1px solid var(--border); border-radius: 4px; width: 100%; max-width: 300px; font-size: 12px;">
+            {% for resp in brief_data.responsible_list %}
+              <option value="{{ resp }}">{{ resp }}</option>
+            {% endfor %}
+          </select>
+        </div>
 
-            <!-- Health статус -->
-            <td style="padding: 12px; border: 1px solid var(--border); text-align: center;">
-              <span class="pill pill-gray" id="status_{{ metric.id }}">—</span>
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+        <!-- Показатель Health -->
+        <div style="margin-bottom: 12px; padding: 12px; background: #f0f9ff; border-radius: 6px; border-left: 3px solid #16A34A;">
+          <label style="display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; color: #1e40af;">Показатель Health</label>
+          <p style="margin: 0; font-size: 11px; color: var(--ink-1);">{{ metric.health_algorithm }}</p>
+          <p style="margin: 6px 0 0 0; font-size: 11px; color: var(--ink-3); font-weight: 500;">Норма: <strong style="color: #2563EB;">{{ metric.health_unit }}</strong></p>
+        </div>
+
+        <!-- Итоговый результат и статус -->
+        <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
+          <div>
+            <div style="font-size: 11px; color: var(--ink-4); margin-bottom: 4px;">Статус проверки</div>
+            <span class="pill pill-gray" id="status_{{ metric.id }}">—</span>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
     </div>
 
-    <!-- Ответственный -->
-    <div style="margin-bottom: 30px; padding: 20px; background: var(--bg-2); border-radius: 8px;">
-      <label style="display: block; margin-bottom: 8px; font-weight: 600;">Ответственный:</label>
-      <select name="responsible" style="padding: 10px; border: 1px solid var(--border); border-radius: 4px; width: 100%; max-width: 300px;">
-        <option value="">-- Выбрать ответственного --</option>
-        <option value="Руководитель отдела продаж">Руководитель отдела продаж</option>
-        <option value="Менеджер по продажам">Менеджер по продажам</option>
-        <option value="Другое">Другое</option>
-      </select>
-    </div>
 
     <!-- Кнопки -->
     <div style="display: flex; gap: 12px; margin-top: 30px; border-top: 1px solid var(--border); padding-top: 20px;">
@@ -122,20 +115,20 @@
 
 {% block scripts %}
 <script>
-  // Определяем метрики с их параметрами для вычисления
+  // Определяем метрики с их параметрами для health проверки
   const metricsConfig = {
-    '1.1': { threshold: 5, comparison: 'gte', type: 'growth' },      // ≥5%
-    '1.2': { threshold: 95, comparison: 'gte', type: 'percent' },    // ≥95%
-    '1.3': { threshold: 0, comparison: 'gte', type: 'number' },      // ≥0%
-    '1.4': { threshold: 0.80, comparison: 'gte', type: 'decimal' },  // ≥0.80
-    '1.5': { threshold: 12, comparison: 'gte', type: 'percent' },    // ≥12%
-    '1.6': { threshold: 20, comparison: 'gte', type: 'percent' },    // ≥20%
-    '1.7': { threshold: 60, comparison: 'lte', type: 'days' },       // ≤60
-    '1.8': { threshold: 40, comparison: 'lte', type: 'percent' },    // ≤40%
-    '1.9': { threshold: 'yes', comparison: 'eq', type: 'yesno' },    // Да
-    '1.10': { threshold: '6m', comparison: 'date', type: 'date' },   // Не старше 6 мес
-    '1.11': { threshold: 60, comparison: 'gte', type: 'percent' },   // ≥60%
-    '1.12': { threshold: 50, comparison: 'gt', type: 'number' },     // >50
+    '1.1': { threshold: 5, comparison: 'gte' },      // ≥5%
+    '1.2': { threshold: 95, comparison: 'gte' },     // ≥95%
+    '1.3': { threshold: 0, comparison: 'gte' },      // ≥0%
+    '1.4': { threshold: 0.80, comparison: 'gte' },   // ≥0.80
+    '1.5': { threshold: 12, comparison: 'gte' },     // ≥12%
+    '1.6': { threshold: 20, comparison: 'gte' },     // ≥20%
+    '1.7': { threshold: 60, comparison: 'lte' },     // ≤60
+    '1.8': { threshold: 40, comparison: 'lte' },     // ≤40%
+    '1.9': { threshold: 'yes', comparison: 'eq' },   // Да
+    '1.10': { threshold: '6m', comparison: 'date' }, // Не старше 6 мес
+    '1.11': { threshold: 60, comparison: 'gte' },    // ≥60%
+    '1.12': { threshold: 50, comparison: 'gt' },     // >50
   };
 
   function checkHealth(metricId, value) {
@@ -144,12 +137,10 @@
     const config = metricsConfig[metricId];
     if (!config) return false;
 
-    const numValue = parseFloat(value);
+    if (config.comparison === 'eq') {
+      return value === config.threshold;
+    }
 
-    if (config.comparison === 'gte') return numValue >= config.threshold;
-    if (config.comparison === 'lte') return numValue <= config.threshold;
-    if (config.comparison === 'gt') return numValue > config.threshold;
-    if (config.comparison === 'eq') return value === config.threshold;
     if (config.comparison === 'date') {
       const inputDate = new Date(value);
       const sixMonthsAgo = new Date();
@@ -157,29 +148,37 @@
       return inputDate >= sixMonthsAgo;
     }
 
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return false;
+
+    if (config.comparison === 'gte') return numValue >= config.threshold;
+    if (config.comparison === 'lte') return numValue <= config.threshold;
+    if (config.comparison === 'gt') return numValue > config.threshold;
+
     return false;
   }
 
   function updateMetricStatus(metricId) {
-    const input = document.querySelector(`input[name="metric_${metricId}"], select[name="metric_${metricId}"]`);
-    const value = input ? input.value : '';
-    const resultSpan = document.getElementById(`result_${metricId}`);
-    const statusSpan = document.getElementById(`status_${metricId}`);
+    // Получаем все поля для этого метрика
+    const inputs = document.querySelectorAll(`[data-metric-id="${metricId}"]`);
+    let hasAnyValue = false;
+    let lastValue = '';
 
-    // Показываем введённое значение в "Итоговом ответе"
-    if (value) {
-      resultSpan.textContent = value;
-      resultSpan.style.background = '#f0f9ff';
-    } else {
-      resultSpan.textContent = '—';
-      resultSpan.style.background = 'white';
-    }
+    inputs.forEach(input => {
+      if (input.value) {
+        hasAnyValue = true;
+        lastValue = input.value;
+      }
+    });
+
+    const statusSpan = document.getElementById(`status_${metricId}`);
+    if (!statusSpan) return;
 
     // Проверяем Health
-    if (checkHealth(metricId, value)) {
+    if (checkHealth(metricId, lastValue)) {
       statusSpan.textContent = '✓';
       statusSpan.className = 'pill pill-green';
-    } else if (value) {
+    } else if (hasAnyValue) {
       statusSpan.textContent = '✗';
       statusSpan.className = 'pill pill-red';
     } else {
