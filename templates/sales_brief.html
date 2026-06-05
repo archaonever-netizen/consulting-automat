@@ -73,16 +73,17 @@
 
         <!-- Показатель Health -->
         <div style="margin-bottom: 12px; padding: 12px; background: #f0f9ff; border-radius: 6px; border-left: 3px solid #16A34A;">
-          <label style="display: block; font-weight: 600; font-size: 12px; margin-bottom: 4px; color: #1e40af;">Показатель Health</label>
-          <p style="margin: 0; font-size: 11px; color: var(--ink-1);">{{ metric.health_algorithm }}</p>
-          <p style="margin: 6px 0 0 0; font-size: 11px; color: var(--ink-3); font-weight: 500;">Норма: <strong style="color: #2563EB;">{{ metric.health_unit }}</strong></p>
-        </div>
-
-        <!-- Итоговый результат и статус -->
-        <div style="display: grid; grid-template-columns: 1fr auto; gap: 12px; padding-top: 12px; border-top: 1px solid var(--border);">
-          <div>
-            <div style="font-size: 11px; color: var(--ink-4); margin-bottom: 4px;">Статус проверки</div>
-            <span class="pill pill-gray" id="status_{{ metric.id }}">—</span>
+          <label style="display: block; font-weight: 600; font-size: 12px; margin-bottom: 6px; color: #1e40af;">Показатель Health</label>
+          <p style="margin: 0 0 8px 0; font-size: 11px; color: var(--ink-1);">{{ metric.health_note }}</p>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding-top: 8px; border-top: 1px solid rgba(37, 99, 235, 0.2);">
+            <div>
+              <div style="font-size: 10px; color: var(--ink-4); margin-bottom: 4px;">Результат расчёта</div>
+              <div style="font-size: 16px; font-weight: 600; color: #2563EB;" id="result_{{ metric.id }}">—</div>
+            </div>
+            <div>
+              <div style="font-size: 10px; color: var(--ink-4); margin-bottom: 4px;">Health статус</div>
+              <div style="font-size: 14px; font-weight: 600; color: #16A34A;" id="health_{{ metric.id }}">—</div>
+            </div>
           </div>
         </div>
       </div>
@@ -115,87 +116,164 @@
 
 {% block scripts %}
 <script>
-  // Определяем метрики с их параметрами для health проверки
+  // Конфигурация метрик для расчётов и health проверки
   const metricsConfig = {
-    '1.1': { threshold: 5, comparison: 'gte' },      // ≥5%
-    '1.2': { threshold: 95, comparison: 'gte' },     // ≥95%
-    '1.3': { threshold: 0, comparison: 'gte' },      // ≥0%
-    '1.4': { threshold: 0.80, comparison: 'gte' },   // ≥0.80
-    '1.5': { threshold: 12, comparison: 'gte' },     // ≥12%
-    '1.6': { threshold: 20, comparison: 'gte' },     // ≥20%
-    '1.7': { threshold: 60, comparison: 'lte' },     // ≤60
-    '1.8': { threshold: 40, comparison: 'lte' },     // ≤40%
-    '1.9': { threshold: 'yes', comparison: 'eq' },   // Да
-    '1.10': { threshold: '6m', comparison: 'date' }, // Не старше 6 мес
-    '1.11': { threshold: 60, comparison: 'gte' },    // ≥60%
-    '1.12': { threshold: 50, comparison: 'gt' },     // >50
+    '1.1': { calcType: 'direct', threshold: 5, comparison: 'gte' },
+    '1.2': { calcType: 'division_percent', threshold: 95, comparison: 'gte' },
+    '1.3': { calcType: 'direct', threshold: 0, comparison: 'gte' },
+    '1.4': { calcType: 'division', threshold: 0.80, comparison: 'gte' },
+    '1.5': { calcType: 'division_percent', threshold: 12, comparison: 'gte' },
+    '1.6': { calcType: 'division_percent', threshold: 20, comparison: 'gte' },
+    '1.7': { calcType: 'date_diff', threshold: 60, comparison: 'lte' },
+    '1.8': { calcType: 'division_percent', threshold: 40, comparison: 'lte' },
+    '1.9': { calcType: 'yesno', threshold: 'yes', comparison: 'eq' },
+    '1.10': { calcType: 'date_age', threshold: 6, comparison: 'date_months' },
+    '1.11': { calcType: 'division_percent', threshold: 60, comparison: 'gte' },
+    '1.12': { calcType: 'subtraction', threshold: 50, comparison: 'gt' },
   };
 
-  function checkHealth(metricId, value) {
-    if (!value && value !== 0) return false;
+  function getMetricValues(metricId) {
+    const inputs = document.querySelectorAll(`[data-metric-id="${metricId}"]`);
+    const values = [];
+    inputs.forEach(input => {
+      values.push(input.value || null);
+    });
+    return values;
+  }
 
+  function calculateMetricResult(metricId, values) {
     const config = metricsConfig[metricId];
-    if (!config) return false;
+    if (!config) return null;
+    if (values.some(v => !v && v !== 0)) return null;
 
-    if (config.comparison === 'eq') {
-      return value === config.threshold;
+    const nums = values.map(v => parseFloat(v));
+
+    switch (config.calcType) {
+      case 'direct':
+        return nums[0];
+      case 'division':
+        return nums.length >= 2 ? (nums[1] / nums[0]).toFixed(2) : null;
+      case 'division_percent':
+        return nums.length >= 2 ? ((nums[1] / nums[0]) * 100).toFixed(1) : null;
+      case 'subtraction':
+        return nums.length >= 2 ? (nums[0] - nums[1]).toFixed(0) : null;
+      case 'date_diff': {
+        if (values.length >= 2 && values[0] && values[1]) {
+          const date1 = new Date(values[0]);
+          const date2 = new Date(values[1]);
+          const diffMs = Math.abs(date2 - date1);
+          const diffDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+          return diffDays;
+        }
+        return null;
+      }
+      case 'date_age': {
+        if (values[0]) {
+          const inputDate = new Date(values[0]);
+          const today = new Date();
+          const diffMs = today - inputDate;
+          const diffMonths = Math.floor(diffMs / (1000 * 60 * 60 * 24 * 30.44));
+          return diffMonths;
+        }
+        return null;
+      }
+      case 'yesno':
+        return values[0];
+      default:
+        return null;
+    }
+  }
+
+  function calculateHealth(metricId, result) {
+    if (result === null && result !== 0) return null;
+    const config = metricsConfig[metricId];
+    if (!config) return null;
+
+    let isHealthy = false;
+    const threshold = config.threshold;
+    const numResult = parseFloat(result);
+
+    switch (config.comparison) {
+      case 'gte':
+        isHealthy = numResult >= threshold;
+        break;
+      case 'lte':
+        isHealthy = numResult <= threshold;
+        break;
+      case 'gt':
+        isHealthy = numResult > threshold;
+        break;
+      case 'eq':
+        isHealthy = result === threshold;
+        break;
+      case 'date_months':
+        isHealthy = numResult <= threshold;
+        break;
     }
 
-    if (config.comparison === 'date') {
-      const inputDate = new Date(value);
-      const sixMonthsAgo = new Date();
-      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
-      return inputDate >= sixMonthsAgo;
+    let healthPercent = 0;
+    if (isHealthy) {
+      healthPercent = 100;
+    } else {
+      if (config.comparison === 'gte') {
+        healthPercent = Math.round((numResult / threshold) * 100);
+      } else if (config.comparison === 'lte') {
+        healthPercent = Math.round(((threshold + (threshold - numResult)) / threshold) * 100);
+      } else if (config.comparison === 'gt') {
+        healthPercent = Math.round((numResult / (threshold + 1)) * 100);
+      }
     }
 
-    const numValue = parseFloat(value);
-    if (isNaN(numValue)) return false;
+    healthPercent = Math.min(healthPercent, 100);
+    healthPercent = Math.max(healthPercent, 0);
 
-    if (config.comparison === 'gte') return numValue >= config.threshold;
-    if (config.comparison === 'lte') return numValue <= config.threshold;
-    if (config.comparison === 'gt') return numValue > config.threshold;
-
-    return false;
+    return { isHealthy, percent: healthPercent };
   }
 
   function updateMetricStatus(metricId) {
-    // Получаем все поля для этого метрика
-    const inputs = document.querySelectorAll(`[data-metric-id="${metricId}"]`);
-    let hasAnyValue = false;
-    let lastValue = '';
+    const values = getMetricValues(metricId);
+    const resultSpan = document.getElementById(`result_${metricId}`);
+    const healthSpan = document.getElementById(`health_${metricId}`);
 
-    inputs.forEach(input => {
-      if (input.value) {
-        hasAnyValue = true;
-        lastValue = input.value;
+    if (!resultSpan || !healthSpan) return;
+
+    const result = calculateMetricResult(metricId, values);
+
+    if (result !== null && result !== '' && result !== undefined) {
+      if (metricsConfig[metricId].calcType === 'division') {
+        resultSpan.textContent = parseFloat(result).toFixed(2);
+      } else if (metricsConfig[metricId].calcType === 'division_percent') {
+        resultSpan.textContent = result + '%';
+      } else if (metricsConfig[metricId].calcType === 'yesno') {
+        resultSpan.textContent = result === 'yes' ? 'Да' : 'Нет';
+      } else {
+        resultSpan.textContent = result;
       }
-    });
-
-    const statusSpan = document.getElementById(`status_${metricId}`);
-    if (!statusSpan) return;
-
-    // Проверяем Health
-    if (checkHealth(metricId, lastValue)) {
-      statusSpan.textContent = '✓';
-      statusSpan.className = 'pill pill-green';
-    } else if (hasAnyValue) {
-      statusSpan.textContent = '✗';
-      statusSpan.className = 'pill pill-red';
     } else {
-      statusSpan.textContent = '—';
-      statusSpan.className = 'pill pill-gray';
+      resultSpan.textContent = '—';
+    }
+
+    if (result !== null && result !== '' && result !== undefined) {
+      const health = calculateHealth(metricId, result);
+      if (health) {
+        const healthColor = health.isHealthy ? '#16A34A' : health.percent >= 75 ? '#C2740B' : '#DC2626';
+        healthSpan.style.color = healthColor;
+        healthSpan.textContent = health.percent + '%';
+      } else {
+        healthSpan.textContent = '—';
+      }
+    } else {
+      healthSpan.textContent = '—';
+      healthSpan.style.color = 'var(--ink-4)';
     }
   }
 
-  // Слушаем изменения в полях
   document.querySelectorAll('.metric-input').forEach(field => {
     field.addEventListener('change', function() {
-      const metricId = this.dataset.metricId;
-      updateMetricStatus(metricId);
+      updateMetricStatus(this.dataset.metricId);
     });
     field.addEventListener('keyup', function() {
-      const metricId = this.dataset.metricId;
-      updateMetricStatus(metricId);
+      updateMetricStatus(this.dataset.metricId);
     });
   });
 </script>
