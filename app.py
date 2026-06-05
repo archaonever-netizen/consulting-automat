@@ -299,6 +299,33 @@ def add_client():
         return redirect(url_for('clients'))
     return render_template('client_form.html')
 
+@app.route('/client/<int:client_id>/brief/add', methods=['POST'])
+def add_brief(client_id):
+    """Добавление нового брифа к клиенту."""
+    client = Client.query.get_or_404(client_id)
+    brief_name = request.form.get('name', f'Бриф #{datetime.utcnow().timestamp()}')
+
+    brief = Brief(
+        brief_type=brief_name,
+        status='Не заполнено',
+        client_id=client_id
+    )
+    db.session.add(brief)
+    db.session.commit()
+
+    return redirect(url_for('client_briefs', client_id=client_id))
+
+@app.route('/brief/<int:brief_id>/delete', methods=['POST'])
+def delete_brief(brief_id):
+    """Удаление брифа."""
+    brief = Brief.query.get_or_404(brief_id)
+    client_id = brief.client_id
+
+    db.session.delete(brief)
+    db.session.commit()
+
+    return redirect(url_for('client_briefs', client_id=client_id))
+
 @app.route('/client/<int:client_id>/edit', methods=['GET', 'POST'])
 def edit_client(client_id):
     """Редактирование имени клиента."""
@@ -323,29 +350,11 @@ def client_briefs(client_id):
     client = Client.query.get_or_404(client_id)
     palette = ['#1D1D1F','#2563EB','#16A34A','#7C3AED','#0891B2','#DB2777','#EA580C']
 
-    all_brief_types = [
-        {'key': 'briefing',
-         'name': 'Брифинг "Бизнес-портрет"',
-         'desc': 'Основная анкета для сбора формальной информации о бизнесе клиента.'},
-        {'key': 'point_a',
-         'name': 'Точка А',
-         'desc': 'Глубинное интервью: реальные боли, цели и ресурсы бизнеса.'},
-        {'key': 'docs',
-         'name': 'Документация',
-         'desc': 'Чек-лист сбора документов и ключевых артефактов бизнеса.'},
-    ]
+    # Получаем реальные брифы из БД (без создания жестко закодированных)
+    briefs_from_db = Brief.query.filter_by(client_id=client.id).all()
 
-    # Гарантируем наличие всех трёх анкет
-    briefs_map = {b.brief_type: b for b in client.briefs}
-    for bt in all_brief_types:
-        if bt['key'] not in briefs_map:
-            nb = Brief(brief_type=bt['key'], client_id=client.id)
-            db.session.add(nb)
-            briefs_map[bt['key']] = nb
-    db.session.commit()
-
-    done = sum(1 for b in briefs_map.values() if b.status == 'Заполнено')
-    total = 3
+    done = sum(1 for b in briefs_from_db if b.status == 'Заполнено')
+    total = len(briefs_from_db) if briefs_from_db else 1
 
     parts    = client.name.split()
     initials = (parts[0][0] + (parts[1][0] if len(parts) > 1 else '')).upper()
@@ -367,14 +376,13 @@ def client_briefs(client_id):
     ring_filled = round(health / 100 * circ, 1)
     ring_empty  = round(circ - ring_filled, 1)
 
-    # Список брифов для вкладки «Брифы»
+    # Список брифов из БД для вкладки «Брифы»
     briefs_list = []
-    for bt in all_brief_types:
-        b = Brief.query.filter_by(client_id=client.id, brief_type=bt['key']).first()
+    for b in briefs_from_db:
         briefs_list.append({
-            'type': bt['key'],
-            'name': bt['name'],
-            'desc': bt['desc'],
+            'type': b.brief_type,
+            'name': b.brief_type or f'Бриф #{b.id}',
+            'desc': f'Создан {b.created_at.strftime("%d.%m.%Y")}' if b.created_at else 'Только что создан',
             'status': b.status,
             'id': b.id,
             'updated_at': b.updated_at.strftime('%d.%m.%Y %H:%M') if b.updated_at else None,
@@ -382,13 +390,12 @@ def client_briefs(client_id):
 
     # Активность: последние изменения брифов
     events = []
-    for b in client.briefs:
+    for b in briefs_from_db:
         if b.updated_at:
-            bname = next((x['name'] for x in all_brief_types if x['key'] == b.brief_type), b.brief_type)
             events.append({
                 'kind': 'doc',
                 'time': b.updated_at.strftime('%d.%m.%Y %H:%M'),
-                'text': f'Анкета «{bname}» — {b.status}',
+                'text': f'Бриф «{b.brief_type}» — {b.status}',
                 'ts': b.updated_at,
             })
     events.sort(key=lambda x: x['ts'], reverse=True)
@@ -396,14 +403,13 @@ def client_briefs(client_id):
     if not activity:
         activity = [{'kind': 'doc', 'time': '—', 'text': 'Активности пока нет'}]
 
-    # Рекомендуемые шаги (B3 — статика пока брифы не заполнены полностью)
+    # Рекомендуемые шаги
     steps = []
-    for bt in all_brief_types:
-        b = briefs_map.get(bt['key'])
-        if b and b.status != 'Заполнено':
-            steps.append({'title': f'Заполнить «{bt["name"]}»',
-                          'desc': bt['desc']})
-    if not steps:
+    unfilled = [b for b in briefs_from_db if b.status != 'Заполнено']
+    if unfilled:
+        steps.append({'title': f'Заполнить брифы ({len(unfilled)} не заполнено)',
+                      'desc': 'Заполните оставшиеся брифы для полного анализа'})
+    if not unfilled:
         steps = [
             {'title': 'Обсудить результаты анализа',
              'desc': 'Все брифы заполнены — ИИ готов сформировать полный план.'},

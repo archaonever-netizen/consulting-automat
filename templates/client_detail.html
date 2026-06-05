@@ -326,7 +326,18 @@
 
   {# ── Tab: Брифы ── #}
   <div class="tab-panel" id="tab-briefs" style="display: none;">
-    <div class="brief-grid" style="margin-top: 22px;">
+    <div style="margin-top: 22px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 style="margin: 0;">Брифы</h3>
+      <button class="btn btn-primary btn-sm" onclick="showAddBriefForm()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        Добавить бриф
+      </button>
+    </div>
+
+    {% if client.briefs_list %}
+    <div class="brief-grid">
       {% for brief in client.briefs_list %}
       <div class="brief-card rise d{{ loop.index }}">
         <h4>{{ brief.name }}</h4>
@@ -342,6 +353,9 @@
                  class="btn btn-ghost btn-sm">PDF</a>
             {% endif %}
             <a href="{{ url_for('brief_form', brief_id=brief.id) }}" class="btn btn-soft btn-sm">Открыть</a>
+            <form method="POST" action="{{ url_for('delete_brief', brief_id=brief.id) }}" style="display: inline;" onsubmit="return confirm('Удалить этот бриф?');">
+              <button type="submit" class="btn btn-ghost btn-sm" style="color: var(--danger);">Удалить</button>
+            </form>
           </div>
         </div>
         {% if brief.updated_at %}
@@ -352,6 +366,23 @@
       </div>
       {% endfor %}
     </div>
+    {% else %}
+    <div class="empty-tab">
+      <div class="ei">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h5"/>
+        </svg>
+      </div>
+      <b>Брифы не добавлены</b>
+      <span>Создайте первый бриф, чтобы собирать информацию о компании</span>
+      <button class="btn btn-primary btn-sm" style="margin-top: 16px;" onclick="showAddBriefForm()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 5v14M5 12h14"/>
+        </svg>
+        Добавить первый бриф
+      </button>
+    </div>
+    {% endif %}
   </div>
 
   {# ── Tab: Документы ── #}
@@ -428,5 +459,17 @@
   document.querySelectorAll('#detailTabs .tab').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
+
+  function showAddBriefForm() {
+    const name = prompt('Название брифа:', 'Новый бриф');
+    if (name) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '{{ url_for("add_brief", client_id=client.id) }}';
+      form.innerHTML = `<input type="hidden" name="name" value="${name}">`;
+      document.body.appendChild(form);
+      form.submit();
+    }
+  }
 </script>
 {% endblock %}
