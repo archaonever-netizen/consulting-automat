@@ -136,6 +136,25 @@ def get_brief_questions(brief_type):
                 {'title': '7. Скрипты продаж и шаблоны',
                  'fields': ['Наличие скриптов', 'Примеры диалогов']}
             ]
+        },
+        'sales': {
+            'title': 'Брифинг "Продажи"',
+            'type': 'sales',
+            'metrics': [
+                {'id': '1.1', 'question': 'Фактическая выручка по продажам услуг (тыс. руб.) за последний квартал', 'input_hint': 'Данные из учётной системы', 'type': 'number', 'unit': 'тыс. руб.', 'health_threshold': 5, 'health_unit': '% рост год-к-году'},
+                {'id': '1.2', 'question': 'Процент выполнения квартального плана по выручке', 'input_hint': 'Факт / План', 'type': 'percent', 'unit': '%', 'health_threshold': 95, 'health_unit': '%'},
+                {'id': '1.3', 'question': 'Количество активных клиентов за последние 12 месяцев', 'input_hint': 'Из CRM: уникальные клиенты', 'type': 'number', 'unit': 'клиентов', 'health_threshold': 0, 'health_unit': '% прирост'},
+                {'id': '1.4', 'question': 'Коэффициент удержания клиентов (Retention Rate) за год', 'input_hint': 'Клиенты прошлого года / в текущем году', 'type': 'decimal', 'unit': '0.00–1.00', 'health_threshold': 0.80, 'health_unit': '≥80%'},
+                {'id': '1.5', 'question': 'Коэффициент конверсии «Лид → SQL» за квартал', 'input_hint': 'SQL / Лиды', 'type': 'percent', 'unit': '%', 'health_threshold': 12, 'health_unit': '%'},
+                {'id': '1.6', 'question': 'Коэффициент конверсии «SQL → Договор» за квартал', 'input_hint': 'Сделки / SQL', 'type': 'percent', 'unit': '%', 'health_threshold': 20, 'health_unit': '%'},
+                {'id': '1.7', 'question': 'Средняя длительность цикла продаж (дней) за квартал', 'input_hint': 'Дата закрытия - дата первого контакта', 'type': 'number', 'unit': 'дней', 'health_threshold': 60, 'health_unit': '≤60 дней'},
+                {'id': '1.8', 'question': 'Доля выручки от 5 крупнейших клиентов', 'input_hint': 'Топ-5 / Общая выручка', 'type': 'percent', 'unit': '%', 'health_threshold': 40, 'health_unit': '≤40%'},
+                {'id': '1.9', 'question': 'Наличие утверждённого регламента квалификации лидов', 'input_hint': 'Да / Нет', 'type': 'yesno', 'unit': 'Да/Нет', 'health_threshold': 'yes'},
+                {'id': '1.10', 'question': 'Дата последней актуализации коммерческих предложений', 'input_hint': 'Дата утверждения или \"нет\"', 'type': 'date', 'unit': 'Дата', 'health_threshold': '6m', 'health_unit': 'не старше 6 мес'},
+                {'id': '1.11', 'question': 'Процент менеджеров, выполнивших план продаж в квартале', 'input_hint': 'Менеджеры с Факт ≥ Квота', 'type': 'percent', 'unit': '%', 'health_threshold': 60, 'health_unit': '≥60%'},
+                {'id': '1.12', 'question': 'NPS по послепродажному обслуживанию (за 6 мес.)', 'input_hint': '%Промоутеров - %Критиков', 'type': 'number', 'unit': '-100 до +100', 'health_threshold': 50, 'health_unit': '>50'},
+            ],
+            'responsible_list': ['Руководитель отдела продаж', 'Менеджер по продажам', 'Другое']
         }
     }
     return questions.get(brief_type, {})
@@ -437,10 +456,46 @@ def brief_form(brief_id):
     brief = Brief.query.get_or_404(brief_id)
     questions_data = get_brief_questions(brief.brief_type)
 
+    # Для Sales брифа используем специальный шаблон
+    if questions_data.get('type') == 'sales':
+        if request.method == 'POST':
+            # Собираем метрики из формы
+            metrics = {}
+            responsible = request.form.get('responsible', '')
+
+            for metric in questions_data.get('metrics', []):
+                value = request.form.get(f"metric_{metric['id']}", '')
+                if value:
+                    metrics[metric['id']] = value
+
+            # Сохраняем как answers JSON
+            brief.answers = {
+                'metrics': metrics,
+                'responsible': responsible,
+                'last_updated': datetime.utcnow().isoformat()
+            }
+
+            if metrics or responsible:
+                brief.status = 'В работе'
+            else:
+                brief.status = 'Не заполнено'
+            db.session.commit()
+
+            # Если нажали «Сохранить и завершить»
+            if 'complete' in request.form:
+                brief.status = 'Заполнено'
+                db.session.commit()
+                return redirect(url_for('client_briefs', client_id=brief.client_id))
+
+            return redirect(url_for('brief_form', brief_id=brief.id))
+
+        return render_template('sales_brief.html', brief=brief, brief_data=questions_data)
+
+    # Для остальных типов брифов — обычная логика
     if request.method == 'POST':
         # Собираем все ответы из формы
         answers = {}
-        for section in questions_data['sections']:
+        for section in questions_data.get('sections', []):
             for field in section['fields']:
                 key = f"{section['title']}||{field}"
                 value = request.form.get(key, '')
