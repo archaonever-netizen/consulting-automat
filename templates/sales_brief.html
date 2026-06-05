@@ -11,7 +11,7 @@
   </a>
 </div>
 
-<div class="detail-body" style="max-width: 1200px; margin: 0 auto;">
+<div class="detail-body" style="max-width: 1400px; margin: 0 auto;">
   <div style="margin-bottom: 30px;">
     <h2>{{ brief_data.title }}</h2>
     <p style="color: var(--ink-3);">12 ключевых метрик продаж с расчётом Health показателя</p>
@@ -21,26 +21,27 @@
 
     <!-- Таблица с метриками -->
     <div style="overflow-x: auto; margin-bottom: 30px;">
-      <table style="width: 100%; border-collapse: collapse;">
+      <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
         <thead>
-          <tr style="background: var(--ink-1); color: white; font-weight: 600;">
-            <th style="padding: 12px; text-align: left; border: 1px solid var(--border);">№</th>
-            <th style="padding: 12px; text-align: left; border: 1px solid var(--border);">Вопрос</th>
-            <th style="padding: 12px; text-align: left; border: 1px solid var(--border);">Вводные (клиент вводит)</th>
-            <th style="padding: 12px; text-align: left; border: 1px solid var(--border);">Health (норма)</th>
-            <th style="padding: 12px; text-align: center; border: 1px solid var(--border);">Статус</th>
+          <tr style="background: #2563EB; color: white; font-weight: 600;">
+            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 40px;">№</th>
+            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 280px;">Вопрос</th>
+            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 150px;">Вводные</th>
+            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 150px;">Итоговый ответ</th>
+            <th style="padding: 12px; text-align: left; border: 1px solid #2563EB; width: 120px;">Норма</th>
+            <th style="padding: 12px; text-align: center; border: 1px solid #2563EB; width: 80px;">Health</th>
           </tr>
         </thead>
         <tbody>
           {% for metric in brief_data.metrics %}
           <tr style="border-bottom: 1px solid var(--border);">
             <!-- № -->
-            <td style="padding: 12px; border: 1px solid var(--border); font-weight: 600; background: var(--bg-2);">
+            <td style="padding: 12px; border: 1px solid var(--border); font-weight: 600; background: var(--bg-2); text-align: center;">
               {{ metric.id }}
             </td>
 
             <!-- Вопрос -->
-            <td style="padding: 12px; border: 1px solid var(--border); font-size: 13px;">
+            <td style="padding: 12px; border: 1px solid var(--border); font-size: 12px;">
               <strong>{{ metric.question }}</strong>
               <div style="font-size: 11px; color: var(--ink-4); margin-top: 4px;">
                 {{ metric.input_hint }}
@@ -50,28 +51,32 @@
             <!-- Вводные (поле ввода) -->
             <td style="padding: 12px; border: 1px solid var(--border);">
               {% if metric.type == 'yesno' %}
-                <select name="metric_{{ metric.id }}" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%;">
-                  <option value="">-- Выбрать --</option>
+                <select name="metric_{{ metric.id }}" class="metric-input" data-metric-id="{{ metric.id }}" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
+                  <option value="">—</option>
                   <option value="yes">Да</option>
                   <option value="no">Нет</option>
                 </select>
               {% elif metric.type == 'date' %}
-                <input type="date" name="metric_{{ metric.id }}" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%;">
+                <input type="date" name="metric_{{ metric.id }}" class="metric-input" data-metric-id="{{ metric.id }}" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
               {% elif metric.type == 'decimal' %}
-                <input type="number" name="metric_{{ metric.id }}" min="0" max="1" step="0.01" placeholder="0.00" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%;">
+                <input type="number" name="metric_{{ metric.id }}" class="metric-input" data-metric-id="{{ metric.id }}" min="0" max="1" step="0.01" placeholder="0.00" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
               {% else %}
-                <input type="number" name="metric_{{ metric.id }}" placeholder="Введите значение" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%;">
+                <input type="number" name="metric_{{ metric.id }}" class="metric-input" data-metric-id="{{ metric.id }}" placeholder="0" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; font-size: 12px;">
               {% endif %}
               <div style="font-size: 11px; color: var(--ink-4); margin-top: 4px;">{{ metric.unit }}</div>
             </td>
 
-            <!-- Health (норма) -->
-            <td style="padding: 12px; border: 1px solid var(--border); font-size: 12px; background: var(--bg-2);">
-              <strong style="color: #2563EB;">{{ metric.health_unit }}</strong>
-              <div style="font-size: 11px; color: var(--ink-4); margin-top: 4px;">норма</div>
+            <!-- Итоговый ответ (вычисляется) -->
+            <td style="padding: 12px; border: 1px solid var(--border); background: var(--bg-2); font-weight: 600;">
+              <span id="result_{{ metric.id }}" style="display: block; padding: 6px; border-radius: 4px; background: white; border: 1px solid var(--border);">—</span>
             </td>
 
-            <!-- Статус -->
+            <!-- Норма -->
+            <td style="padding: 12px; border: 1px solid var(--border); font-size: 12px; background: var(--ink-0);">
+              <strong style="color: #2563EB;">{{ metric.health_unit }}</strong>
+            </td>
+
+            <!-- Health статус -->
             <td style="padding: 12px; border: 1px solid var(--border); text-align: center;">
               <span class="pill pill-gray" id="status_{{ metric.id }}">—</span>
             </td>
@@ -117,27 +122,82 @@
 
 {% block scripts %}
 <script>
-  // Простая логика для health статусов (можно расширить позже)
-  function updateHealthStatus(metricId, value) {
-    const status = document.getElementById('status_' + metricId);
-    if (!value) {
-      status.textContent = '—';
-      status.className = 'pill pill-gray';
+  // Определяем метрики с их параметрами для вычисления
+  const metricsConfig = {
+    '1.1': { threshold: 5, comparison: 'gte', type: 'growth' },      // ≥5%
+    '1.2': { threshold: 95, comparison: 'gte', type: 'percent' },    // ≥95%
+    '1.3': { threshold: 0, comparison: 'gte', type: 'number' },      // ≥0%
+    '1.4': { threshold: 0.80, comparison: 'gte', type: 'decimal' },  // ≥0.80
+    '1.5': { threshold: 12, comparison: 'gte', type: 'percent' },    // ≥12%
+    '1.6': { threshold: 20, comparison: 'gte', type: 'percent' },    // ≥20%
+    '1.7': { threshold: 60, comparison: 'lte', type: 'days' },       // ≤60
+    '1.8': { threshold: 40, comparison: 'lte', type: 'percent' },    // ≤40%
+    '1.9': { threshold: 'yes', comparison: 'eq', type: 'yesno' },    // Да
+    '1.10': { threshold: '6m', comparison: 'date', type: 'date' },   // Не старше 6 мес
+    '1.11': { threshold: 60, comparison: 'gte', type: 'percent' },   // ≥60%
+    '1.12': { threshold: 50, comparison: 'gt', type: 'number' },     // >50
+  };
+
+  function checkHealth(metricId, value) {
+    if (!value && value !== 0) return false;
+
+    const config = metricsConfig[metricId];
+    if (!config) return false;
+
+    const numValue = parseFloat(value);
+
+    if (config.comparison === 'gte') return numValue >= config.threshold;
+    if (config.comparison === 'lte') return numValue <= config.threshold;
+    if (config.comparison === 'gt') return numValue > config.threshold;
+    if (config.comparison === 'eq') return value === config.threshold;
+    if (config.comparison === 'date') {
+      const inputDate = new Date(value);
+      const sixMonthsAgo = new Date();
+      sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+      return inputDate >= sixMonthsAgo;
+    }
+
+    return false;
+  }
+
+  function updateMetricStatus(metricId) {
+    const input = document.querySelector(`input[name="metric_${metricId}"], select[name="metric_${metricId}"]`);
+    const value = input ? input.value : '';
+    const resultSpan = document.getElementById(`result_${metricId}`);
+    const statusSpan = document.getElementById(`status_${metricId}`);
+
+    // Показываем введённое значение в "Итоговом ответе"
+    if (value) {
+      resultSpan.textContent = value;
+      resultSpan.style.background = '#f0f9ff';
     } else {
-      // Упрощённая логика: если есть значение, считаем "в порядке"
-      status.textContent = '✓';
-      status.className = 'pill pill-green';
+      resultSpan.textContent = '—';
+      resultSpan.style.background = 'white';
+    }
+
+    // Проверяем Health
+    if (checkHealth(metricId, value)) {
+      statusSpan.textContent = '✓';
+      statusSpan.className = 'pill pill-green';
+    } else if (value) {
+      statusSpan.textContent = '✗';
+      statusSpan.className = 'pill pill-red';
+    } else {
+      statusSpan.textContent = '—';
+      statusSpan.className = 'pill pill-gray';
     }
   }
 
   // Слушаем изменения в полях
-  document.querySelectorAll('input, select').forEach(field => {
-    if (field.name.startsWith('metric_')) {
-      field.addEventListener('change', function() {
-        const metricId = this.name.replace('metric_', '');
-        updateHealthStatus(metricId, this.value);
-      });
-    }
+  document.querySelectorAll('.metric-input').forEach(field => {
+    field.addEventListener('change', function() {
+      const metricId = this.dataset.metricId;
+      updateMetricStatus(metricId);
+    });
+    field.addEventListener('keyup', function() {
+      const metricId = this.dataset.metricId;
+      updateMetricStatus(metricId);
+    });
   });
 </script>
 {% endblock %}
