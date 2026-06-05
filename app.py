@@ -6,20 +6,24 @@ from datetime import datetime
 from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session
 from models import db, Client, Brief
 from fpdf import FPDF
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из .env.local
+load_dotenv('.env.local')
 
 # -------------------------------------------------------------------
 # Настройка приложения
 # -------------------------------------------------------------------
 app = Flask(__name__)
 
-# Подключение к базе данных: используем DATABASE_URL от Render (PostgreSQL),
-# иначе локальный SQLite
+# Подключение к базе данных Supabase
 database_url = os.environ.get('DATABASE_URL')
 if database_url:
-    # Render передаёт URL начиная с postgres://, SQLAlchemy требует postgresql://
+    # Supabase передаёт URL начиная с postgres://, SQLAlchemy требует postgresql://
     database_url = database_url.replace('postgres://', 'postgresql://', 1)
     app.config['SQLALCHEMY_DATABASE_URI'] = database_url
 else:
+    # Локальное разработка — SQLite
     basedir = os.path.abspath(os.path.dirname(__file__))
     db_path = os.path.join(basedir, 'instance', 'app.db')
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
