@@ -72,6 +72,19 @@
     };
   }
 
+  // --- Сворачивание сайдбара ---
+  const sidebar = document.querySelector('.sidebar');
+  const toggleBtn = sidebar && sidebar.querySelector('[title="Свернуть"]');
+  if (sidebar && toggleBtn) {
+    if (localStorage.getItem('sb_collapsed') === '1') {
+      sidebar.classList.add('sb-collapsed');
+    }
+    toggleBtn.addEventListener('click', function() {
+      const collapsed = sidebar.classList.toggle('sb-collapsed');
+      localStorage.setItem('sb_collapsed', collapsed ? '1' : '');
+    });
+  }
+
   // --- Splash screen (показывается только один раз за сессию) ---
   document.addEventListener('DOMContentLoaded', function() {
     const splash = document.getElementById('splash-screen');
