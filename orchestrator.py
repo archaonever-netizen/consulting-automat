@@ -34,11 +34,16 @@ class Orchestrator:
             dict с анализом и определённостью функций
         """
         print(f"[ORCHESTRATOR] analyze_task called")
+        print(f"[ORCHESTRATOR] Available functions: {self.available_functions}")
+        print(f"[ORCHESTRATOR] Task description length: {len(task_description)}")
 
         prompt = OrchestratorPrompts.analyze_task(
             task_description,
             self.available_functions
         )
+
+        print(f"[ORCHESTRATOR] Prompt length: {len(prompt)}")
+        print(f"[ORCHESTRATOR] Prompt preview: {prompt[:200]}")
 
         messages = [
             {"role": "user", "content": prompt}

@@ -58,15 +58,25 @@ class PromtraClient:
             if top_p is not None:
                 params['top_p'] = top_p
 
+            print(f"\n[PROMPTRA] Sending request...")
+            print(f"[PROMPTRA] Messages: {len(params['messages'])} message(s)")
+            for i, msg in enumerate(params['messages']):
+                print(f"[PROMPTRA]   Message {i}: role={msg['role']}, content_length={len(msg['content'])}")
+                if len(msg['content']) < 200:
+                    print(f"[PROMPTRA]     Content: {msg['content']}")
+
             response = self.client.chat.completions.create(**params)
 
             content = response.choices[0].message.content
 
             # Логирование для отладки
-            print(f"\n[PROMPTRA] Response received")
+            print(f"[PROMPTRA] Response received")
             print(f"[PROMPTRA] Model: {response.model}")
+            print(f"[PROMPTRA] Stop reason: {response.choices[0].finish_reason}")
             print(f"[PROMPTRA] Content length: {len(content) if content else 0}")
             print(f"[PROMPTRA] Content preview: {content[:500] if content else 'None'}")
+            if response.usage:
+                print(f"[PROMPTRA] Tokens - input: {response.usage.prompt_tokens}, output: {response.usage.completion_tokens}")
 
             return {
                 'content': content,
