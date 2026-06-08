@@ -19,9 +19,7 @@ def initialize_agents():
         # Загружаем функции с eager loading для relationships
         from sqlalchemy.orm import joinedload
         functions = Function.query.options(
-            joinedload(Function.executor_link),
-            joinedload(Function.consumer_links),
-            joinedload(Function.supplier_links)
+            joinedload(Function.links)  # 'links' это actual relationship, создаётся через backref
         ).all()
         print(f"[AGENTS] Found {len(functions)} functions in DB")
 
