@@ -92,7 +92,7 @@
       {% if department.executor_links %}
       <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
         {% for link in department.executor_links %}
-        <div style="padding: 1rem; background: var(--surface-2); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center;">
+        <div style="padding: 1rem; background: var(--surface-2); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="window.location.href='{{ url_for('company_function_detail', function_id=link.function_id) }}'">
           <div style="flex: 1;">
             <div style="font-weight: 700; color: var(--text-primary);">{{ link.function_name }}</div>
             {% if link.description %}
@@ -135,7 +135,7 @@
       {% if department.consumer_links %}
       <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
         {% for link in department.consumer_links %}
-        <div style="padding: 1rem; background: var(--surface-2); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center;">
+        <div style="padding: 1rem; background: var(--surface-2); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="window.location.href='{{ url_for('company_function_detail', function_id=link.function_id) }}'">
           <div style="flex: 1;">
             <div style="font-weight: 700; color: var(--text-primary);">{{ link.function_name }}</div>
             {% if link.description %}
@@ -178,7 +178,7 @@
       {% if department.supplier_links %}
       <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
         {% for link in department.supplier_links %}
-        <div style="padding: 1rem; background: var(--surface-2); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center;">
+        <div style="padding: 1rem; background: var(--surface-2); border-radius: var(--radius-md); display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="window.location.href='{{ url_for('company_function_detail', function_id=link.function_id) }}'">
           <div style="flex: 1;">
             <div style="font-weight: 700; color: var(--text-primary);">{{ link.function_name }}</div>
             {% if link.description %}
@@ -277,15 +277,22 @@ window.addEventListener('click', function(e) {
 });
 
 // Переключение вкладок
-function switchTab(name) {
+function switchTab(event) {
+  const clickedTab = event.target.closest('.tab');
+  if (!clickedTab) return;
+
+  const tabName = clickedTab.getAttribute('data-tab');
   const tabs = document.querySelectorAll('#detailTabs .tab');
   const panels = document.querySelectorAll('.tab-panel');
 
   tabs.forEach(tab => tab.classList.remove('active'));
   panels.forEach(panel => panel.style.display = 'none');
 
-  event.target.classList.add('active');
-  document.getElementById('tab-' + name).style.display = 'block';
+  clickedTab.classList.add('active');
+  const targetPanel = document.getElementById('tab-' + tabName);
+  if (targetPanel) {
+    targetPanel.style.display = 'block';
+  }
 }
 
 document.querySelectorAll('#detailTabs .tab').forEach(tab => {
