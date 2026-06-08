@@ -33,6 +33,8 @@ class Orchestrator:
         Returns:
             dict с анализом и определённостью функций
         """
+        print(f"[ORCHESTRATOR] analyze_task called")
+
         prompt = OrchestratorPrompts.analyze_task(
             task_description,
             self.available_functions
@@ -42,12 +44,16 @@ class Orchestrator:
             {"role": "user", "content": prompt}
         ]
 
+        print(f"[ORCHESTRATOR] Calling Promptra API for task analysis")
+
         result = self.client.chat_completion(
             messages,
             temperature=self.config['temperature'],
             max_tokens=DeepSeekConfig.get_tokens_for_task('analyze_project'),
             top_p=self.config.get('top_p')
         )
+
+        print(f"[ORCHESTRATOR] API result - error: {result.get('error')}, content length: {len(result.get('content', '') or '')}")
 
         if result['error']:
             return {

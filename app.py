@@ -1340,24 +1340,35 @@ def agent_orchestrate_project(client_id):
     try:
         from agents import get_orchestrator
 
+        print(f"\n[AGENT] Starting orchestrate_project for client {client_id}")
+
         client = Client.query.get_or_404(client_id)
         data = request.get_json()
 
         project_description = data.get('project_description', '').strip()
         task_functions = data.get('functions', None)
 
+        print(f"[AGENT] Project description: {project_description[:100]}...")
+        print(f"[AGENT] Task functions: {task_functions}")
+
         if not project_description:
             return jsonify({'error': 'Project description is required'}), 400
 
         orchestrator = get_orchestrator()
+        print(f"[AGENT] Orchestrator initialized, calling orchestrate_project...")
+
         result = orchestrator.orchestrate_project(
             client,
             project_description,
             task_functions
         )
 
+        print(f"[AGENT] Result status: {result.get('status') if isinstance(result, dict) else 'unknown'}")
+        print(f"[AGENT] Result keys: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
+
         return jsonify(result), 200
     except Exception as e:
+        print(f"[AGENT] Exception: {str(e)}")
         return jsonify({'error': str(e), 'status': 'failed'}), 500
 
 

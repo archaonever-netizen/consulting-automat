@@ -57,11 +57,10 @@ class PromtraClient:
             content = response.choices[0].message.content
 
             # Логирование для отладки
-            import sys
-            print(f"\n[PROMPTRA] Response received", file=sys.stderr)
-            print(f"[PROMPTRA] Model: {response.model}", file=sys.stderr)
-            print(f"[PROMPTRA] Content length: {len(content) if content else 0}", file=sys.stderr)
-            print(f"[PROMPTRA] Content preview: {content[:200] if content else 'None'}", file=sys.stderr)
+            print(f"\n[PROMPTRA] Response received")
+            print(f"[PROMPTRA] Model: {response.model}")
+            print(f"[PROMPTRA] Content length: {len(content) if content else 0}")
+            print(f"[PROMPTRA] Content preview: {content[:500] if content else 'None'}")
 
             return {
                 'content': content,
