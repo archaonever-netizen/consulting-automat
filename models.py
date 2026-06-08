@@ -222,3 +222,50 @@ class ChatMessage(db.Model):
     content = db.Column(db.Text)
     tokens_used = db.Column(db.Integer)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class AIAgent(db.Model):
+    """ИИ-советник для функции."""
+    __tablename__ = 'ai_agents'
+    id = db.Column(db.Integer, primary_key=True)
+    function_id = db.Column(db.Integer, db.ForeignKey('functions.id', ondelete='CASCADE'), nullable=False, unique=True)
+    model = db.Column(db.String(50), default='claude-3.5-sonnet')
+    temperature = db.Column(db.Float, default=0.7)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    function = db.relationship('Function', backref=db.backref('ai_agent', uselist=False, lazy=True))
+    tasks = db.relationship('AITask', backref='agent', lazy=True, cascade='all, delete-orphan')
+
+
+class AITask(db.Model):
+    """Задача для ИИ-агента."""
+    __tablename__ = 'ai_tasks'
+    id = db.Column(db.Integer, primary_key=True)
+    agent_id = db.Column(db.Integer, db.ForeignKey('ai_agents.id', ondelete='CASCADE'), nullable=False)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id', ondelete='CASCADE'), nullable=True)
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    status = db.Column(db.String(20), default='pending')  # 'pending', 'in_progress', 'completed', 'failed'
+    priority = db.Column(db.Integer, default=0)  # 0=low, 1=normal, 2=high
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    client = db.relationship('Client', lazy=True)
+    runs = db.relationship('AIAgentRun', backref='task', lazy=True, cascade='all, delete-orphan')
+
+
+class AIAgentRun(db.Model):
+    """Выполнение задачи агентом."""
+    __tablename__ = 'ai_agent_runs'
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('ai_tasks.id', ondelete='CASCADE'), nullable=False)
+    status = db.Column(db.String(20), default='pending')  # 'pending', 'running', 'completed', 'failed'
+    input_prompt = db.Column(db.Text)
+    output_response = db.Column(db.Text)
+    error_message = db.Column(db.Text)
+    tokens_used = db.Column(db.Integer, default=0)
+    execution_time = db.Column(db.Float)  # в секундах
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime)

@@ -5,7 +5,7 @@ import random
 from datetime import datetime
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort, flash
-from models import db, Client, Brief, User, Role, Function, Department, FunctionDepartmentLink
+from models import db, Client, Brief, User, Role, Function, Department, FunctionDepartmentLink, AITask, AIAgentRun
 from fpdf import FPDF
 from dotenv import load_dotenv
 
@@ -1306,6 +1306,143 @@ def remove_link(link_id):
         return redirect(url_for('company_function_detail', function_id=return_id))
     else:
         return redirect(url_for('company'))
+
+# -------------------------------------------------------------------
+# ИИ-агенты (AI Advisors)
+# -------------------------------------------------------------------
+
+@app.route('/api/agent/analyze', methods=['POST'])
+@login_required
+def agent_analyze():
+    """API: Анализировать задачу через главного координатора (Orchestrator)."""
+    try:
+        from agents import get_orchestrator
+
+        data = request.get_json()
+        task_description = data.get('task_description', '').strip()
+        client_id = data.get('client_id', type=int)
+
+        if not task_description:
+            return jsonify({'error': 'Task description is required'}), 400
+
+        orchestrator = get_orchestrator()
+        analysis = orchestrator.analyze_task(task_description)
+
+        return jsonify(analysis), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'status': 'failed'}), 500
+
+
+@app.route('/api/agent/project/<int:client_id>', methods=['POST'])
+@login_required
+def agent_orchestrate_project(client_id):
+    """API: Координировать работу агентов для проекта."""
+    try:
+        from agents import get_orchestrator
+
+        client = Client.query.get_or_404(client_id)
+        data = request.get_json()
+
+        project_description = data.get('project_description', '').strip()
+        task_functions = data.get('functions', None)
+
+        if not project_description:
+            return jsonify({'error': 'Project description is required'}), 400
+
+        orchestrator = get_orchestrator()
+        result = orchestrator.orchestrate_project(
+            client,
+            project_description,
+            task_functions
+        )
+
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'status': 'failed'}), 500
+
+
+@app.route('/api/agent/function/<int:function_id>/analyze', methods=['POST'])
+@login_required
+def agent_function_analyze(function_id):
+    """API: Анализировать проект через конкретного функционального советника."""
+    try:
+        from agents import get_agent_by_function_name
+
+        func = Function.query.get_or_404(function_id)
+        data = request.get_json()
+
+        client_id = data.get('client_id', type=int)
+        project_description = data.get('project_description', '').strip()
+
+        if not client_id or not project_description:
+            return jsonify({'error': 'client_id and project_description are required'}), 400
+
+        client = Client.query.get_or_404(client_id)
+
+        agent = get_agent_by_function_name(func.name)
+        if not agent:
+            return jsonify({'error': f'Agent for function {func.name} not initialized'}), 500
+
+        result = agent.analyze_project(client, project_description)
+
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'status': 'failed'}), 500
+
+
+@app.route('/api/agent/function/<int:function_id>/plan', methods=['POST'])
+@login_required
+def agent_function_create_plan(function_id):
+    """API: Создать план действий через функционального советника."""
+    try:
+        from agents import get_agent_by_function_name
+
+        func = Function.query.get_or_404(function_id)
+        data = request.get_json()
+
+        client_id = data.get('client_id', type=int)
+        project_context = data.get('project_context', '').strip()
+
+        if not client_id or not project_context:
+            return jsonify({'error': 'client_id and project_context are required'}), 400
+
+        client = Client.query.get_or_404(client_id)
+
+        agent = get_agent_by_function_name(func.name)
+        if not agent:
+            return jsonify({'error': f'Agent for function {func.name} not initialized'}), 500
+
+        result = agent.create_action_plan(client, project_context)
+
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'status': 'failed'}), 500
+
+
+@app.route('/api/agent/function/<int:function_id>/checklist', methods=['POST'])
+@login_required
+def agent_function_checklist(function_id):
+    """API: Сгенерировать чек-лист через функционального советника."""
+    try:
+        from agents import get_agent_by_function_name
+
+        func = Function.query.get_or_404(function_id)
+        data = request.get_json()
+
+        topic = data.get('topic', '').strip()
+
+        if not topic:
+            return jsonify({'error': 'topic is required'}), 400
+
+        agent = get_agent_by_function_name(func.name)
+        if not agent:
+            return jsonify({'error': f'Agent for function {func.name} not initialized'}), 500
+
+        result = agent.generate_checklist(topic)
+
+        return jsonify(result), 200
+    except Exception as e:
+        return jsonify({'error': str(e), 'status': 'failed'}), 500
 
 if __name__ == '__main__':
     app.run(debug=True)
