@@ -343,11 +343,13 @@
         <h4>{{ brief.name }}</h4>
         <p>{{ brief.desc }}</p>
         <div class="bf-foot">
-          <span class="pill {% if brief.status == 'Заполнено' %}pill-green{% elif brief.status == 'В работе' %}pill-amber{% else %}pill-gray{% endif %}">
-            {% if brief.status == 'Заполнено' %}<span class="led"></span>{% endif %}
-            {{ brief.status }}
-          </span>
-          <div style="display: flex; gap: 8px;">
+          <div class="bf-status">
+            <span class="pill {% if brief.status == 'Заполнено' %}pill-green{% elif brief.status == 'В работе' %}pill-amber{% else %}pill-gray{% endif %}">
+              {% if brief.status == 'Заполнено' %}<span class="led"></span>{% endif %}
+              {{ brief.status }}
+            </span>
+          </div>
+          <div class="bf-actions">
             {% if brief.status != 'Не заполнено' %}
               <a href="{{ url_for('generate_pdf', brief_id=brief.id) }}" target="_blank"
                  class="btn btn-ghost btn-sm">PDF</a>
