@@ -918,3 +918,17 @@ a:hover { color: var(--accent-hover); }
 .matrix-badge.executor { background: var(--accent-weak); color: var(--accent-ink); }
 .matrix-badge.consumer { background: var(--success-weak); color: var(--success); }
 .matrix-badge.supplier { background: var(--amber-weak); color: var(--amber); }
+
+/* ============================================================
+   AI Analysis Spinner Animation
+   ============================================================ */
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Color aliases for AI analysis */
+.success-light { background-color: var(--success-weak); }
+.danger-light { background-color: var(--danger-weak); }
+.primary-light { background-color: var(--accent-weak); }
+.bg-2 { background-color: var(--surface-2); }
