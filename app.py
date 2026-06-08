@@ -4,8 +4,8 @@ import json
 import random
 from datetime import datetime
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort
-from models import db, Client, Brief, User, Role, Function, Department
+from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort, flash
+from models import db, Client, Brief, User, Role, Function, Department, FunctionDepartmentLink
 from fpdf import FPDF
 from dotenv import load_dotenv
 
@@ -55,6 +55,49 @@ def seed_functions():
         if not Function.query.filter_by(name=name).first():
             db.session.add(Function(name=name, sort_order=i))
     db.session.commit()
+
+def compute_function_health(func):
+    """Вычислить health функции из 4 бинарных сигналов → проценты по 25."""
+    signals = [
+        bool(func.description and func.description.strip()),
+        func.executor_link is not None,
+        len(func.consumer_links) > 0,
+        len(func.supplier_links) > 0,
+    ]
+    return round(sum(signals) / len(signals) * 100)
+
+def compute_department_health(dept):
+    """Вычислить health отдела из 3 бинарных сигналов → проценты по ~33."""
+    signals = [
+        bool(dept.description and dept.description.strip()),
+        len(dept.executor_links) > 0,
+        len(dept.consumer_links) > 0 or len(dept.supplier_links) > 0,
+    ]
+    return round(sum(signals) / len(signals) * 100)
+
+def health_label_and_class(health):
+    """Преобразовать процент health в label и CSS-класс (по аналогии с client health)."""
+    if health == 100:
+        return 'Хорошее', 'up'
+    elif health >= 67:
+        return 'В порядке', 'up'
+    elif health >= 33:
+        return 'В работе', 'warn'
+    elif health > 0:
+        return 'Внимание', 'down'
+    else:
+        return 'Нет данных', 'flat'
+
+def health_spark_color_and_state(health):
+    """Преобразовать процент health в цвет спарка и состояние (по аналогии с client health)."""
+    if health >= 70:
+        return '#16A34A', 'Хорошее состояние'
+    elif health >= 45:
+        return '#C2740B', 'Требует внимания'
+    elif health > 0:
+        return '#DC2626', 'Зона риска'
+    else:
+        return '#BFC0C7', 'Нет данных'
 
 with app.app_context():
     try:
@@ -925,65 +968,225 @@ def settings():
 
 
 # -------------------------------------------------------------------
-# Вкладка "Компания" (организационная структура)
+# Вкладка "Компания" (организационная структура с матрицей)
 # -------------------------------------------------------------------
 
 @app.route('/company')
 @founder_required
 def company():
-    """Главная страница организационной структуры."""
+    """Матрица: Функции × Отделы."""
     functions = Function.query.order_by(Function.sort_order).all()
+    departments = Department.query.order_by(Department.name).all()
+    links = FunctionDepartmentLink.query.all()
 
+    # Подготовка данных функций
     functions_data = []
     for func in functions:
-        dept_count = len(func.departments) if func.departments else 0
+        health = compute_function_health(func)
+        health_label, health_cls = health_label_and_class(health)
+        spark_color, health_state = health_spark_color_and_state(health)
+        circ = 113.1
+        ring_filled = round(health / 100 * circ, 1)
+        ring_empty = round(circ - ring_filled, 1)
+
         functions_data.append({
             'id': func.id,
             'name': func.name,
             'description': func.description,
-            'dept_count': dept_count,
-            'sort_order': func.sort_order,
+            'health': health,
+            'health_label': health_label,
+            'health_cls': health_cls,
+            'spark_color': spark_color,
+            'health_state': health_state,
+            'ring_filled': ring_filled,
+            'ring_empty': ring_empty,
             'initials': func.name[:2].upper(),
-            'color': ['#2563EB', '#16A34A', '#7C3AED', '#0891B2', '#DB2777', '#EA580C', '#1D1D1F', '#F59E0B', '#EC4899'][functions_data.__len__() % 9],
+            'color': ['#2563EB', '#16A34A', '#7C3AED', '#0891B2', '#DB2777', '#EA580C', '#1D1D1F', '#F59E0B', '#EC4899'][func.id % 9],
         })
 
-    return render_template('company.html', functions=functions_data)
+    # Подготовка данных отделов
+    departments_data = []
+    for dept in departments:
+        health = compute_department_health(dept)
+        health_label, health_cls = health_label_and_class(health)
+        spark_color, health_state = health_spark_color_and_state(health)
+        circ = 113.1
+        ring_filled = round(health / 100 * circ, 1)
+        ring_empty = round(circ - ring_filled, 1)
+
+        departments_data.append({
+            'id': dept.id,
+            'name': dept.name,
+            'description': dept.description,
+            'health': health,
+            'health_label': health_label,
+            'health_cls': health_cls,
+            'spark_color': spark_color,
+            'health_state': health_state,
+            'ring_filled': ring_filled,
+            'ring_empty': ring_empty,
+            'initials': dept.name[:2].upper(),
+            'color': ['#2563EB', '#16A34A', '#7C3AED', '#0891B2', '#DB2777', '#EA580C', '#1D1D1F', '#F59E0B', '#EC4899'][dept.id % 9],
+        })
+
+    # Матрица связей для шаблона
+    matrix = {}
+    for link in links:
+        key = (link.function_id, link.department_id)
+        if key not in matrix:
+            matrix[key] = []
+        matrix[key].append({
+            'relation_type': link.relation_type,
+            'description': link.description,
+            'id': link.id,
+        })
+
+    return render_template('company.html',
+                          functions=functions_data,
+                          departments=departments_data,
+                          matrix=matrix,
+                          total_departments=len(departments),
+                          total_links=len(links))
 
 @app.route('/company/function/<int:function_id>')
 @founder_required
 def company_function_detail(function_id):
-    """Детали функции и её отделы."""
+    """Детали функции с вкладками."""
     func = Function.query.get_or_404(function_id)
 
-    departments = func.departments if func.departments else []
-    depts_data = []
-    for dept in departments:
-        depts_data.append({
-            'id': dept.id,
-            'name': dept.name,
-            'description': dept.description,
-            'created_by': dept.created_by.full_name if dept.created_by else 'Система',
-            'created_at': dept.created_at.strftime('%d.%m.%Y %H:%M') if dept.created_at else 'неизвестно',
+    health = compute_function_health(func)
+    health_label, health_cls = health_label_and_class(health)
+    spark_color, health_state = health_spark_color_and_state(health)
+    circ = 113.1
+    ring_filled = round(health / 100 * circ, 1)
+    ring_empty = round(circ - ring_filled, 1)
+
+    # Подготовка данных для вкладок
+    executor_dept = None
+    if func.executor_link:
+        executor_dept = func.executor_link.department
+
+    consumer_links = []
+    for link in func.consumer_links:
+        consumer_links.append({
+            'id': link.id,
+            'department_id': link.department.id,
+            'department_name': link.department.name,
+            'description': link.description,
         })
 
+    supplier_links = []
+    for link in func.supplier_links:
+        supplier_links.append({
+            'id': link.id,
+            'department_id': link.department.id,
+            'department_name': link.department.name,
+            'description': link.description,
+        })
+
+    func_data = {
+        'id': func.id,
+        'name': func.name,
+        'description': func.description,
+        'health': health,
+        'health_label': health_label,
+        'health_cls': health_cls,
+        'spark_color': spark_color,
+        'health_state': health_state,
+        'ring_filled': ring_filled,
+        'ring_empty': ring_empty,
+        'initials': func.name[:2].upper(),
+        'color': ['#2563EB', '#16A34A', '#7C3AED', '#0891B2', '#DB2777', '#EA580C', '#1D1D1F', '#F59E0B', '#EC4899'][func.id % 9],
+        'executor_dept': executor_dept,
+        'consumer_links': consumer_links,
+        'supplier_links': supplier_links,
+    }
+
     return render_template('company_function_detail.html',
-                         function=func,
-                         departments=depts_data)
+                         function=type('F', (), func_data),
+                         all_departments=Department.query.order_by(Department.name).all())
 
-@app.route('/company/function/<int:function_id>/department/add', methods=['POST'])
+@app.route('/company/department/<int:department_id>')
 @founder_required
-def add_department(function_id):
-    """Добавить отдел в функцию."""
-    func = Function.query.get_or_404(function_id)
+def company_department_detail(department_id):
+    """Детали отдела с вкладками."""
+    dept = Department.query.get_or_404(department_id)
 
+    health = compute_department_health(dept)
+    health_label, health_cls = health_label_and_class(health)
+    spark_color, health_state = health_spark_color_and_state(health)
+    circ = 113.1
+    ring_filled = round(health / 100 * circ, 1)
+    ring_empty = round(circ - ring_filled, 1)
+
+    # Подготовка данных для вкладок
+    executor_links = []
+    for link in dept.executor_links:
+        executor_links.append({
+            'id': link.id,
+            'function_id': link.function.id,
+            'function_name': link.function.name,
+            'description': link.description,
+        })
+
+    consumer_links = []
+    for link in dept.consumer_links:
+        consumer_links.append({
+            'id': link.id,
+            'function_id': link.function.id,
+            'function_name': link.function.name,
+            'description': link.description,
+        })
+
+    supplier_links = []
+    for link in dept.supplier_links:
+        supplier_links.append({
+            'id': link.id,
+            'function_id': link.function.id,
+            'function_name': link.function.name,
+            'description': link.description,
+        })
+
+    dept_data = {
+        'id': dept.id,
+        'name': dept.name,
+        'description': dept.description,
+        'health': health,
+        'health_label': health_label,
+        'health_cls': health_cls,
+        'spark_color': spark_color,
+        'health_state': health_state,
+        'ring_filled': ring_filled,
+        'ring_empty': ring_empty,
+        'initials': dept.name[:2].upper(),
+        'color': ['#2563EB', '#16A34A', '#7C3AED', '#0891B2', '#DB2777', '#EA580C', '#1D1D1F', '#F59E0B', '#EC4899'][dept.id % 9],
+        'executor_links': executor_links,
+        'consumer_links': consumer_links,
+        'supplier_links': supplier_links,
+    }
+
+    return render_template('company_department_detail.html',
+                         department=type('D', (), dept_data),
+                         all_functions=Function.query.order_by(Function.sort_order).all())
+
+@app.route('/company/department/add', methods=['POST'])
+@founder_required
+def add_department():
+    """Добавить новый отдел (без привязки к функции)."""
     name = request.form.get('name', '').strip()
     description = request.form.get('description', '').strip()
 
     if not name:
-        return redirect(url_for('company_function_detail', function_id=function_id))
+        flash('Название отдела обязательно', 'error')
+        return redirect(url_for('company'))
+
+    # Проверка на уникальность имени
+    existing = Department.query.filter_by(name=name).first()
+    if existing:
+        flash(f'Отдел с именем "{name}" уже существует', 'error')
+        return redirect(url_for('company'))
 
     dept = Department(
-        function_id=function_id,
         name=name,
         description=description if description else None,
         created_by_id=g.user.id
@@ -991,7 +1194,117 @@ def add_department(function_id):
     db.session.add(dept)
     db.session.commit()
 
+    flash(f'Отдел "{name}" создан', 'success')
+    return redirect(url_for('company'))
+
+@app.route('/company/function/<int:function_id>/description', methods=['POST'])
+@founder_required
+def update_function_description(function_id):
+    """Обновить описание функции."""
+    func = Function.query.get_or_404(function_id)
+    description = request.form.get('description', '').strip()
+
+    func.description = description if description else None
+    db.session.commit()
+
+    flash(f'Описание функции "{func.name}" обновлено', 'success')
     return redirect(url_for('company_function_detail', function_id=function_id))
+
+@app.route('/company/department/<int:department_id>/description', methods=['POST'])
+@founder_required
+def update_department_description(department_id):
+    """Обновить описание отдела."""
+    dept = Department.query.get_or_404(department_id)
+    description = request.form.get('description', '').strip()
+
+    dept.description = description if description else None
+    db.session.commit()
+
+    flash(f'Описание отдела "{dept.name}" обновлено', 'success')
+    return redirect(url_for('company_department_detail', department_id=department_id))
+
+@app.route('/company/link/add', methods=['POST'])
+@founder_required
+def add_link():
+    """Добавить или обновить связь между функцией и отделом."""
+    function_id = request.form.get('function_id', type=int)
+    department_id = request.form.get('department_id', type=int)
+    relation_type = request.form.get('relation_type', '').lower()
+    description = request.form.get('description', '').strip()
+    return_to = request.form.get('return_to', 'function')  # 'function' или 'department'
+    return_id = request.form.get('return_id', type=int)
+
+    func = Function.query.get_or_404(function_id) if function_id else None
+    dept = Department.query.get_or_404(department_id) if department_id else None
+
+    if not func or not dept or relation_type not in ('executor', 'consumer', 'supplier'):
+        flash('Некорректные параметры', 'error')
+        return redirect(url_for('company'))
+
+    # Для executor: удалить существующую executor-связь функции (мягкая проверка)
+    if relation_type == 'executor':
+        existing_executor = FunctionDepartmentLink.query.filter_by(
+            function_id=function_id,
+            relation_type='executor'
+        ).first()
+        if existing_executor and existing_executor.department_id != department_id:
+            db.session.delete(existing_executor)
+            db.session.commit()
+
+    # Проверить на дублирование — если связь уже существует, обновить
+    existing_link = FunctionDepartmentLink.query.filter_by(
+        function_id=function_id,
+        department_id=department_id,
+        relation_type=relation_type
+    ).first()
+
+    if existing_link:
+        existing_link.description = description if description else None
+        existing_link.updated_at = datetime.utcnow()
+    else:
+        link = FunctionDepartmentLink(
+            function_id=function_id,
+            department_id=department_id,
+            relation_type=relation_type,
+            description=description if description else None,
+            created_by_id=g.user.id
+        )
+        db.session.add(link)
+
+    db.session.commit()
+
+    flash(f'Связь добавлена: {func.name} ← {dept.name} ({relation_type})', 'success')
+
+    if return_to == 'department' and return_id:
+        return redirect(url_for('company_department_detail', department_id=return_id))
+    elif return_to == 'function' and return_id:
+        return redirect(url_for('company_function_detail', function_id=return_id))
+    else:
+        return redirect(url_for('company'))
+
+@app.route('/company/link/<int:link_id>/remove', methods=['POST'])
+@founder_required
+def remove_link(link_id):
+    """Удалить связь."""
+    link = FunctionDepartmentLink.query.get_or_404(link_id)
+    return_to = request.form.get('return_to', 'function')
+    return_id = request.form.get('return_id', type=int)
+
+    func_name = link.function.name
+    dept_name = link.department.name
+    relation_type = link.relation_type
+
+    db.session.delete(link)
+    db.session.commit()
+
+    flash(f'Связь удалена: {func_name} ↔ {dept_name} ({relation_type})', 'success')
+
+    if return_to == 'department' and return_id:
+        return redirect(url_for('company_department_detail', department_id=return_id))
+    elif return_to == 'function' and return_id:
+        return redirect(url_for('company_function_detail', function_id=return_id))
+    else:
+        return redirect(url_for('company'))
 
 if __name__ == '__main__':
     app.run(debug=True)

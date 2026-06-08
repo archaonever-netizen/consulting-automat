@@ -9,7 +9,7 @@
 {%- set _client_eps = ['clients','add_client','edit_client','delete_client',
                         'client_briefs','brief_form','update_brief_status',
                         'autosave_brief','generate_pdf'] -%}
-{%- set _company_eps = ['company','company_function_detail','add_department'] -%}
+{%- set _company_eps = ['company','company_function_detail','company_department_detail','add_department','update_function_description','update_department_description','add_link','remove_link'] -%}
 {%- if _ep == 'home' -%}
   {%- set _active = 'home' -%}
 {%- elif _ep in ['chat','chat_send'] -%}

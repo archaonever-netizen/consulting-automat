@@ -46,6 +46,33 @@ class User(db.Model):
         return check_password_hash(self.password_hash, raw)
 
 
+class FunctionDepartmentLink(db.Model):
+    """Связь между функцией и отделом: исполнитель / потребитель / поставщик."""
+    __tablename__ = 'function_department_links'
+    id = db.Column(db.Integer, primary_key=True)
+    function_id = db.Column(db.Integer, db.ForeignKey('functions.id', ondelete='CASCADE'), nullable=False)
+    department_id = db.Column(db.Integer, db.ForeignKey('departments.id', ondelete='CASCADE'), nullable=False)
+    relation_type = db.Column(db.String(20), nullable=False)  # 'executor' | 'consumer' | 'supplier'
+    description = db.Column(db.Text)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    function = db.relationship('Function', backref=db.backref('links', lazy=True, cascade='all, delete-orphan'))
+    department = db.relationship('Department', backref=db.backref('links', lazy=True, cascade='all, delete-orphan'))
+    created_by = db.relationship('User', lazy=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('function_id', 'department_id', 'relation_type',
+                            name='uq_function_department_relation'),
+        db.CheckConstraint("relation_type in ('executor','consumer','supplier')",
+                           name='ck_function_department_relation_type'),
+        db.Index('uq_one_executor_per_function', 'function_id', unique=True,
+                 postgresql_where=db.text("relation_type = 'executor'"),
+                 sqlite_where=db.text("relation_type = 'executor'")),
+    )
+
+
 class Function(db.Model):
     """Функциональный элемент компании (Техническая, Коммерческая и т.д.)."""
     __tablename__ = 'functions'
@@ -57,23 +84,48 @@ class Function(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    departments = db.relationship('Department', backref='function', lazy=True, cascade="all, delete-orphan")
+    @property
+    def executor_link(self):
+        """Отдел-исполнитель этой функции (ровно один или None)."""
+        return next((l for l in self.links if l.relation_type == 'executor'), None)
+
+    @property
+    def consumer_links(self):
+        """Отделы-потребители этой функции."""
+        return [l for l in self.links if l.relation_type == 'consumer']
+
+    @property
+    def supplier_links(self):
+        """Отделы-поставщики для этой функции."""
+        return [l for l in self.links if l.relation_type == 'supplier']
 
 
 class Department(db.Model):
-    """Отдел внутри функции."""
+    """Отдел компании (многофункциональная единица)."""
     __tablename__ = 'departments'
     id = db.Column(db.Integer, primary_key=True)
-    function_id = db.Column(db.Integer, db.ForeignKey('functions.id'), nullable=False)
-    name = db.Column(db.String(150), nullable=False)
+    name = db.Column(db.String(150), unique=True, nullable=False)
     description = db.Column(db.Text)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    __table_args__ = (
-        db.UniqueConstraint('function_id', 'name', name='uq_department_name_per_function'),
-    )
+    created_by = db.relationship('User', lazy=True)
+
+    @property
+    def executor_links(self):
+        """Функции, которые исполняет этот отдел."""
+        return [l for l in self.links if l.relation_type == 'executor']
+
+    @property
+    def consumer_links(self):
+        """Функции, которые потребляет этот отдел."""
+        return [l for l in self.links if l.relation_type == 'consumer']
+
+    @property
+    def supplier_links(self):
+        """Функции, в которые поставляет этот отдел."""
+        return [l for l in self.links if l.relation_type == 'supplier']
 
 
 class Client(db.Model):

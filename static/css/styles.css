@@ -903,3 +903,17 @@ a:hover { color: var(--accent-hover); }
   .chips { gap: 8px; }
   .chip-sug { width: 160px; font-size: 13px; }
 }
+
+/* ---- Матрица компании (Функции × Отделы) ---- */
+.matrix-wrap { overflow: auto; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--card-bg); box-shadow: var(--shadow-sm); }
+.matrix-table { border-collapse: separate; border-spacing: 0; min-width: 100%; }
+.matrix-table th, .matrix-table td { border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); padding: 10px 14px; text-align: left; white-space: nowrap; }
+.matrix-table thead th { position: sticky; top: 0; z-index: 2; background: var(--surface-2); font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--ink-3); cursor: pointer; }
+.matrix-table tbody th { position: sticky; left: 0; z-index: 1; background: var(--card-bg); font-weight: 700; cursor: pointer; max-width: 220px; white-space: normal; }
+.matrix-table tbody th:hover, .matrix-table thead th:hover { color: var(--accent-ink); }
+.matrix-cell { text-align: center; cursor: pointer; transition: background .12s; }
+.matrix-cell:hover { background: var(--surface-2); }
+.matrix-badge { display: inline-flex; width: 26px; height: 26px; border-radius: 8px; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; }
+.matrix-badge.executor { background: var(--accent-weak); color: var(--accent-ink); }
+.matrix-badge.consumer { background: var(--success-weak); color: var(--success); }
+.matrix-badge.supplier { background: var(--amber-weak); color: var(--amber); }
