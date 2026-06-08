@@ -20,7 +20,8 @@ class PromtraClient:
 
         self.client = OpenAI(
             api_key=self.api_key,
-            base_url=self.base_url
+            base_url=self.base_url,
+            timeout=30.0  # 30 секунд timeout на запрос
         )
 
         print(f"[PROMPTRA] OpenAI client initialized successfully")
@@ -86,8 +87,10 @@ class PromtraClient:
                 'error': None
             }
         except Exception as e:
-            import sys
-            print(f"\n[PROMPTRA] Error: {str(e)}", file=sys.stderr)
+            error_msg = str(e)
+            print(f"\n[PROMPTRA] Error: {error_msg}")
+            if 'timeout' in error_msg.lower() or 'timed out' in error_msg.lower():
+                print("[PROMPTRA] ⚠️ REQUEST TIMEOUT - Promptra API took too long to respond")
             return {
                 'content': None,
                 'tokens_used': 0,
