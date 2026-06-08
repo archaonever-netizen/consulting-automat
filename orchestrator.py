@@ -3,6 +3,7 @@
 
 import json
 from typing import List, Dict, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from promptra_client import PromtraClient
 from prompts import OrchestratorPrompts, ContextBuilder
 from deepseek_config import DeepSeekConfig
@@ -110,6 +111,9 @@ class Orchestrator:
         Returns:
             dict с итоговым планом и выводами агентов
         """
+        import time
+        start_time = time.time()
+
         if not task_functions:
             analysis = self.analyze_task(project_description)
             if analysis['status'] == 'failed':
@@ -125,18 +129,38 @@ class Orchestrator:
             'consolidated_plan': None
         }
 
-        for function_name in task_functions:
+        # Параллельное выполнение анализов функциональных агентов
+        print(f"[ORCHESTRATOR] Starting parallel analysis for {len(task_functions)} functions")
+
+        def analyze_function(function_name):
+            """Вспомогательная функция для параллельного анализа."""
             if function_name not in self.agents:
-                continue
+                return function_name, None
 
             agent = self.agents[function_name]
+            print(f"[ORCHESTRATOR] Analyzing function: {function_name}")
             agent_result = agent.analyze_project(client_obj, project_description)
+            return function_name, agent_result
 
-            results['agents_analysis'][function_name] = {
-                'status': agent_result['status'],
-                'analysis': agent_result['analysis'],
-                'tokens_used': agent_result['tokens_used']
+        # Используем ThreadPoolExecutor для параллельных запросов
+        with ThreadPoolExecutor(max_workers=9) as executor:
+            futures = {
+                executor.submit(analyze_function, func_name): func_name
+                for func_name in task_functions
             }
+
+            # Собираем результаты по мере их завершения
+            for future in as_completed(futures):
+                func_name, agent_result = future.result()
+                if agent_result is not None:
+                    results['agents_analysis'][func_name] = {
+                        'status': agent_result['status'],
+                        'analysis': agent_result['analysis'],
+                        'tokens_used': agent_result['tokens_used']
+                    }
+                    print(f"[ORCHESTRATOR] ✓ Completed: {func_name}")
+
+        print(f"[ORCHESTRATOR] All {len(task_functions)} functions analyzed")
 
         consolidated_prompt = self._build_consolidated_prompt(
             project_description,
@@ -160,6 +184,9 @@ class Orchestrator:
             'plan': consolidated['content'],
             'error': consolidated['error']
         }
+
+        elapsed_time = time.time() - start_time
+        print(f"[ORCHESTRATOR] Total orchestration time: {elapsed_time:.2f} seconds")
 
         return results
 
