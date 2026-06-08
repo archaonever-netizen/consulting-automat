@@ -1260,7 +1260,6 @@ def add_link():
 
     if existing_link:
         existing_link.description = description if description else None
-        existing_link.updated_at = datetime.utcnow()
     else:
         link = FunctionDepartmentLink(
             function_id=function_id,

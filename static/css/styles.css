@@ -314,7 +314,8 @@ a:hover { color: var(--accent-hover); }
 .modal-card { background: var(--card-bg); border-radius: var(--radius-xl); padding: 1.75rem; max-width: 440px; width: 92%; box-shadow: var(--shadow-lg); animation: fadeInUp .3s var(--ease-out); }
 .modal-title { font-family: var(--font-display); font-weight: 800; font-size: 1.35rem; letter-spacing: -.02em; margin-bottom: .6rem; color: var(--text-primary); }
 .modal-text { font-family: var(--font-body); font-size: 1rem; color: var(--text-secondary); margin-bottom: 1.5rem; line-height: 1.5; }
-.modal-actions form { display: flex; gap: .75rem; justify-content: flex-end; }
+.modal-actions form { display: flex; flex-direction: column; }
+.modal-actions form > div:last-child { display: flex; gap: .75rem; justify-content: flex-end; }
 
 /* ============================================================
    ЭТАП 3 — КЛИЕНТЫ (views.css → Flask/Jinja)
