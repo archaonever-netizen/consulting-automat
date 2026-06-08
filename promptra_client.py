@@ -11,6 +11,10 @@ class PromtraClient:
         self.model = model
         self.base_url = 'https://api.promptra.ru/v1'
 
+        print(f"[PROMPTRA] Initializing with model: {model}")
+        print(f"[PROMPTRA] API key present: {bool(self.api_key)}")
+        print(f"[PROMPTRA] Base URL: {self.base_url}")
+
         if not self.api_key:
             raise ValueError('PROMPTRA_API_KEY environment variable not set')
 
@@ -18,6 +22,8 @@ class PromtraClient:
             api_key=self.api_key,
             base_url=self.base_url
         )
+
+        print(f"[PROMPTRA] OpenAI client initialized successfully")
 
     def chat_completion(
         self,
