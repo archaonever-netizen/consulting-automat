@@ -57,17 +57,28 @@ class Orchestrator:
             }
 
         try:
-            analysis = json.loads(result['content'])
+            content = result['content'].strip()
+
+            # Try to extract JSON from markdown code blocks
+            if '```json' in content:
+                content = content.split('```json')[1].split('```')[0].strip()
+            elif '```' in content:
+                content = content.split('```')[1].split('```')[0].strip()
+
+            analysis = json.loads(content)
             return {
                 'status': 'success',
                 'analysis': analysis,
                 'tokens_used': result['tokens_used'],
                 'error': None
             }
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as e:
+            import sys
+            print(f"JSON Parse Error: {str(e)}", file=sys.stderr)
+            print(f"Response content: {result['content'][:500]}", file=sys.stderr)
             return {
                 'status': 'failed',
-                'error': 'Could not parse JSON response',
+                'error': f'Could not parse JSON response: {str(e)}',
                 'analysis': None
             }
 
