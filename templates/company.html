@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Компания — ШЕФ{% endblock %}
+
+{% block content %}
+<div class="page">
+
+  <!-- ── Header ── -->
+  <div class="page-head">
+    <h1 class="page-title">Компания</h1>
+    <p class="page-subtitle">Организационная структура: функции и отделы</p>
+  </div>
+
+  <!-- ── Статистика ── -->
+  <div class="stats-strip">
+    <div class="stat">
+      <span class="k">Функции</span>
+      <span class="v">{{ functions|length }}</span>
+    </div>
+    <div class="stat">
+      <span class="k">Всего отделов</span>
+      <span class="v">{{ functions|sum(attribute='dept_count') }}</span>
+    </div>
+  </div>
+
+  <!-- ── Грид функций ── -->
+  {% if functions %}
+  <div class="clients-grid">
+    {% for func in functions %}
+    <div class="client-card rise d{{ loop.index if loop.index <= 6 else 6 }}"
+         data-name="{{ func.name | lower }}">
+
+      <div class="cc-top">
+        <span class="big-av av-md" style="background: {{ func.color }}">{{ func.initials }}</span>
+        <div class="cc-id">
+          <div class="cc-name">
+            <span>{{ func.name }}</span>
+            {% if func.dept_count > 0 %}
+              <span class="pill pill-blue">{{ func.dept_count }} отдел{% if func.dept_count != 1 %}ов{% endif %}</span>
+            {% else %}
+              <span class="pill pill-gray">Нет отделов</span>
+            {% endif %}
+          </div>
+          {% if func.description %}
+          <div class="cc-meta">{{ func.description }}</div>
+          {% endif %}
+        </div>
+      </div>
+
+      <div class="cc-foot">
+        <a href="{{ url_for('company_function_detail', function_id=func.id) }}"
+           class="btn btn-sm btn-secondary">Открыть</a>
+      </div>
+
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+  <div style="text-align: center; padding: 3rem 1rem; color: var(--text-secondary);">
+    <p>Функции не загружены</p>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

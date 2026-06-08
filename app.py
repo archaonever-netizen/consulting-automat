@@ -3,8 +3,9 @@ import os
 import json
 import random
 from datetime import datetime
-from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session
-from models import db, Client, Brief
+from functools import wraps
+from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort
+from models import db, Client, Brief, User, Role, Function, Department
 from fpdf import FPDF
 from dotenv import load_dotenv
 
@@ -32,12 +33,53 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.secret_key = os.environ.get('SECRET_KEY', 'shef-dev-secret-key-change-in-prod')
 db.init_app(app)
 
+# -------------------------------------------------------------------
+# Инициализация БД и сидинг начальных данных
+# -------------------------------------------------------------------
+
+_FUNCTIONS_SEED = [
+    'Техническая',
+    'Коммерческая',
+    'Финансовая',
+    'Управление рисками',
+    'Учетная',
+    'Административная',
+    'Управление инновациями',
+    'Управление данными',
+    'Устойчивое развитие (ESG)',
+]
+
+def seed_functions():
+    """Заполнить фиксированный набор функций (идемпотентно)."""
+    for i, name in enumerate(_FUNCTIONS_SEED, start=1):
+        if not Function.query.filter_by(name=name).first():
+            db.session.add(Function(name=name, sort_order=i))
+    db.session.commit()
+
 with app.app_context():
     try:
         db.create_all()
+        seed_functions()
     except Exception as e:
-        print(f"Warning: Could not create tables: {e}")
+        print(f"Warning: Could not create tables or seed data: {e}")
         # Приложение продолжит работать даже если БД недоступна
+
+# -------------------------------------------------------------------
+# Загрузка текущего пользователя и контекст-процессоры
+# -------------------------------------------------------------------
+
+@app.before_request
+def load_logged_in_user():
+    """Загрузить текущего пользователя из сессии."""
+    if request.endpoint and request.endpoint == 'static':
+        return
+    user_id = session.get('user_id')
+    g.user = User.query.get(user_id) if user_id else None
+
+@app.context_processor
+def inject_current_user():
+    """Сделать текущего пользователя доступным в шаблонах."""
+    return dict(current_user=getattr(g, 'user', None))
 
 @app.context_processor
 def inject_nav():
@@ -46,6 +88,30 @@ def inject_nav():
         return dict(nav_client_count=Client.query.count())
     except Exception:
         return dict(nav_client_count=0)
+
+# -------------------------------------------------------------------
+# Декораторы для защиты маршрутов
+# -------------------------------------------------------------------
+
+def login_required(view):
+    """Требовать авторизацию."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if g.user is None:
+            return redirect(url_for('login', next=request.path))
+        return view(*args, **kwargs)
+    return wrapped
+
+def founder_required(view):
+    """Требовать авторизацию как Founder."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if g.user is None:
+            return redirect(url_for('login', next=request.path))
+        if not g.user.is_founder:
+            abort(403)
+        return view(*args, **kwargs)
+    return wrapped
 
 # -------------------------------------------------------------------
 # Вспомогательные функции для структуры анкет
@@ -163,7 +229,48 @@ def get_brief_questions(brief_type):
 # Маршруты (роуты) приложения
 # -------------------------------------------------------------------
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Вход в приложение."""
+    if g.user is not None:
+        return redirect(url_for('home'))
+
+    if request.method == 'POST':
+        email = request.form.get('email', '').lower().strip()
+        password = request.form.get('password', '')
+        error = None
+
+        if not email:
+            error = 'Email обязателен'
+        elif not password:
+            error = 'Пароль обязателен'
+        else:
+            user = User.query.filter_by(email=email).first()
+            if user is None:
+                error = 'Пользователь не найден'
+            elif not user.is_active:
+                error = 'Аккаунт деактивирован'
+            elif not user.check_password(password):
+                error = 'Неверный пароль'
+
+        if error is None:
+            session['user_id'] = user.id
+            session.modified = True
+            next_page = request.args.get('next', url_for('home'))
+            return redirect(next_page)
+
+        return render_template('login.html', error=error)
+
+    return render_template('login.html')
+
+@app.route('/logout', methods=['POST'])
+def logout():
+    """Выход из приложения."""
+    session.clear()
+    return redirect(url_for('login'))
+
 @app.route('/')
+@login_required
 def home():
     """Главная — сводка ШЕФ, focus-list, pulse."""
     palette = ['#1D1D1F','#2563EB','#16A34A','#7C3AED','#0891B2','#DB2777','#EA580C']
@@ -246,6 +353,7 @@ def home():
 
 
 @app.route('/clients')
+@login_required
 def clients():
     """Картотека клиентов — с агрегированными данными для UI."""
     palette = ['#1D1D1F','#2563EB','#16A34A','#7C3AED','#0891B2','#DB2777','#EA580C']
@@ -308,6 +416,7 @@ def clients():
     )
 
 @app.route('/add_client', methods=['GET', 'POST'])
+@login_required
 def add_client():
     """Добавление нового клиента."""
     if request.method == 'POST':
@@ -319,6 +428,7 @@ def add_client():
     return render_template('client_form.html')
 
 @app.route('/client/<int:client_id>/brief/add', methods=['GET', 'POST'])
+@login_required
 def add_brief(client_id):
     """Добавление нового брифа к клиенту."""
     client = Client.query.get_or_404(client_id)
@@ -347,6 +457,7 @@ def add_brief(client_id):
     return render_template('add_brief.html', client=client, available_briefs=available_briefs)
 
 @app.route('/brief/<int:brief_id>/delete', methods=['POST'])
+@login_required
 def delete_brief(brief_id):
     """Удаление брифа."""
     brief = Brief.query.get_or_404(brief_id)
@@ -358,6 +469,7 @@ def delete_brief(brief_id):
     return redirect(url_for('client_briefs', client_id=client_id))
 
 @app.route('/client/<int:client_id>/edit', methods=['GET', 'POST'])
+@login_required
 def edit_client(client_id):
     """Редактирование имени клиента."""
     client = Client.query.get_or_404(client_id)
@@ -368,6 +480,7 @@ def edit_client(client_id):
     return render_template('client_form.html', client=client, edit_mode=True)
 
 @app.route('/client/<int:client_id>/delete', methods=['POST'])
+@login_required
 def delete_client(client_id):
     """Удаление клиента и всех его анкет."""
     client = Client.query.get_or_404(client_id)
@@ -376,6 +489,7 @@ def delete_client(client_id):
     return redirect(url_for('clients'))
 
 @app.route('/client/<int:client_id>')
+@login_required
 def client_briefs(client_id):
     """Детальная карточка клиента с вкладками (Обзор, Брифы, …)."""
     client = Client.query.get_or_404(client_id)
@@ -463,6 +577,7 @@ def client_briefs(client_id):
     return render_template('client_detail.html', client=type('C', (), client_data))
 
 @app.route('/brief/<int:brief_id>', methods=['GET', 'POST'])
+@login_required
 def brief_form(brief_id):
     """Заполнение конкретной анкеты."""
     brief = Brief.query.get_or_404(brief_id)
@@ -548,6 +663,7 @@ def brief_form(brief_id):
     return render_template('brief_form.html', brief=brief, questions=questions_data)
 
 @app.route('/brief/<int:brief_id>/pdf')
+@login_required
 def generate_pdf(brief_id):
     """Генерация PDF-версии анкеты с сохранением заполненных данных."""
     brief = Brief.query.get_or_404(brief_id)
@@ -617,6 +733,7 @@ def generate_pdf(brief_id):
     return response
 
 @app.route('/update_brief_status/<int:brief_id>', methods=['POST'])
+@login_required
 def update_brief_status(brief_id):
     """Ручное обновление статуса анкеты."""
     brief = Brief.query.get_or_404(brief_id)
@@ -627,6 +744,7 @@ def update_brief_status(brief_id):
     return redirect(url_for('brief_form', brief_id=brief.id))
 
 @app.route('/brief/<int:brief_id>/autosave', methods=['POST'])
+@login_required
 def autosave_brief(brief_id):
     """Автосохранение анкеты (без изменения статуса на 'Заполнено')."""
     brief = Brief.query.get_or_404(brief_id)
@@ -700,6 +818,7 @@ _CHAT_SUGGESTIONS = [
 
 
 @app.route('/chat')
+@login_required
 def chat():
     """Чат с ИИ (UI-заглушка, B2)."""
     hour = datetime.now().hour
@@ -722,6 +841,7 @@ def chat():
 
 
 @app.route('/chat/send', methods=['POST'])
+@login_required
 def chat_send():
     """Принимает сообщение пользователя, добавляет в сессию, возвращает мок-ответ ИИ."""
     data = request.get_json()
@@ -779,25 +899,99 @@ _EMPTY_SECTIONS = {
 
 
 @app.route('/analytics')
+@login_required
 def analytics():
     return render_template('empty_section.html', section=_EMPTY_SECTIONS['analytics'])
 
 @app.route('/tasks')
+@login_required
 def tasks():
     return render_template('empty_section.html', section=_EMPTY_SECTIONS['tasks'])
 
 @app.route('/templates')
+@login_required
 def templates_view():
     return render_template('empty_section.html', section=_EMPTY_SECTIONS['templates'])
 
 @app.route('/knowledge')
+@login_required
 def knowledge():
     return render_template('empty_section.html', section=_EMPTY_SECTIONS['knowledge'])
 
 @app.route('/settings')
+@login_required
 def settings():
     return render_template('empty_section.html', section=_EMPTY_SECTIONS['settings'])
 
+
+# -------------------------------------------------------------------
+# Вкладка "Компания" (организационная структура)
+# -------------------------------------------------------------------
+
+@app.route('/company')
+@founder_required
+def company():
+    """Главная страница организационной структуры."""
+    functions = Function.query.order_by(Function.sort_order).all()
+
+    functions_data = []
+    for func in functions:
+        dept_count = len(func.departments) if func.departments else 0
+        functions_data.append({
+            'id': func.id,
+            'name': func.name,
+            'description': func.description,
+            'dept_count': dept_count,
+            'sort_order': func.sort_order,
+            'initials': func.name[:2].upper(),
+            'color': ['#2563EB', '#16A34A', '#7C3AED', '#0891B2', '#DB2777', '#EA580C', '#1D1D1F', '#F59E0B', '#EC4899'][functions_data.__len__() % 9],
+        })
+
+    return render_template('company.html', functions=functions_data)
+
+@app.route('/company/function/<int:function_id>')
+@founder_required
+def company_function_detail(function_id):
+    """Детали функции и её отделы."""
+    func = Function.query.get_or_404(function_id)
+
+    departments = func.departments if func.departments else []
+    depts_data = []
+    for dept in departments:
+        depts_data.append({
+            'id': dept.id,
+            'name': dept.name,
+            'description': dept.description,
+            'created_by': dept.created_by.full_name if dept.created_by else 'Система',
+            'created_at': dept.created_at.strftime('%d.%m.%Y %H:%M') if dept.created_at else 'неизвестно',
+        })
+
+    return render_template('company_function_detail.html',
+                         function=func,
+                         departments=depts_data)
+
+@app.route('/company/function/<int:function_id>/department/add', methods=['POST'])
+@founder_required
+def add_department(function_id):
+    """Добавить отдел в функцию."""
+    func = Function.query.get_or_404(function_id)
+
+    name = request.form.get('name', '').strip()
+    description = request.form.get('description', '').strip()
+
+    if not name:
+        return redirect(url_for('company_function_detail', function_id=function_id))
+
+    dept = Department(
+        function_id=function_id,
+        name=name,
+        description=description if description else None,
+        created_by_id=g.user.id
+    )
+    db.session.add(dept)
+    db.session.commit()
+
+    return redirect(url_for('company_function_detail', function_id=function_id))
 
 if __name__ == '__main__':
     app.run(debug=True)

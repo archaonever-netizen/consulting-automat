@@ -9,12 +9,15 @@
 {%- set _client_eps = ['clients','add_client','edit_client','delete_client',
                         'client_briefs','brief_form','update_brief_status',
                         'autosave_brief','generate_pdf'] -%}
+{%- set _company_eps = ['company','company_function_detail','add_department'] -%}
 {%- if _ep == 'home' -%}
   {%- set _active = 'home' -%}
 {%- elif _ep in ['chat','chat_send'] -%}
   {%- set _active = 'chat' -%}
 {%- elif _ep in _client_eps -%}
   {%- set _active = 'clients' -%}
+{%- elif _ep in _company_eps -%}
+  {%- set _active = 'company' -%}
 {%- elif _ep == 'analytics' -%}
   {%- set _active = 'analytics' -%}
 {%- elif _ep == 'tasks' -%}
@@ -101,6 +104,19 @@
       {% endif %}
     </a>
 
+    {# company (founder only) #}
+    {% if current_user and current_user.is_founder %}
+    <a href="{{ url_for('company') }}"
+       class="sb-navitem{% if _active == 'company' %} active{% endif %}">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+           stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+        <polyline points="9 22 9 12 15 12 15 22"/>
+      </svg>
+      <span>Компания</span>
+    </a>
+    {% endif %}
+
     {# analytics #}
     <a href="{{ url_for('analytics') }}" class="sb-navitem{% if _active == 'analytics' %} active{% endif %}">
       <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -184,18 +200,24 @@
   </div>
 
   <!-- Карточка пользователя -->
-  <div class="sb-user">
-    <span class="sb-av">АС</span>
+  {% if current_user %}
+  <form method="POST" action="{{ url_for('logout') }}" class="sb-user" style="cursor: pointer;">
+    {%- set parts = current_user.full_name.split() -%}
+    {%- set initials = (parts[0][0] + (parts[1][0] if parts|length > 1 else '')).upper() -%}
+    <span class="sb-av">{{ initials }}</span>
     <span class="sb-meta">
-      <b>Алексей Смирнов</b>
-      <span>Владелец</span>
+      <b>{{ current_user.full_name }}</b>
+      <span>{% if current_user.is_founder %}Основатель{% elif current_user.role %}{{ current_user.role.name }}{% else %}Сотрудник{% endif %}</span>
     </span>
-    <svg class="sb-chev" width="16" height="16" viewBox="0 0 24 24" fill="none"
-         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <circle cx="5" cy="12" r="1.6"/>
-      <circle cx="12" cy="12" r="1.6"/>
-      <circle cx="19" cy="12" r="1.6"/>
-    </svg>
-  </div>
+    <button type="submit" class="sb-chev" title="Выйти" style="border: none; background: none; padding: 0; cursor: pointer; color: inherit;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="5" cy="12" r="1.6"/>
+        <circle cx="12" cy="12" r="1.6"/>
+        <circle cx="19" cy="12" r="1.6"/>
+      </svg>
+    </button>
+  </form>
+  {% endif %}
 
 </aside>
