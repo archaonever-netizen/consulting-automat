@@ -1103,7 +1103,7 @@ def company_function_detail(function_id):
     }
 
     return render_template('company_function_detail.html',
-                         function=type('F', (), func_data),
+                         function=type('F', (), func_data)(),
                          all_departments=Department.query.order_by(Department.name).all())
 
 @app.route('/company/department/<int:department_id>')
@@ -1166,7 +1166,7 @@ def company_department_detail(department_id):
     }
 
     return render_template('company_department_detail.html',
-                         department=type('D', (), dept_data),
+                         department=type('D', (), dept_data)(),
                          all_functions=Function.query.order_by(Function.sort_order).all())
 
 @app.route('/company/department/add', methods=['POST'])
