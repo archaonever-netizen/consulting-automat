@@ -45,6 +45,10 @@ def initialize_agents():
         orchestrator = Orchestrator(agents, db)
         print("[AGENTS] Orchestrator created successfully")
 
+        # Явно отделяем все объекты от сессии перед выходом из контекста
+        # Это предотвращает ошибки "parent instance is not bound to a Session"
+        db.session.expunge_all()
+
         return orchestrator, agents
 
 
