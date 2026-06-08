@@ -54,14 +54,25 @@ class PromtraClient:
 
             response = self.client.chat.completions.create(**params)
 
+            content = response.choices[0].message.content
+
+            # Логирование для отладки
+            import sys
+            print(f"\n[PROMPTRA] Response received", file=sys.stderr)
+            print(f"[PROMPTRA] Model: {response.model}", file=sys.stderr)
+            print(f"[PROMPTRA] Content length: {len(content) if content else 0}", file=sys.stderr)
+            print(f"[PROMPTRA] Content preview: {content[:200] if content else 'None'}", file=sys.stderr)
+
             return {
-                'content': response.choices[0].message.content,
+                'content': content,
                 'tokens_used': response.usage.total_tokens if response.usage else 0,
                 'model': response.model,
                 'stop_reason': response.choices[0].finish_reason,
                 'error': None
             }
         except Exception as e:
+            import sys
+            print(f"\n[PROMPTRA] Error: {str(e)}", file=sys.stderr)
             return {
                 'content': None,
                 'tokens_used': 0,
