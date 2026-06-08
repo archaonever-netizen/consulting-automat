@@ -1,5 +1,6 @@
 # promptra_client.py
 import os
+import time
 from typing import Optional
 from openai import OpenAI
 
@@ -66,7 +67,13 @@ class PromtraClient:
                 if len(msg['content']) < 200:
                     print(f"[PROMPTRA]     Content: {msg['content']}")
 
+            start_time = time.time()
+            print(f"[PROMPTRA] Starting API call at {start_time}")
+
             response = self.client.chat.completions.create(**params)
+
+            elapsed_time = time.time() - start_time
+            print(f"[PROMPTRA] API call completed in {elapsed_time:.2f} seconds")
 
             content = response.choices[0].message.content
 
