@@ -96,8 +96,7 @@ class FunctionAgent:
             messages,
             temperature=self.config['temperature'],
             max_tokens=DeepSeekConfig.get_tokens_for_task('create_plan'),
-            top_p=self.config.get('top_p'),
-            top_k=self.config.get('top_k')
+            top_p=self.config.get('top_p')
         )
 
         return {
@@ -128,8 +127,7 @@ class FunctionAgent:
             messages,
             temperature=self.config['temperature'],
             max_tokens=DeepSeekConfig.get_tokens_for_task('generate_checklist'),
-            top_p=self.config.get('top_p'),
-            top_k=self.config.get('top_k')
+            top_p=self.config.get('top_p')
         )
 
         return {
@@ -162,8 +160,7 @@ class FunctionAgent:
             messages,
             temperature=self.config['temperature'],
             max_tokens=DeepSeekConfig.get_tokens_for_task('create_plan'),
-            top_p=self.config.get('top_p'),
-            top_k=self.config.get('top_k')
+            top_p=self.config.get('top_p')
         )
 
         execution_time = time.time() - start_time
