@@ -22,7 +22,7 @@ class PromtraClient:
         self.client = OpenAI(
             api_key=self.api_key,
             base_url=self.base_url,
-            timeout=30.0  # 30 секунд timeout на запрос
+            timeout=90.0  # 90 секунд timeout на запрос (Promptra может быть медленный)
         )
 
         print(f"[PROMPTRA] OpenAI client initialized successfully")

@@ -30,6 +30,12 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + db_path
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_pre_ping': True,      # Проверять соединение перед использованием
+    'pool_recycle': 3600,       # Переиспользовать соединение каждый час
+    'pool_size': 10,            # Размер пула соединений
+    'max_overflow': 20,         # Макс дополнительные соединения
+}
 app.secret_key = os.environ.get('SECRET_KEY', 'shef-dev-secret-key-change-in-prod')
 db.init_app(app)
 
