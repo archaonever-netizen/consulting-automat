@@ -16,7 +16,13 @@ def initialize_agents():
 
     with app.app_context():
         print("[AGENTS] Initializing agents...")
-        functions = Function.query.all()
+        # Загружаем функции с eager loading для relationships
+        from sqlalchemy.orm import joinedload
+        functions = Function.query.options(
+            joinedload(Function.executor_link),
+            joinedload(Function.consumer_links),
+            joinedload(Function.supplier_links)
+        ).all()
         print(f"[AGENTS] Found {len(functions)} functions in DB")
 
         agents = {}
@@ -24,6 +30,11 @@ def initialize_agents():
             print(f"[AGENTS] Creating agent for function: {func.name}")
             print(f"[AGENTS]   Description: {func.description[:50] if func.description else 'EMPTY'}")
             try:
+                # Форсируем загрузку всех relationships пока сессия ещё открыта
+                _ = func.executor_link
+                _ = func.consumer_links
+                _ = func.supplier_links
+
                 agent = FunctionAgent(func, db)
                 agents[func.name] = agent
                 print(f"[AGENTS] ✓ Agent created successfully")

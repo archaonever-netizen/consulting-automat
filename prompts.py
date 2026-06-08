@@ -137,19 +137,28 @@ class ContextBuilder:
         if function_obj.description:
             lines.append(f"Описание: {function_obj.description}")
 
-        executor = function_obj.executor_link
-        if executor:
-            lines.append(f"Основной исполнитель: {executor.department.name}")
+        try:
+            executor = function_obj.executor_link
+            if executor:
+                lines.append(f"Основной исполнитель: {executor.department.name}")
+        except Exception:
+            pass  # Игнорируем если relationship недоступен
 
-        consumers = function_obj.consumer_links
-        if consumers:
-            consumer_names = ", ".join([l.department.name for l in consumers])
-            lines.append(f"Потребители: {consumer_names}")
+        try:
+            consumers = function_obj.consumer_links
+            if consumers:
+                consumer_names = ", ".join([l.department.name for l in consumers])
+                lines.append(f"Потребители: {consumer_names}")
+        except Exception:
+            pass  # Игнорируем если relationship недоступен
 
-        suppliers = function_obj.supplier_links
-        if suppliers:
-            supplier_names = ", ".join([l.department.name for l in suppliers])
-            lines.append(f"Поставщики: {supplier_names}")
+        try:
+            suppliers = function_obj.supplier_links
+            if suppliers:
+                supplier_names = ", ".join([l.department.name for l in suppliers])
+                lines.append(f"Поставщики: {supplier_names}")
+        except Exception:
+            pass  # Игнорируем если relationship недоступен
 
         return "\n".join(lines)
 
