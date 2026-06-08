@@ -15,7 +15,6 @@ class DeepSeekConfig:
 
     # Параметры семплирования (для лучшей стабильности)
     TOP_P = 0.9  # nucleus sampling (какой % вероятности учитывать)
-    TOP_K = 40   # top-k sampling (сколько топ-вариантов рассмотреть)
 
     # Max tokens для разных типов операций
     TOKENS = {
@@ -49,12 +48,10 @@ class DeepSeekConfig:
                 'model': cls.ORCHESTRATOR_MODEL,
                 'temperature': cls.ORCHESTRATOR_TEMPERATURE,
                 'top_p': cls.TOP_P,
-                'top_k': cls.TOP_K,
             }
         else:  # function agent
             return {
                 'model': cls.FUNCTION_AGENT_MODEL,
                 'temperature': cls.FUNCTION_AGENT_TEMPERATURE,
                 'top_p': cls.TOP_P,
-                'top_k': cls.TOP_K,
             }

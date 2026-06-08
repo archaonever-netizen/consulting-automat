@@ -46,8 +46,7 @@ class Orchestrator:
             messages,
             temperature=self.config['temperature'],
             max_tokens=DeepSeekConfig.get_tokens_for_task('analyze_project'),
-            top_p=self.config.get('top_p'),
-            top_k=self.config.get('top_k')
+            top_p=self.config.get('top_p')
         )
 
         if result['error']:
@@ -131,8 +130,7 @@ class Orchestrator:
             messages,
             temperature=self.config['temperature'],
             max_tokens=DeepSeekConfig.get_tokens_for_task('consolidate'),
-            top_p=self.config.get('top_p'),
-            top_k=self.config.get('top_k')
+            top_p=self.config.get('top_p')
         )
 
         results['consolidated_plan'] = {

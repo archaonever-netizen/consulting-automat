@@ -25,8 +25,7 @@ class PromtraClient:
         temperature: float = 0.7,
         max_tokens: Optional[int] = None,
         model: Optional[str] = None,
-        top_p: Optional[float] = None,
-        top_k: Optional[int] = None
+        top_p: Optional[float] = None
     ) -> dict:
         """
         Отправить запрос к Promptra и получить ответ.
@@ -37,7 +36,6 @@ class PromtraClient:
             max_tokens: Максимальное количество токенов в ответе
             model: Модель (если не указана, используется default)
             top_p: Nucleus sampling parameter (0-1)
-            top_k: Top-k sampling parameter
 
         Returns:
             dict с полями: content, tokens_used, model, stop_reason
@@ -50,11 +48,9 @@ class PromtraClient:
                 'max_tokens': max_tokens or 2000
             }
 
-            # Добавляем параметры семплирования если указаны
+            # Добавляем параметр семплирования если указан
             if top_p is not None:
                 params['top_p'] = top_p
-            if top_k is not None:
-                params['top_k'] = top_k
 
             response = self.client.chat.completions.create(**params)
 
