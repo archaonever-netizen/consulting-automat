@@ -5,6 +5,10 @@ from function_agent import FunctionAgent
 from orchestrator import Orchestrator
 from models import Function, db
 
+# Глобальный кэш
+_orchestrator_cache = None
+_agents_cache = None
+
 
 def initialize_agents():
     """Инициализировать агентов из БД и вернуть orchestrator."""
@@ -52,6 +56,15 @@ def get_agent_by_function_name(function_name: str):
 
 
 def get_orchestrator():
-    """Получить главный координатор."""
-    orchestrator, _ = initialize_agents()
+    """Получить главный координатор (кэшированный)."""
+    global _orchestrator_cache, _agents_cache
+
+    if _orchestrator_cache is not None:
+        print("[AGENTS] Using cached orchestrator")
+        return _orchestrator_cache
+
+    print("[AGENTS] Creating new orchestrator (not in cache)")
+    orchestrator, agents = initialize_agents()
+    _orchestrator_cache = orchestrator
+    _agents_cache = agents
     return orchestrator
