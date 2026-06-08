@@ -67,9 +67,6 @@ class FunctionDepartmentLink(db.Model):
                             name='uq_function_department_relation'),
         db.CheckConstraint("relation_type in ('executor','consumer','supplier')",
                            name='ck_function_department_relation_type'),
-        db.Index('uq_one_executor_per_function', 'function_id', unique=True,
-                 postgresql_where=db.text("relation_type = 'executor'"),
-                 sqlite_where=db.text("relation_type = 'executor'")),
     )
 
 
