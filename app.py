@@ -1084,6 +1084,7 @@ def company_function_detail(function_id):
             'description': link.description,
         })
 
+    executor_link = func.executor_link
     func_data = {
         'id': func.id,
         'name': func.name,
@@ -1097,6 +1098,7 @@ def company_function_detail(function_id):
         'ring_empty': ring_empty,
         'initials': func.name[:2].upper(),
         'color': ['#2563EB', '#16A34A', '#7C3AED', '#0891B2', '#DB2777', '#EA580C', '#1D1D1F', '#F59E0B', '#EC4899'][func.id % 9],
+        'executor_link': executor_link,
         'executor_dept': executor_dept,
         'consumer_links': consumer_links,
         'supplier_links': supplier_links,
