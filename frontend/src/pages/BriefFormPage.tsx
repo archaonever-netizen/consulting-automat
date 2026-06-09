@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import Icon from '../components/Icon';
+import SalesBrief, { type SalesQuestions } from '../components/SalesBrief';
 
 interface Section {
   title: string;
@@ -10,7 +11,8 @@ interface Section {
 
 interface Questions {
   title: string;
-  sections: Section[];
+  sections?: Section[];
+  type?: string;
 }
 
 const STATUS_CLS: Record<string, string> = {
@@ -75,6 +77,19 @@ export default function BriefFormPage() {
   }
 
   if (loading) return <div className="page"><div className="loading-bar"></div></div>;
+
+  // Sales-бриф: отдельный UI с метриками и живым расчётом Health.
+  if (questions?.type === 'sales') {
+    return (
+      <SalesBrief
+        briefId={briefId!}
+        questions={questions as unknown as SalesQuestions}
+        initialAnswers={answers}
+        initialStatus={status}
+        clientId={clientId}
+      />
+    );
+  }
 
   // Защита: questions может быть null или без sections (неизвестный тип брифа).
   const sections = questions?.sections ?? [];

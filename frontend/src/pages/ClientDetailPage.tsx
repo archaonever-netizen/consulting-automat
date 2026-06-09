@@ -33,13 +33,15 @@ const RING_STROKE: Record<string, string> = {
   up: '#1F9D57', warn: '#C2820F', down: '#E23D32', flat: '#BFC0C7',
 };
 const BRIEF_NAMES: Record<string, string> = {
-  briefing: 'Бизнес-портрет', point_a: 'Точка А', docs: 'Документация',
+  sales: 'Продажи', briefing: 'Бизнес-портрет', point_a: 'Точка А', docs: 'Документация',
 };
 const BRIEF_DESCS: Record<string, string> = {
+  sales: '12 ключевых метрик продаж с расчётом Health-показателя',
   briefing: 'Общая информация о компании, продуктах, финансах и команде',
   point_a: 'Боли, цели и ресурсы для аудита',
   docs: 'Организационные схемы, процессы и отчётность',
 };
+const BRIEF_TYPES = ['sales', 'briefing', 'point_a', 'docs'];
 const TAB_LABELS: Record<Tab, string> = {
   overview: 'Обзор', briefs: 'Брифы', docs: 'Документы', analytics: 'Аналитика', tasks: 'Задачи',
 };
@@ -99,7 +101,7 @@ export default function ClientDetailPage() {
   const pillLabel = client.health === 100 ? 'Активен' : client.health > 0 ? 'В работе' : 'Новый';
 
   const existing = new Set(briefs.map(b => b.brief_type));
-  const available = ['briefing', 'point_a', 'docs'].filter(t => !existing.has(t));
+  const available = BRIEF_TYPES.filter(t => !existing.has(t));
   const activity = briefs
     .filter(b => b.updated_at)
     .map(b => ({ time: b.updated_at as string, text: `Бриф «${BRIEF_NAMES[b.brief_type] || b.brief_type}» обновлён` }));

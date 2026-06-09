@@ -927,6 +927,16 @@ a:hover { color: var(--accent-hover); }
   100% { transform: rotate(360deg); }
 }
 
+/* ───────────── Sales-бриф (метрики + Health) ───────────── */
+.metric-num { display: inline-grid; place-items: center; min-width: 38px; height: 26px; padding: 0 9px; background: var(--accent); color: #fff; border-radius: 8px; font-weight: 800; font-size: 12.5px; flex: 0 0 auto; }
+.metric-inputs { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 14px; }
+.metric-formula { display: flex; align-items: center; gap: 10px; padding: 11px 14px; background: var(--surface-2); border-left: 3px solid var(--accent); border-radius: 8px; }
+.metric-formula code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: var(--text-primary); }
+.metric-health { margin-top: 14px; padding: 13px 15px; background: var(--accent-weak); border-left: 3px solid var(--success); border-radius: 10px; }
+.metric-health .mh-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; padding-top: 9px; margin-top: 4px; border-top: 1px solid rgba(37,99,235,.18); }
+.metric-health .mh-k { font-size: 10.5px; color: var(--ink-4); font-weight: 700; margin-bottom: 4px; }
+.metric-health .mh-v { font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
 /* Color aliases for AI analysis */
 .success-light { background-color: var(--success-weak); }
 .danger-light { background-color: var(--danger-weak); }
