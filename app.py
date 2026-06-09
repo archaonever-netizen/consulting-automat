@@ -1856,19 +1856,41 @@ def delete_task(task_id):
 def get_or_create_main_session(user_id):
     """Получить или создать основную чат-сессию 'AI Assistant' для пользователя."""
     try:
+        print(f"[CHAT] get_or_create_main_session for user {user_id}")
+
+        # Сначала попытаться найти существующую сессию
         session = UserChatSession.query.filter_by(user_id=user_id).first()
-        if not session:
-            print(f"[CHAT] Creating main session for user {user_id}")
-            session = UserChatSession(
-                user_id=user_id,
-                title='AI Assistant'
-            )
-            db.session.add(session)
-            db.session.commit()
-            print(f"[CHAT] Main session created: {session.id}")
-        else:
+
+        if session:
             print(f"[CHAT] Using existing session: {session.id}")
+            return session
+
+        print(f"[CHAT] Creating new main session for user {user_id}")
+
+        # Создать новую сессию
+        session = UserChatSession(
+            user_id=user_id,
+            title='AI Assistant'
+        )
+
+        try:
+            db.session.add(session)
+            db.session.flush()  # Flush instead of commit to get the ID
+            session_id = session.id
+            db.session.commit()
+            print(f"[CHAT] Main session created: {session_id}")
+        except Exception as db_err:
+            print(f"[CHAT] DB Error creating session: {db_err}")
+            db.session.rollback()
+            # Try to get it again in case it was created concurrently
+            session = UserChatSession.query.filter_by(user_id=user_id).first()
+            if session:
+                print(f"[CHAT] Session was created concurrently, using it: {session.id}")
+                return session
+            raise
+
         return session
+
     except Exception as e:
         print(f"[CHAT] ERROR in get_or_create_main_session: {e}")
         import traceback
@@ -1936,28 +1958,38 @@ def get_subchats():
         session = get_or_create_main_session(g.user.id)
         print(f"[CHAT] Session: {session.id}")
 
-        subchats = UserSubChat.query.filter_by(session_id=session.id).order_by(
+        # Используем более эффективный запрос
+        from sqlalchemy import func
+        subchats = db.session.query(
+            UserSubChat.id,
+            UserSubChat.task_id,
+            UserSubChat.version,
+            UserSubChat.tokens_used,
+            UserSubChat.created_at,
+            UserTask.title.label('task_title'),
+            func.count(UserChatMessage.id).label('message_count')
+        ).outerjoin(UserTask).outerjoin(UserChatMessage).filter(
+            UserSubChat.session_id == session.id
+        ).group_by(
+            UserSubChat.id, UserTask.title
+        ).order_by(
             UserSubChat.created_at.desc()
         ).all()
+
         print(f"[CHAT] Found {len(subchats)} subchats")
 
-        result = []
-        for sc in subchats:
-            try:
-                task_title = sc.task.title if sc.task else 'Общий чат'
-                msg_count = len(sc.messages) if sc.messages else 0
-                result.append({
-                    'id': sc.id,
-                    'task_id': sc.task_id,
-                    'task_title': task_title,
-                    'version': sc.version,
-                    'tokens_used': sc.tokens_used,
-                    'created_at': sc.created_at.isoformat() if sc.created_at else '',
-                    'message_count': msg_count
-                })
-            except Exception as e:
-                print(f"[CHAT] Error serializing subchat {sc.id}: {e}")
-                continue
+        result = [
+            {
+                'id': sc.id,
+                'task_id': sc.task_id,
+                'task_title': sc.task_title or 'Общий чат',
+                'version': sc.version,
+                'tokens_used': sc.tokens_used,
+                'created_at': sc.created_at.isoformat() if sc.created_at else '',
+                'message_count': sc.message_count or 0
+            }
+            for sc in subchats
+        ]
 
         print(f"[CHAT] Returning {len(result)} subchats")
         return jsonify(result), 200
