@@ -300,10 +300,16 @@
         </div>
 
         {# Loading state #}
-        <div id="analysisLoading" style="display: none; text-align: center; padding: 40px 20px;">
-          <div style="display: inline-block; width: 40px; height: 40px; border: 3px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-          <p style="margin-top: 16px; color: var(--ink-3);">Анализируем проект с ИИ-агентами...</p>
-          <small style="color: var(--ink-4);">Обычно занимает 5-10 секунд</small>
+        <div id="analysisLoading" style="display: none; padding: 24px 0;">
+          <div id="progressPhase" style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px; color: var(--ink-2); font-weight: 500;">
+            <div style="width: 20px; height: 20px; border: 2px solid var(--border); border-top-color: var(--primary); border-radius: 50%; animation: spin 1s linear infinite; flex-shrink: 0;"></div>
+            <span id="progressPhaseText">Инициализация...</span>
+            <span id="progressTimer" style="margin-left: auto; font-size: 12px; color: var(--ink-4); font-weight: 400; font-variant-numeric: tabular-nums;">0 сек</span>
+          </div>
+          <div id="progressFunctions" style="display: none; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+            <div style="padding: 10px 14px; background: var(--bg-2); font-size: 12px; color: var(--ink-4); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em;">Функции</div>
+            <div id="progressFunctionsList" style="padding: 8px 0;"></div>
+          </div>
         </div>
 
         {# Results #}
@@ -509,62 +515,128 @@
   }
 
   // ── ИИ-анализ проекта ──
+  let _pollInterval = null;
+  let _startTime = null;
+  let _timerInterval = null;
+
   async function analyzeProjectWithAI() {
     const description = document.getElementById('projectDescription').value.trim();
+    if (!description) { alert('Опишите проект для анализа'); return; }
 
-    if (!description) {
-      alert('Опишите проект для анализа');
+    const analyzeBtn = document.getElementById('analyzeBtn');
+    document.getElementById('aiAnalysisForm').style.display = 'none';
+    document.getElementById('analysisResults').style.display = 'none';
+    document.getElementById('analysisError').style.display = 'none';
+    document.getElementById('analysisLoading').style.display = 'block';
+    analyzeBtn.disabled = true;
+
+    _startTime = Date.now();
+    _startTimer();
+    setPhaseText('Отправляем задачу на сервер...');
+
+    let taskId;
+    try {
+      const res = await fetch('/api/agent/project/{{ client.id }}', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ project_description: description })
+      });
+      let data;
+      try { data = await res.json(); } catch {
+        throw new Error('Сервер недоступен. Попробуйте ещё раз.');
+      }
+      if (!res.ok) throw new Error(data.error || 'Ошибка запуска задачи');
+      taskId = data.task_id;
+    } catch (err) {
+      showError(err.message);
+      analyzeBtn.disabled = false;
       return;
     }
 
-    const analyzeBtn = document.getElementById('analyzeBtn');
-    const form = document.getElementById('aiAnalysisForm');
-    const loading = document.getElementById('analysisLoading');
-    const results = document.getElementById('analysisResults');
-    const error = document.getElementById('analysisError');
+    setPhaseText('Анализируем задачу...');
+    _pollInterval = setInterval(() => pollTask(taskId, analyzeBtn), 2000);
+  }
 
-    // Скрыть предыдущие результаты
-    form.style.display = 'none';
-    results.style.display = 'none';
-    error.style.display = 'none';
-    loading.style.display = 'block';
-    analyzeBtn.disabled = true;
-
+  async function pollTask(taskId, analyzeBtn) {
+    let data;
     try {
-      const response = await fetch('/api/agent/project/{{ client.id }}', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          project_description: description
-        })
-      });
+      const res = await fetch(`/api/agent/task/${taskId}`);
+      if (!res.ok) return;
+      data = await res.json();
+    } catch { return; }
 
-      let data;
-      try {
-        data = await response.json();
-      } catch {
-        throw new Error('Сервер перегружен или не отвечает. Попробуйте через несколько секунд.');
-      }
+    updateProgressUI(data);
 
-      if (!response.ok || data.status === 'failed') {
-        throw new Error(data.error || 'Ошибка при анализе проекта');
-      }
-
-      // Отобразить результаты
-      displayAnalysisResults(data);
-      results.style.display = 'block';
-      loading.style.display = 'none';
-
-    } catch (err) {
-      console.error('Analysis error:', err);
-      document.getElementById('errorMessage').innerText = err.message;
-      error.style.display = 'block';
-      loading.style.display = 'none';
-    } finally {
+    if (data.status === 'done') {
+      clearInterval(_pollInterval);
+      clearInterval(_timerInterval);
+      document.getElementById('analysisLoading').style.display = 'none';
+      displayAnalysisResults(data.result);
+      document.getElementById('analysisResults').style.display = 'block';
+      analyzeBtn.disabled = false;
+    } else if (data.status === 'failed') {
+      clearInterval(_pollInterval);
+      clearInterval(_timerInterval);
+      showError(data.error || 'Ошибка при анализе проекта');
       analyzeBtn.disabled = false;
     }
+  }
+
+  function updateProgressUI(data) {
+    const phase = data.phase;
+    const funcs = data.functions || [];
+    const done = data.completed_functions || [];
+
+    if (phase === 'analyzing') {
+      setPhaseText('Оркестратор анализирует задачу...');
+      document.getElementById('progressFunctions').style.display = 'none';
+    } else if (phase === 'running') {
+      const total = funcs.length;
+      const doneCount = done.length;
+      setPhaseText(`Советники работают... ${doneCount} из ${total}`);
+      document.getElementById('progressFunctions').style.display = 'block';
+      renderFunctionsList(funcs, done);
+    } else if (phase === 'consolidating') {
+      setPhaseText('Составляем консолидированный план...');
+      document.getElementById('progressFunctions').style.display = 'block';
+      renderFunctionsList(funcs, done);
+    } else if (phase === 'done') {
+      setPhaseText('Готово!');
+    }
+  }
+
+  function renderFunctionsList(funcs, done) {
+    const doneSet = new Set(done);
+    const list = document.getElementById('progressFunctionsList');
+    list.innerHTML = funcs.map(f => {
+      const isDone = doneSet.has(f);
+      return `<div style="display:flex;align-items:center;gap:10px;padding:7px 14px;border-bottom:1px solid var(--border);last-child:border-0;">
+        <span style="width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;flex-shrink:0;
+          ${isDone ? 'background:var(--success);color:#fff;' : 'background:var(--border);color:var(--ink-4);'}">
+          ${isDone ? '✓' : '…'}
+        </span>
+        <span style="font-size:13px;color:${isDone ? 'var(--ink-2)' : 'var(--ink-4)'};">${escapeHtml(f)}</span>
+      </div>`;
+    }).join('');
+  }
+
+  function setPhaseText(text) {
+    document.getElementById('progressPhaseText').textContent = text;
+  }
+
+  function _startTimer() {
+    clearInterval(_timerInterval);
+    _timerInterval = setInterval(() => {
+      const sec = Math.round((Date.now() - _startTime) / 1000);
+      document.getElementById('progressTimer').textContent = sec + ' сек';
+    }, 1000);
+  }
+
+  function showError(msg) {
+    document.getElementById('analysisLoading').style.display = 'none';
+    document.getElementById('errorMessage').innerText = msg;
+    document.getElementById('analysisError').style.display = 'block';
+    document.getElementById('aiAnalysisForm').style.display = 'block';
   }
 
   function displayAnalysisResults(data) {
@@ -615,11 +687,14 @@
   }
 
   function clearAnalysis() {
+    clearInterval(_pollInterval);
+    clearInterval(_timerInterval);
     document.getElementById('projectDescription').value = '';
     document.getElementById('aiAnalysisForm').style.display = 'block';
     document.getElementById('analysisResults').style.display = 'none';
     document.getElementById('analysisError').style.display = 'none';
     document.getElementById('analysisLoading').style.display = 'none';
+    document.getElementById('analyzeBtn').disabled = false;
   }
 
   function escapeHtml(text) {

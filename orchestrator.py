@@ -98,7 +98,8 @@ class Orchestrator:
         self,
         client_obj,
         project_description: str,
-        task_functions: Optional[List[str]] = None
+        task_functions: Optional[List[str]] = None,
+        progress_callback=None
     ) -> dict:
         """
         Координировать работу агентов для проекта.
@@ -114,6 +115,9 @@ class Orchestrator:
         import time
         start_time = time.time()
 
+        if progress_callback:
+            progress_callback('phase', {'phase': 'analyzing'})
+
         if not task_functions:
             analysis = self.analyze_task(project_description)
             if analysis['status'] == 'failed':
@@ -128,6 +132,9 @@ class Orchestrator:
             'agents_analysis': {},
             'consolidated_plan': None
         }
+
+        if progress_callback:
+            progress_callback('phase', {'phase': 'running', 'total': len(task_functions), 'functions': task_functions})
 
         # Параллельное выполнение анализов функциональных агентов
         print(f"[ORCHESTRATOR] Starting parallel analysis for {len(task_functions)} functions")
@@ -163,8 +170,13 @@ class Orchestrator:
                         'tokens_used': agent_result['tokens_used']
                     }
                     print(f"[ORCHESTRATOR] ✓ Completed: {func_name}")
+                    if progress_callback:
+                        progress_callback('function_done', {'function': func_name, 'status': agent_result['status']})
 
         print(f"[ORCHESTRATOR] All {len(task_functions)} functions analyzed")
+
+        if progress_callback:
+            progress_callback('phase', {'phase': 'consolidating'})
 
         consolidated_prompt = self._build_consolidated_prompt(
             project_description,

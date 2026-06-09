@@ -2,6 +2,9 @@
 import os
 import json
 import random
+import uuid
+import threading
+import time as _time
 from datetime import datetime
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort, flash
@@ -16,6 +19,18 @@ load_dotenv('.env.local')
 # Настройка приложения
 # -------------------------------------------------------------------
 app = Flask(__name__)
+
+# Хранилище фоновых задач оркестратора: task_id -> state dict
+_tasks: dict = {}
+_tasks_lock = threading.Lock()
+
+def _cleanup_tasks():
+    """Удалять задачи старше 30 минут чтобы не копить память."""
+    cutoff = _time.time() - 1800
+    with _tasks_lock:
+        stale = [tid for tid, t in _tasks.items() if t.get('created_at', 0) < cutoff]
+        for tid in stale:
+            del _tasks[tid]
 
 # Подключение к базе данных Supabase
 database_url = os.environ.get('DATABASE_URL')
@@ -1345,40 +1360,78 @@ def agent_analyze():
 @app.route('/api/agent/project/<int:client_id>', methods=['POST'])
 @login_required
 def agent_orchestrate_project(client_id):
-    """API: Координировать работу агентов для проекта."""
-    try:
-        from agents import get_orchestrator
+    """API: Запустить оркестрацию в фоне и вернуть task_id для polling."""
+    client = Client.query.get_or_404(client_id)
+    data = request.get_json()
+    project_description = data.get('project_description', '').strip()
+    task_functions = data.get('functions', None)
 
-        print(f"\n[AGENT] Starting orchestrate_project for client {client_id}")
+    if not project_description:
+        return jsonify({'error': 'Project description is required'}), 400
 
-        client = Client.query.get_or_404(client_id)
-        data = request.get_json()
+    task_id = str(uuid.uuid4())
+    with _tasks_lock:
+        _tasks[task_id] = {
+            'status': 'pending',
+            'phase': 'pending',
+            'functions': [],
+            'completed_functions': [],
+            'result': None,
+            'error': None,
+            'created_at': _time.time(),
+        }
 
-        project_description = data.get('project_description', '').strip()
-        task_functions = data.get('functions', None)
+    def run():
+        try:
+            from agents import get_orchestrator
+            with app.app_context():
+                _cleanup_tasks()
+                orchestrator = get_orchestrator()
 
-        print(f"[AGENT] Project description: {project_description[:100]}...")
-        print(f"[AGENT] Task functions: {task_functions}")
+                def on_progress(event, payload):
+                    with _tasks_lock:
+                        task = _tasks.get(task_id)
+                        if task is None:
+                            return
+                        if event == 'phase':
+                            task['phase'] = payload['phase']
+                            if payload['phase'] == 'running':
+                                task['functions'] = payload.get('functions', [])
+                        elif event == 'function_done':
+                            task['completed_functions'].append(payload['function'])
 
-        if not project_description:
-            return jsonify({'error': 'Project description is required'}), 400
+                with app.app_context():
+                    task_client = Client.query.get(client_id)
 
-        orchestrator = get_orchestrator()
-        print(f"[AGENT] Orchestrator initialized, calling orchestrate_project...")
+                result = orchestrator.orchestrate_project(
+                    task_client, project_description, task_functions,
+                    progress_callback=on_progress
+                )
+                with _tasks_lock:
+                    if task_id in _tasks:
+                        _tasks[task_id]['status'] = 'done'
+                        _tasks[task_id]['phase'] = 'done'
+                        _tasks[task_id]['result'] = result
+        except Exception as e:
+            print(f"[TASK {task_id}] Exception: {e}")
+            with _tasks_lock:
+                if task_id in _tasks:
+                    _tasks[task_id]['status'] = 'failed'
+                    _tasks[task_id]['error'] = str(e)
 
-        result = orchestrator.orchestrate_project(
-            client,
-            project_description,
-            task_functions
-        )
+    threading.Thread(target=run, daemon=True).start()
+    return jsonify({'task_id': task_id}), 202
 
-        print(f"[AGENT] Result status: {result.get('status') if isinstance(result, dict) else 'unknown'}")
-        print(f"[AGENT] Result keys: {list(result.keys()) if isinstance(result, dict) else 'not a dict'}")
 
-        return jsonify(result), 200
-    except Exception as e:
-        print(f"[AGENT] Exception: {str(e)}")
-        return jsonify({'error': str(e), 'status': 'failed'}), 500
+@app.route('/api/agent/task/<task_id>', methods=['GET'])
+@login_required
+def get_task_status(task_id):
+    """API: Получить статус фоновой задачи оркестрации."""
+    with _tasks_lock:
+        task = _tasks.get(task_id)
+    if task is None:
+        return jsonify({'error': 'Task not found'}), 404
+    return jsonify(task), 200
 
 
 @app.route('/api/agent/function/<int:function_id>/analyze', methods=['POST'])
