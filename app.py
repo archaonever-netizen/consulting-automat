@@ -2285,17 +2285,21 @@ def send_message_to_subchat(subchat_id):
                     parsed_json = None
                     display_response = full_response
 
+                    print(f'[CHAT] full_response length: {len(full_response)}, has braces: {{ in response: {"{" in full_response}')
+
                     if task_id and '{' in full_response and '}' in full_response:
                         try:
                             s = full_response.rfind('{')
                             e2 = full_response.rfind('}') + 1
                             if s >= 0 and e2 > s:
                                 json_str = full_response[s:e2]
+                                print(f'[CHAT] Trying to parse JSON: {json_str[:100]}...')
                                 parsed_json = json.loads(json_str)
+                                print(f'[CHAT] JSON parsed successfully: field={parsed_json.get("field")}, value={parsed_json.get("value")[:50] if parsed_json.get("value") else None}')
                                 # Убрать JSON из видимого текста для пользователя
                                 display_response = full_response[:s].rstrip()
                         except Exception as je:
-                            print(f'Ошибка парсинга JSON: {je}')
+                            print(f'[CHAT] Ошибка парсинга JSON: {je}')
 
                     # Отправить чистый текст пользователю (без JSON)
                     # Убираем JSON из всех accumulated chunks
