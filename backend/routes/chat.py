@@ -26,11 +26,14 @@ async def get_session(
 ):
     """Получить или создать сессию чата текущего пользователя."""
     session = await chat_service.get_or_create_session(db, current_user)
-    # перезагрузить с subchats
+    # перезагрузить с subchats И их messages — иначе сериализация SubChatRead.messages
+    # триггерит ленивую загрузку вне greenlet (MissingGreenlet → 500).
     result = await db.execute(
         select(UserChatSession)
         .where(UserChatSession.id == session.id)
-        .options(selectinload(UserChatSession.subchats))
+        .options(
+            selectinload(UserChatSession.subchats).selectinload(UserSubChat.messages)
+        )
     )
     return result.scalar_one()
 
@@ -44,7 +47,14 @@ async def create_subchat(
     """Создать новый подчат в сессии пользователя."""
     session = await chat_service.get_or_create_session(db, current_user)
     subchat = await chat_service.create_subchat(db, session.id, data.task_id)
-    return subchat
+    # перезагрузить с messages — иначе сериализация SubChatRead.messages
+    # триггерит ленивую загрузку вне greenlet (MissingGreenlet → 500).
+    result = await db.execute(
+        select(UserSubChat)
+        .where(UserSubChat.id == subchat.id)
+        .options(selectinload(UserSubChat.messages))
+    )
+    return result.scalar_one()
 
 
 @router.get("/subchats/{subchat_id}", response_model=SubChatRead)
