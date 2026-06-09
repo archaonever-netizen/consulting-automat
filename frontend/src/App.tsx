@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './styles/styles.css';
+import Splash from './components/Splash';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
@@ -19,6 +20,7 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <BrowserRouter>
+      <Splash />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route
