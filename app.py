@@ -1931,44 +1931,77 @@ def chat():
 @login_required
 def get_subchats():
     """Получить список подчатов в сессии пользователя."""
-    session = get_or_create_main_session(g.user.id)
-    subchats = UserSubChat.query.filter_by(session_id=session.id).order_by(
-        UserSubChat.created_at.desc()
-    ).all()
+    try:
+        print(f"[CHAT] get_subchats called for user {g.user.id}")
+        session = get_or_create_main_session(g.user.id)
+        print(f"[CHAT] Session: {session.id}")
 
-    return jsonify([{
-        'id': sc.id,
-        'task_id': sc.task_id,
-        'task_title': sc.task.title if sc.task else 'Общий чат',
-        'version': sc.version,
-        'tokens_used': sc.tokens_used,
-        'created_at': sc.created_at.isoformat(),
-        'message_count': len(sc.messages)
-    } for sc in subchats]), 200
+        subchats = UserSubChat.query.filter_by(session_id=session.id).order_by(
+            UserSubChat.created_at.desc()
+        ).all()
+        print(f"[CHAT] Found {len(subchats)} subchats")
+
+        result = []
+        for sc in subchats:
+            try:
+                task_title = sc.task.title if sc.task else 'Общий чат'
+                msg_count = len(sc.messages) if sc.messages else 0
+                result.append({
+                    'id': sc.id,
+                    'task_id': sc.task_id,
+                    'task_title': task_title,
+                    'version': sc.version,
+                    'tokens_used': sc.tokens_used,
+                    'created_at': sc.created_at.isoformat() if sc.created_at else '',
+                    'message_count': msg_count
+                })
+            except Exception as e:
+                print(f"[CHAT] Error serializing subchat {sc.id}: {e}")
+                continue
+
+        print(f"[CHAT] Returning {len(result)} subchats")
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"[CHAT] ERROR in get_subchats: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/chat/subchat/<int:subchat_id>/messages', methods=['GET'])
 @login_required
 def get_subchat_messages(subchat_id):
     """Получить сообщения из подчата."""
-    subchat = UserSubChat.query.get_or_404(subchat_id)
-    session = subchat.session
+    try:
+        print(f"[CHAT] get_subchat_messages for subchat {subchat_id}")
+        subchat = UserSubChat.query.get_or_404(subchat_id)
+        session = subchat.session
 
-    # Проверка доступа
-    if session.user_id != g.user.id:
-        abort(403)
+        # Проверка доступа
+        if session.user_id != g.user.id:
+            abort(403)
 
-    messages = UserChatMessage.query.filter_by(subchat_id=subchat_id).order_by(
-        UserChatMessage.created_at.asc()
-    ).all()
+        messages = UserChatMessage.query.filter_by(subchat_id=subchat_id).order_by(
+            UserChatMessage.created_at.asc()
+        ).all()
 
-    return jsonify([{
-        'id': m.id,
-        'role': m.role,
-        'content': m.content,
-        'tokens': m.tokens,
-        'created_at': m.created_at.isoformat()
-    } for m in messages]), 200
+        result = []
+        for m in messages:
+            result.append({
+                'id': m.id,
+                'role': m.role,
+                'content': m.content,
+                'tokens': m.tokens or 0,
+                'created_at': m.created_at.isoformat() if m.created_at else ''
+            })
+
+        print(f"[CHAT] Returning {len(result)} messages")
+        return jsonify(result), 200
+    except Exception as e:
+        print(f"[CHAT] ERROR in get_subchat_messages: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/chat/subchat/<int:subchat_id>/send', methods=['POST'])
