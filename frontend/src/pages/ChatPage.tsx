@@ -1,153 +1,162 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import api from '../services/api';
+import Icon from '../components/Icon';
+import { ShefMonoGlyph } from '../components/Logo';
 
 interface Message {
   id?: number;
   role: 'user' | 'assistant';
   content: string;
-  tokens?: number;
-  created_at?: string;
 }
-
 interface SubChat {
   id: number;
   task_id: number | null;
   version: number;
   tokens_used: number;
-  created_at: string;
   messages: Message[];
 }
-
 interface ChatSession {
   id: number;
   title: string;
   subchats: SubChat[];
 }
+interface TaskItem {
+  id: number;
+  title: string;
+  status: string;
+}
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
 export default function ChatPage() {
   const [session, setSession] = useState<ChatSession | null>(null);
-  const [activeSubchat, setActiveSubchat] = useState<SubChat | null>(null);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [activeId, setActiveId] = useState<number | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filledNote, setFilledNote] = useState<string | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const [taskModal, setTaskModal] = useState(false);
+  const endRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  useEffect(() => {
-    loadSession();
-  }, []);
+  useEffect(() => { init(); }, []);
+  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  async function loadSession() {
+  async function init() {
     try {
-      const { data } = await api.get<ChatSession>('/api/chat/session');
-      setSession(data);
-      if (data.subchats.length > 0) {
-        await selectSubchat(data.subchats[data.subchats.length - 1].id);
-      } else {
-        await createNewSubchat(data);
-      }
-    } catch (e) {
-      setError('Ошибка загрузки сессии');
+      const [s, t] = await Promise.all([
+        api.get<ChatSession>('/api/chat/session'),
+        api.get<TaskItem[]>('/api/tasks').catch(() => ({ data: [] as TaskItem[] })),
+      ]);
+      setSession(s.data);
+      setTasks(t.data);
+      const main = s.data.subchats.find(sc => sc.task_id === null) ?? s.data.subchats[0];
+      if (main) await selectSubchat(main.id, s.data);
+    } catch {
+      setError('Ошибка загрузки чата');
     } finally {
       setLoading(false);
     }
   }
 
-  async function selectSubchat(subchatId: number) {
-    const { data } = await api.get<SubChat>(`/api/chat/subchats/${subchatId}`);
-    setActiveSubchat(data);
-    setMessages(data.messages);
+  async function reloadSession(): Promise<ChatSession | null> {
+    const { data } = await api.get<ChatSession>('/api/chat/session');
+    setSession(data);
+    return data;
   }
 
-  async function createNewSubchat(sess?: ChatSession) {
-    const s = sess || session;
-    if (!s) return;
-    const { data } = await api.post<SubChat>('/api/chat/session/subchats', { task_id: null });
-    setActiveSubchat(data);
-    setMessages([]);
-    setSession(prev => prev ? { ...prev, subchats: [...prev.subchats, data] } : prev);
+  async function selectSubchat(id: number, sess?: ChatSession) {
+    const src = sess ?? session;
+    const local = src?.subchats.find(sc => sc.id === id);
+    setActiveId(id);
+    setError(null);
+    setFilledNote(null);
+    if (local) setMessages(local.messages ?? []);
+    try {
+      const { data } = await api.get<SubChat>(`/api/chat/subchats/${id}`);
+      setMessages(data.messages ?? []);
+    } catch { /* оставляем локальные */ }
+  }
+
+  const mainSub = session?.subchats.find(sc => sc.task_id === null) ?? null;
+  const taskSubs = (session?.subchats ?? []).filter(sc => sc.task_id !== null);
+  const taskTitle = (taskId: number | null) =>
+    (taskId != null && tasks.find(t => t.id === taskId)?.title) || (taskId != null ? `Задача #${taskId}` : 'ИИ-Ассистент');
+  const availableTasks = tasks.filter(t => !taskSubs.some(s => s.task_id === t.id));
+
+  async function addTaskSubchat(taskId: number) {
+    try {
+      const { data } = await api.post<SubChat>('/api/chat/session/subchats', { task_id: taskId });
+      setTaskModal(false);
+      const sess = await reloadSession();
+      await selectSubchat(data.id, sess ?? undefined);
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Не удалось добавить подчат');
+    }
+  }
+
+  async function deleteSubchat(id: number, e: React.MouseEvent) {
+    e.stopPropagation();
+    try {
+      await api.delete(`/api/chat/subchats/${id}`);
+      const sess = await reloadSession();
+      if (activeId === id) {
+        const main = sess?.subchats.find(sc => sc.task_id === null);
+        if (main) await selectSubchat(main.id, sess ?? undefined);
+      }
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Не удалось удалить');
+    }
   }
 
   async function sendMessage() {
-    if (!input.trim() || streaming || !activeSubchat) return;
-
-    const userMsg: Message = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMsg]);
-    const sentContent = input;
+    if (!input.trim() || streaming || activeId == null) return;
+    const sent = input;
+    setMessages(prev => [...prev, { role: 'user', content: sent }, { role: 'assistant', content: '' }]);
     setInput('');
     setStreaming(true);
     setError(null);
     setFilledNote(null);
-
-    const assistantMsg: Message = { role: 'assistant', content: '' };
-    setMessages(prev => [...prev, assistantMsg]);
-
     abortRef.current = new AbortController();
 
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch(
-        `${import.meta.env.VITE_API_URL ?? 'http://localhost:8000'}/api/chat/subchats/${activeSubchat.id}/send`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({ content: sentContent }),
-          signal: abortRef.current.signal,
-        }
-      );
+      const res = await fetch(`${API_BASE}/api/chat/subchats/${activeId}/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ content: sent }),
+        signal: abortRef.current.signal,
+      });
+      if (!res.ok || !res.body) throw new Error(`HTTP ${res.status}`);
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
-      }
-
-      const reader = response.body!.getReader();
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      // SSE-события разделены '\n\n'. Буферизуем, т.к. сетевой чанк
-      // может разорвать событие посередине.
       let buffer = '';
-
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
-
         buffer += decoder.decode(value, { stream: true });
         const events = buffer.split('\n\n');
-        buffer = events.pop() ?? ''; // последний фрагмент может быть неполным
-
+        buffer = events.pop() ?? '';
         for (const evt of events) {
           for (const line of evt.split('\n')) {
             if (!line.startsWith('data: ')) continue;
             try {
-              const parsed = JSON.parse(line.slice(6));
-              if (parsed.chunk) {
+              const p = JSON.parse(line.slice(6));
+              if (p.chunk) {
                 setMessages(prev => {
-                  const updated = [...prev];
-                  updated[updated.length - 1] = {
-                    ...updated[updated.length - 1],
-                    content: updated[updated.length - 1].content + parsed.chunk,
-                  };
-                  return updated;
+                  const u = [...prev];
+                  u[u.length - 1] = { ...u[u.length - 1], content: u[u.length - 1].content + p.chunk };
+                  return u;
                 });
               }
-              if (parsed.filled) {
-                const labels = Object.keys(parsed.filled).join(', ');
-                setFilledNote(`Заполнены поля задачи: ${labels}`);
-              }
-              if (parsed.error) {
-                setError(parsed.error);
-              }
-            } catch {}
+              if (p.filled) setFilledNote('Заполнены поля задачи: ' + Object.keys(p.filled).join(', '));
+              if (p.error) setError(p.error);
+            } catch { /* частичное событие */ }
           }
         }
       }
@@ -162,120 +171,147 @@ export default function ChatPage() {
     }
   }
 
-  function stopStream() {
-    abortRef.current?.abort();
+  function onKey(e: React.KeyboardEvent) {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   }
 
-  function handleKeyDown(e: React.KeyboardEvent) {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendMessage();
-    }
-  }
-
-  if (loading) return <div className="page-loading">Загрузка чата...</div>;
+  if (loading) return <div className="page"><div className="loading-bar"></div></div>;
 
   return (
-    <div className="chat-page">
-      <div className="chat-sidebar">
-        <div className="chat-sidebar-header">
-          <h3 className="chat-sidebar-title">Подчаты</h3>
-          <button
-            className="btn btn-primary btn-sm"
-            onClick={() => createNewSubchat()}
-          >
-            + Новый
+    <div className="chatx">
+      {/* Левый сайдбар — чаты */}
+      <aside className="chatx-col chatx-left">
+        <div className="chatx-side-head"><span className="chatx-side-title">Чаты</span></div>
+        <div className="chatx-list">
+          {mainSub && (
+            <button
+              className={'chatx-chat-item' + (activeId === mainSub.id ? ' active' : '')}
+              onClick={() => selectSubchat(mainSub.id)}
+            >
+              <span className="shef-mono ava"><ShefMonoGlyph /></span>
+              <span>ИИ-Ассистент</span>
+            </button>
+          )}
+        </div>
+      </aside>
+
+      {/* Центр — диалог */}
+      <section className="chatx-col chatx-center">
+        <div className="chatx-msgs">
+          <div className="chatx-msgs-inner">
+            {messages.length === 0 && (
+              <div className="chatx-greet">
+                <span className="shef-mono lg"><ShefMonoGlyph /></span>
+                <b>{activeId === mainSub?.id ? 'ИИ-Ассистент ШЕФ' : taskTitle(taskSubs.find(s => s.id === activeId)?.task_id ?? null)}</b>
+                <span>Задайте вопрос или опишите задачу — помогу разобраться.</span>
+              </div>
+            )}
+            {messages.map((m, i) => {
+              const last = i === messages.length - 1;
+              if (m.role === 'user') {
+                return (
+                  <div key={i} className="msg user">
+                    <div className="msg-body"><div className="bubble">{m.content}</div></div>
+                  </div>
+                );
+              }
+              return (
+                <div key={i} className="msg ai">
+                  <span className={'ava shef' + (streaming && last ? ' thinking' : '')}><ShefMonoGlyph /></span>
+                  <div className="msg-body">
+                    <div className="msg-name">ШЕФ <span className="role">ИИ-ассистент</span></div>
+                    <div className="msg-text">
+                      {m.content
+                        ? <ReactMarkdown>{m.content}</ReactMarkdown>
+                        : <div className="typing"><span /><span /><span /></div>}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {filledNote && (
+              <div className="msg ai">
+                <span className="ava shef"><ShefMonoGlyph /></span>
+                <div className="msg-body"><div className="msg-text" style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--success)' }}><Icon name="check" size={16} />{filledNote}</div></div>
+              </div>
+            )}
+            {error && <div className="orch-error" style={{ marginTop: 8 }}>{error}</div>}
+            <div ref={endRef} />
+          </div>
+        </div>
+
+        <div className="chatx-composer">
+          <div className="composer">
+            <div className="composer-box">
+              <input
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={onKey}
+                placeholder="Напишите сообщение…"
+                disabled={streaming}
+              />
+              {streaming ? (
+                <button className="ic-btn" title="Остановить" onClick={() => abortRef.current?.abort()}><Icon name="stop" size={18} /></button>
+              ) : (
+                <button className="send" title="Отправить" onClick={sendMessage} disabled={!input.trim()}><Icon name="send" size={18} /></button>
+              )}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Правый сайдбар — подчаты */}
+      <aside className="chatx-col chatx-right">
+        <div className="chatx-side-head">
+          <span className="chatx-side-title">Подчаты</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setTaskModal(true)} title="Добавить задачу">
+            <Icon name="plus" size={15} />Добавить задачу
           </button>
         </div>
-        <div className="chat-subchat-list">
-          {session?.subchats.map(sc => (
-            <button
-              key={sc.id}
-              className={`chat-subchat-item${activeSubchat?.id === sc.id ? ' active' : ''}`}
-              onClick={() => selectSubchat(sc.id)}
-            >
-              <span className="chat-subchat-name">
-                {sc.task_id ? `Задача #${sc.task_id}` : `Чат v${sc.version}`}
-              </span>
-              <span className="chat-subchat-tokens">{sc.tokens_used} т.</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div className="chat-main">
-        <div className="chat-header">
-          <h2 className="chat-title">
-            {activeSubchat?.task_id
-              ? `Чат по задаче #${activeSubchat.task_id}`
-              : `Чат v${activeSubchat?.version ?? 1}`}
-          </h2>
-        </div>
-
-        <div className="chat-messages">
-          {messages.length === 0 && (
-            <div className="chat-empty">
-              <p>Начните диалог с ИИ-ассистентом</p>
-            </div>
-          )}
-          {messages.map((msg, i) => (
-            <div key={i} className={`chat-message chat-message--${msg.role}`}>
-              <div className="chat-message-bubble">
-                <div className="chat-message-content">
-                  {msg.role === 'assistant' ? (
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
-                  ) : (
-                    msg.content
-                  )}
-                  {streaming && i === messages.length - 1 && msg.role === 'assistant' && (
-                    <span className="chat-cursor">▌</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
-          <div ref={messagesEndRef} />
-        </div>
-
-        {filledNote && (
-          <div className="chat-filled-note">
-            ✓ {filledNote}
-          </div>
-        )}
-
-        {error && (
-          <div className="chat-error">
-            {error}
-          </div>
-        )}
-
-        <div className="chat-input-area">
-          <textarea
-            className="chat-input"
-            value={input}
-            onChange={e => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Напишите сообщение... (Enter для отправки, Shift+Enter для новой строки)"
-            rows={3}
-            disabled={streaming}
-          />
-          <div className="chat-input-actions">
-            {streaming ? (
-              <button className="btn btn-secondary" onClick={stopStream}>
-                Стоп
-              </button>
-            ) : (
-              <button
-                className="btn btn-primary"
-                onClick={sendMessage}
-                disabled={!input.trim()}
+        <div className="chatx-list">
+          {taskSubs.length === 0 ? (
+            <div className="chatx-empty-side">Подчатов нет. Добавьте задачу — по ней появится отдельный диалог.</div>
+          ) : (
+            taskSubs.map(sc => (
+              <div
+                key={sc.id}
+                className={'chatx-sub-item' + (activeId === sc.id ? ' active' : '')}
+                onClick={() => selectSubchat(sc.id)}
               >
-                Отправить
-              </button>
-            )}
+                <Icon name="check" size={15} />
+                <span className="chatx-sub-name">{taskTitle(sc.task_id)}</span>
+                <button className="chatx-sub-del" title="Удалить подчат" onClick={e => deleteSubchat(sc.id, e)}>
+                  <Icon name="trash" size={14} />
+                </button>
+              </div>
+            ))
+          )}
+        </div>
+      </aside>
+
+      {taskModal && (
+        <div className="modal-overlay" style={{ display: 'flex' }} onClick={e => { if (e.target === e.currentTarget) setTaskModal(false); }}>
+          <div className="modal-card">
+            <h3 className="modal-title">Добавить задачу</h3>
+            <p className="modal-text">Выберите задачу — по ней откроется отдельный подчат для уточнения деталей.</p>
+            <div className="chatx-list" style={{ maxHeight: 320, marginBottom: 8 }}>
+              {availableTasks.length === 0 ? (
+                <div className="chatx-empty-side">Нет доступных задач для добавления.</div>
+              ) : (
+                availableTasks.map(t => (
+                  <button key={t.id} className="chatx-chat-item" onClick={() => addTaskSubchat(t.id)}>
+                    <Icon name="check" size={16} />
+                    <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.title}</span>
+                  </button>
+                ))
+              )}
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => setTaskModal(false)}>Закрыть</button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

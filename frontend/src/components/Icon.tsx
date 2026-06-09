@@ -30,6 +30,8 @@ const ICON_PATHS: Record<string, string> = {
   bolt: '<path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z"/>',
   trendUp: '<path d="m3 17 6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  stop: '<rect x="6" y="6" width="12" height="12" rx="2.5"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
 };
 
 interface IconProps {

@@ -57,6 +57,20 @@ async def create_subchat(
     return result.scalar_one()
 
 
+@router.delete("/subchats/{subchat_id}", status_code=204)
+async def delete_subchat(
+    subchat_id: int,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Удалить подчат задачи. Основной чат удалять нельзя."""
+    res = await chat_service.delete_subchat(db, subchat_id)
+    if res == 'notfound':
+        raise HTTPException(status_code=404, detail="Subchat not found")
+    if res == 'main':
+        raise HTTPException(status_code=400, detail="Основной чат удалить нельзя")
+
+
 @router.get("/subchats/{subchat_id}", response_model=SubChatRead)
 async def get_subchat(
     subchat_id: int,

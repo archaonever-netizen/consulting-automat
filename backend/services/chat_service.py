@@ -64,7 +64,7 @@ _TASK_CONTEXT_TEMPLATE = """\
 
 
 async def get_or_create_session(db: AsyncSession, user: User) -> UserChatSession:
-    """Получить или создать сессию чата для пользователя."""
+    """Получить или создать сессию чата + гарантировать основной подчат «ИИ-Ассистент»."""
     result = await db.execute(
         select(UserChatSession)
         .where(UserChatSession.user_id == user.id)
@@ -76,6 +76,17 @@ async def get_or_create_session(db: AsyncSession, user: User) -> UserChatSession
         db.add(session)
         await db.commit()
         await db.refresh(session)
+
+    # Основной чат — единственный подчат без task_id. Создаём один раз.
+    res_main = await db.execute(
+        select(UserSubChat).where(
+            UserSubChat.session_id == session.id,
+            UserSubChat.task_id.is_(None),
+        )
+    )
+    if res_main.scalars().first() is None:
+        db.add(UserSubChat(session_id=session.id, task_id=None, version=1))
+        await db.commit()
     return session
 
 
@@ -84,22 +95,44 @@ async def create_subchat(
     session_id: int,
     task_id: int | None = None,
 ) -> UserSubChat:
-    """Создать новый подчат в сессии."""
+    """Создать подчат. Для задачи — идемпотентно: если подчат для этой задачи уже
+    есть, возвращаем его (не плодим новые при каждом обращении)."""
+    if task_id is not None:
+        res = await db.execute(
+            select(UserSubChat).where(
+                UserSubChat.session_id == session_id,
+                UserSubChat.task_id == task_id,
+            )
+        )
+        found = res.scalars().first()
+        if found:
+            return found
+
     result = await db.execute(
         select(UserSubChat)
         .where(UserSubChat.session_id == session_id)
         .order_by(UserSubChat.version.desc())
     )
     existing = result.scalars().all()
-    version = (max((s.version for s in existing), default=0) + 1) if task_id is None else len(
-        [s for s in existing if s.task_id == task_id]
-    ) + 1
+    version = max((s.version for s in existing), default=0) + 1
 
     subchat = UserSubChat(session_id=session_id, task_id=task_id, version=version)
     db.add(subchat)
     await db.commit()
     await db.refresh(subchat)
     return subchat
+
+
+async def delete_subchat(db: AsyncSession, subchat_id: int) -> str:
+    """Удалить подчат. Основной чат (task_id=None) удалять нельзя."""
+    sub = await db.get(UserSubChat, subchat_id)
+    if sub is None:
+        return 'notfound'
+    if sub.task_id is None:
+        return 'main'
+    await db.delete(sub)
+    await db.commit()
+    return 'ok'
 
 
 async def get_subchat_messages(db: AsyncSession, subchat_id: int) -> list[UserChatMessage]:
