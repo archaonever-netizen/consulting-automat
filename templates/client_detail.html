@@ -541,7 +541,12 @@
         })
       });
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error('Сервер перегружен или не отвечает. Попробуйте через несколько секунд.');
+      }
 
       if (!response.ok || data.status === 'failed') {
         throw new Error(data.error || 'Ошибка при анализе проекта');
