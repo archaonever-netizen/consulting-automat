@@ -122,11 +122,19 @@ def health_spark_color_and_state(health):
 
 with app.app_context():
     try:
+        print("[APP] Creating database tables...")
         db.create_all()
+        print("[APP] Database tables created successfully")
+
+        print("[APP] Seeding functions...")
         seed_functions()
-        # Агенты будут инициализированы лениво только при первом запросе
+        print("[APP] Functions seeded successfully")
+
+        print("[APP] Startup complete - agents will initialize lazily on first use")
     except Exception as e:
-        print(f"Warning: Could not create tables or seed data: {e}")
+        print(f"[APP] ERROR during startup: {e}")
+        import traceback
+        traceback.print_exc()
         # Приложение продолжит работать даже если БД недоступна
 
 # -------------------------------------------------------------------
