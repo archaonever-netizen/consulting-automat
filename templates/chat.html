@@ -545,16 +545,64 @@ async function sendMessage() {
       body: JSON.stringify({ message })
     });
 
-    const data = await res.json();
-
     if (!res.ok) {
+      const data = await res.json();
       showToast(`Ошибка: ${data.error}`, 'error');
-      if (data.need_new_subchat) {
-        loadSubchats();
+      if (data.need_new_subchat) loadSubchats();
+      return;
+    }
+
+    // Создать временный элемент для стриминга
+    const streamId = 'stream-' + Date.now();
+    msgList.insertAdjacentHTML('beforeend', `
+      <div class="msg ai" id="${streamId}">
+        <div class="ava shef">
+          <svg width="22" height="22" viewBox="0 -5 720 236" xmlns="http://www.w3.org/2000/svg">
+            <g fill="#fff">
+              <path d="M0 0H48V200H0Z"/><path d="M0 155H160L120 200H0Z"/>
+              <path d="M82 155V96L128 58V155Z"/><path d="M186 0H230V200H148L186 155Z"/>
+              <path d="M268 0H318V200H268Z"/><path d="M268 0H478L438 50H268Z"/>
+              <path d="M268 150H438L478 200H268Z"/>
+              <path d="M585 -12H627V212H585Z"/>
+              <path fill-rule="evenodd" clip-rule="evenodd" d="M508 100A98 82 0 1 0 704 100A98 82 0 1 0 508 100ZM554 100A52 42 0 1 0 658 100A52 42 0 1 0 554 100Z"/>
+            </g>
+            <path d="M352 78H404L364 128H312Z" fill="rgba(255,255,255,.55)"/>
+          </svg>
+        </div>
+        <div class="msg-body">
+          <div class="msg-name">ШЕФ<span class="role">· ИИ-ассистент</span></div>
+          <div class="msg-text" id="${streamId}-text"></div>
+        </div>
+      </div>
+    `);
+    document.getElementById('typingIndicator').style.display = 'none';
+    scrollToBottom();
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const evt = JSON.parse(line.slice(6));
+          if (evt.chunk) {
+            const el = document.getElementById(`${streamId}-text`);
+            if (el) { el.textContent += evt.chunk; scrollToBottom(); }
+          } else if (evt.done) {
+            document.getElementById('tokenCount').textContent = evt.subchat_tokens;
+            await loadMessages(); // синхронизировать с БД (заменяет temp элемент)
+          } else if (evt.error) {
+            showToast(`Ошибка: ${evt.error}`, 'error');
+          }
+        } catch (_) {}
       }
-    } else {
-      await loadMessages();
-      document.getElementById('tokenCount').textContent = data.subchat_tokens;
     }
   } catch (e) {
     console.error('Error sending message:', e);

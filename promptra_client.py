@@ -106,6 +106,31 @@ class PromtraClient:
                 'error': str(e)
             }
 
+    def chat_completion_stream(
+        self,
+        messages: list,
+        temperature: float = 0.7,
+        max_tokens: Optional[int] = None,
+        model: Optional[str] = None,
+        top_p: Optional[float] = None
+    ):
+        """Stream chat completion tokens. Yields text chunks one by one."""
+        params = {
+            'model': model or self.model,
+            'messages': messages,
+            'temperature': temperature,
+            'max_tokens': max_tokens or 2000,
+            'stream': True
+        }
+        if top_p is not None:
+            params['top_p'] = top_p
+
+        print(f"\n[PROMPTRA] Starting stream request, model={params['model']}")
+        response = self.client.chat.completions.create(**params)
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
     def count_tokens(self, text: str) -> int:
         """Приблизительно подсчитать токены в тексте (1 слово ≈ 1.3 токена)."""
         return int(len(text.split()) * 1.3)

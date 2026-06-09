@@ -7,7 +7,7 @@ import threading
 import time as _time
 from datetime import datetime, timedelta
 from functools import wraps
-from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort, flash
+from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort, flash, Response, stream_with_context
 from models import db, Client, Brief, User, Role, Function, Department, FunctionDepartmentLink, AITask, AIAgentRun, UserTask, TaskCompletion, UserChatSession, UserSubChat, UserChatMessage
 from fpdf import FPDF
 from dotenv import load_dotenv
@@ -2124,64 +2124,77 @@ def send_message_to_subchat(subchat_id):
             for m in messages
         ])
 
-        # Вызвать LLM
-        from promptra_client import PromtraClient
-        from deepseek_config import DeepSeekConfig
-
-        client = PromtraClient()
-        response = client.chat_completion(
-            messages=llm_messages,
-            model=DeepSeekConfig.CHAT_MODEL,
-            temperature=0.5,
-            max_tokens=300
-        )
-
-        if response.get('error'):
-            return jsonify({'error': f"LLM error: {response['error']}"}), 500
-
-        ai_response = response['content']
-        tokens_used = response.get('tokens_used', 0)
-
-        # Сохранить ответ AI
-        ai_msg = UserChatMessage(
-            subchat_id=subchat_id,
-            role='assistant',
-            content=ai_response,
-            tokens=tokens_used
-        )
-        db.session.add(ai_msg)
-
-        # Обновить счётчик токенов в подчате
-        subchat.tokens_used += tokens_used
-
-        # Если это task_manager - попытаться парсить JSON и обновить задачу
-        parsed_json = None
-        if subchat.task_id:
-            try:
-                import json
-                if '{' in ai_response and '}' in ai_response:
-                    start = ai_response.rfind('{')
-                    end = ai_response.rfind('}') + 1
-                    if start >= 0 and end > start:
-                        json_str = ai_response[start:end]
-                        parsed_json = json.loads(json_str)
-
-                        if parsed_json.get('field') and parsed_json.get('value'):
-                            task = subchat.task
-                            if task:
-                                setattr(task, parsed_json['field'], parsed_json['value'])
-                                task.updated_at = datetime.utcnow()
-            except Exception as e:
-                print(f"Ошибка парсинга JSON: {e}")
-
+        # Зафиксировать сообщение пользователя до начала стриминга
         db.session.commit()
 
-        return jsonify({
-            'response': ai_response,
-            'parsed_json': parsed_json,
-            'tokens_used': tokens_used,
-            'subchat_tokens': subchat.tokens_used
-        }), 200
+        task_id = subchat.task_id
+
+        def generate():
+            from promptra_client import PromtraClient
+            from deepseek_config import DeepSeekConfig
+
+            client = PromtraClient()
+            full_response = ''
+
+            try:
+                for chunk in client.chat_completion_stream(
+                    messages=llm_messages,
+                    model=DeepSeekConfig.CHAT_MODEL,
+                    temperature=0.5,
+                    max_tokens=300
+                ):
+                    if chunk:
+                        full_response += chunk
+                        yield f'data: {json.dumps({"chunk": chunk})}\n\n'
+            except Exception as e:
+                yield f'data: {json.dumps({"error": str(e)})}\n\n'
+                return
+
+            # Сохранить ответ AI в БД
+            try:
+                tokens_approx = int(len(full_response.split()) * 1.3)
+                ai_msg = UserChatMessage(
+                    subchat_id=subchat_id,
+                    role='assistant',
+                    content=full_response,
+                    tokens=tokens_approx
+                )
+                db.session.add(ai_msg)
+
+                sc = UserSubChat.query.get(subchat_id)
+                sc.tokens_used += tokens_approx
+
+                parsed_json = None
+                if task_id:
+                    try:
+                        if '{' in full_response and '}' in full_response:
+                            s = full_response.rfind('{')
+                            e2 = full_response.rfind('}') + 1
+                            if s >= 0 and e2 > s:
+                                parsed_json = json.loads(full_response[s:e2])
+                                if parsed_json.get('field') and parsed_json.get('value'):
+                                    task = sc.task
+                                    if task:
+                                        setattr(task, parsed_json['field'], parsed_json['value'])
+                                        task.updated_at = datetime.utcnow()
+                    except Exception as je:
+                        print(f'Ошибка парсинга JSON: {je}')
+
+                db.session.commit()
+                yield f'data: {json.dumps({"done": True, "subchat_tokens": sc.tokens_used, "parsed_json": parsed_json})}\n\n'
+            except Exception as e:
+                db.session.rollback()
+                yield f'data: {json.dumps({"error": f"DB error: {str(e)}"})}\n\n'
+
+        return Response(
+            stream_with_context(generate()),
+            mimetype='text/event-stream',
+            headers={
+                'Cache-Control': 'no-cache',
+                'X-Accel-Buffering': 'no',
+                'Connection': 'keep-alive'
+            }
+        )
 
     except Exception as e:
         db.session.rollback()
