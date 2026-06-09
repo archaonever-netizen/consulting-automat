@@ -5,6 +5,8 @@ from pydantic import BaseModel
 
 class OrchestrationStartRequest(BaseModel):
     description: str
+    # "pipeline" — LCEL-конвейер v1; "network" — сеть агентов v2 на LangGraph
+    mode: str = "pipeline"
 
 
 class FunctionAnalysisRead(BaseModel):
@@ -35,5 +37,6 @@ class OrchestrationRunRead(BaseModel):
 
 class OrchestrationStartResponse(BaseModel):
     orchestration_id: int
-    task_id: str
+    # для сетевого live-режима Celery не запускается → task_id может отсутствовать
+    task_id: Optional[str] = None
     status: str = "pending"

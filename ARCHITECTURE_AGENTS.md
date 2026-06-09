@@ -1,9 +1,18 @@
 # Архитектура: Сеть ИИ-агентов (executor / supplier)
 
-> Статус: **проект (не реализовано)**. Документ описывает целевую архитектуру
-> сети агентов поверх уже существующих моделей. Текущая реализация этапов 2–3 —
-> упрощённый LCEL-конвейер (`backend/services/orchestrator_service.py`), он
-> остаётся как v1 и НЕ удаляется при внедрении этой сети.
+> Статус: **реализовано** (этапы 1–4 плана внедрения). Сеть живёт в
+> `backend/services/agent_network/` (`state.py`, `topology.py`, `nodes.py`,
+> `graph.py`, `department_tools.py`, `runner.py`). Запуск: Celery
+> `run_orchestration(..., mode="network")` (фон) или SSE
+> `GET /api/agent/orchestration/{id}/stream` (live, через `POST /api/agent/network/{client_id}`).
+> Фронт live-прогресса: `frontend/src/pages/OrchestrationPage.tsx` (раздел «Сеть агентов»).
+> Микро-слой (этап 4): `department_agent` динамически выбирает фреймворки из
+> `DEPARTMENT_TOOLS` (SWOT / реестр рисков / чек-лист / RACI) через JSON-селектор
+> и подкладывает их каркасы в синтез. Smoke-тест без БД/LLM:
+> `python -m backend.services.agent_network._smoke_test`.
+> Текущий LCEL-конвейер (`backend/services/orchestrator_service.py`) остаётся как
+> v1/фолбэк и НЕ удаляется. Остаётся **этап 5** — переключение network режимом по
+> умолчанию после стабилизации на реальных данных.
 
 ---
 

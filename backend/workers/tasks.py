@@ -8,13 +8,17 @@ from ..models import OrchestrationRun
 
 
 @celery_app.task(bind=True, time_limit=600, soft_time_limit=540, name="backend.workers.tasks.run_orchestration")
-def run_orchestration(self, orchestration_id: int, client_id: int, description: str):
+def run_orchestration(self, orchestration_id: int, client_id: int, description: str, mode: str = "pipeline"):
     """
     Celery task: запустить оркестрацию проекта.
     Использует asyncio.run() т.к. Celery worker — синхронный процесс.
+
+    mode="pipeline" — LCEL-конвейер v1 (orchestrate_project).
+    mode="network"  — сеть агентов v2 на LangGraph (run_network).
     """
     async def _run():
         from ..services.orchestrator_service import orchestrate_project
+        from ..services.agent_network import run_network
         from ..core.database import engine
 
         try:
@@ -27,7 +31,10 @@ def run_orchestration(self, orchestration_id: int, client_id: int, description: 
                 await db.commit()
 
                 try:
-                    results = await orchestrate_project(orchestration_id, client_id, description, db)
+                    if mode == "network":
+                        results = await run_network(orchestration_id, client_id, description, db)
+                    else:
+                        results = await orchestrate_project(orchestration_id, client_id, description, db)
                     run.status = "completed"
                     run.results = results
                 except Exception as exc:

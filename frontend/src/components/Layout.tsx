@@ -82,6 +82,14 @@ export default function Layout() {
           >
             ИИ-Чат
           </NavLink>
+          <NavLink
+            to="/orchestration"
+            className={({ isActive }) =>
+              isActive ? 'sb-navitem active' : 'sb-navitem'
+            }
+          >
+            Сеть агентов
+          </NavLink>
         </nav>
 
         <div className="sb-bottom">

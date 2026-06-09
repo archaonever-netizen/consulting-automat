@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from sqlalchemy import select
@@ -11,6 +12,7 @@ from ..schemas.agent import (
     OrchestrationStartRequest,
     OrchestrationStartResponse,
 )
+from ..services.agent_network import stream_network
 from ..workers.tasks import run_orchestration
 
 router = APIRouter()
@@ -41,12 +43,65 @@ async def start_orchestration(
     await db.commit()
     await db.refresh(run)
 
-    task = run_orchestration.delay(run.id, client_id, req.description)
+    task = run_orchestration.delay(run.id, client_id, req.description, req.mode)
 
     return OrchestrationStartResponse(
         orchestration_id=run.id,
         task_id=str(task.id),
         status="pending",
+    )
+
+
+@router.post(
+    "/network/{client_id}",
+    response_model=OrchestrationStartResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def start_network(
+    client_id: int,
+    req: OrchestrationStartRequest,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Создать прогон для live-стриминга сети агентов.
+
+    Celery НЕ запускается — граф гоняется прямо в SSE-эндпоинте
+    GET /api/agent/orchestration/{id}/stream. Возвращает id для подключения.
+    """
+    client = await db.get(Client, client_id)
+    if not client:
+        raise HTTPException(status_code=404, detail="Client not found")
+
+    run = OrchestrationRun(
+        client_id=client_id,
+        description=req.description,
+        status="pending",
+    )
+    db.add(run)
+    await db.commit()
+    await db.refresh(run)
+
+    return OrchestrationStartResponse(orchestration_id=run.id, status="pending")
+
+
+@router.get("/orchestration/{orchestration_id}/stream")
+async def stream_orchestration(
+    orchestration_id: int,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Live-прогон сети агентов (SSE). Стримит trace «какой отдел сейчас работает».
+
+    Content-Type: text/event-stream. Каждое событие: data: {"node","status","ts"}.
+    Завершение: data: {"done": true, "consolidated_plan": "..."}.
+    """
+    return StreamingResponse(
+        stream_network(db, orchestration_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 
