@@ -298,7 +298,7 @@ class UserTask(db.Model):
 
     client = db.relationship('Client', backref=db.backref('tasks', lazy=True, cascade='all, delete-orphan'))
     assigned_to = db.relationship('User', foreign_keys=[assigned_to_id], lazy=True)
-    completion = db.relationship('TaskCompletion', backref='task', uselist=False, cascade='all, delete-orphan')
+    completion = db.relationship('TaskCompletion', foreign_keys='TaskCompletion.task_id', backref='task', uselist=False, cascade='all, delete-orphan')
 
 
 class TaskCompletion(db.Model):
