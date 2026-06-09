@@ -152,7 +152,18 @@ def inject_current_user():
 def inject_nav():
     """Счётчик клиентов для бейджа в сайдбаре."""
     try:
-        return dict(nav_client_count=Client.query.count())
+        # Cache count for 60 seconds to avoid slow queries on every request
+        cache_key = '_nav_client_count'
+        if cache_key not in g:
+            g._nav_client_count_time = 0
+            g._nav_client_count_value = 0
+
+        current_time = _time.time()
+        if current_time - g._nav_client_count_time > 60:
+            g._nav_client_count_value = Client.query.count()
+            g._nav_client_count_time = current_time
+
+        return dict(nav_client_count=g._nav_client_count_value)
     except Exception:
         return dict(nav_client_count=0)
 
