@@ -1,6 +1,10 @@
 meta:
   environment: python
 
+install:
+  - npm --prefix frontend install
+  - npm --prefix frontend run build
+
 run:
-  command: gunicorn app:app --bind 0.0.0.0:5000 --workers 1 --timeout 300 --worker-class gthread --threads 3
+  command: gunicorn backend.main:app --bind 0.0.0.0:5000 --workers 1 --timeout 300 --worker-class uvicorn.workers.UvicornWorker
   containerPort: 5000
