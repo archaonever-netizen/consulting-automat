@@ -1,8 +1,10 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    # str, а не EmailStr: при входе любой неверный ввод должен давать понятный
+    # 401, а не 422 с массивом объектов-ошибок (его фронт не умел рендерить).
+    email: str
     password: str
 
 

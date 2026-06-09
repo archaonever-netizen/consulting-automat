@@ -19,7 +19,15 @@ export default function LoginPage() {
       localStorage.setItem('access_token', response.data.access_token);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Ошибка при входе');
+      // detail может быть строкой (HTTPException) или массивом объектов (422).
+      const detail = err.response?.data?.detail;
+      let msg = 'Ошибка при входе';
+      if (typeof detail === 'string') {
+        msg = detail;
+      } else if (Array.isArray(detail)) {
+        msg = detail.map((d: any) => d?.msg).filter(Boolean).join('; ') || msg;
+      }
+      setError(msg);
     } finally {
       setLoading(false);
     }
