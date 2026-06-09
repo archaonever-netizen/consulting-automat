@@ -1,0 +1,262 @@
+"""Chat сервис с LangChain и SSE streaming."""
+import json
+from typing import AsyncGenerator
+
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from ..core.config import DeepSeekConfig
+from ..models import User, UserChatMessage, UserChatSession, UserSubChat, UserTask
+from .llm_client import get_llm
+
+# Поля задачи, которые auto-fill дозаполняет из диалога
+_TASK_FIELD_LABELS = {
+    "input_data": "Входные данные",
+    "goal": "Цель",
+    "action_description": "Описание действий",
+    "expected_result": "Ожидаемый результат",
+}
+
+_AUTOFILL_EXTRACT_PROMPT = """\
+Ты извлекаешь структурированные данные из диалога о рабочей задаче.
+
+Нужно заполнить ТОЛЬКО эти незаполненные поля:
+{empty_fields}
+
+Диалог:
+{conversation}
+
+Верни ТОЛЬКО JSON. Для каждого поля, значение которого ОДНОЗНАЧНО следует из диалога,
+укажи строку-значение. Если данных для поля недостаточно — НЕ включай его в ответ.
+Ничего не выдумывай, опирайся только на факты из диалога.
+
+Формат (пример):
+{{"goal": "...", "expected_result": "..."}}"""
+
+_CHAT_SYSTEM_PROMPT = """\
+Ты профессиональный ИИ-ассистент консалтинговой компании ШЕФ.
+
+Твоя роль:
+- Помогать менеджерам в работе с клиентами и задачами
+- Анализировать ситуации и предлагать конкретные решения
+- Составлять планы, чек-листы, документацию
+- Давать профессиональные рекомендации
+
+Принципы работы:
+1. Отвечай конкретно и практично
+2. Предлагай готовые к использованию результаты
+3. Если задача связана с клиентом или задачей — используй контекст
+4. Структурируй ответы для удобства чтения
+
+{task_context}"""
+
+_TASK_CONTEXT_TEMPLATE = """\
+Контекст задачи:
+- Задача: {title}
+- Клиент: {client}
+- Описание: {description}
+- Ожидаемый результат: {expected_result}
+- Цель: {goal}"""
+
+
+async def get_or_create_session(db: AsyncSession, user: User) -> UserChatSession:
+    """Получить или создать сессию чата для пользователя."""
+    result = await db.execute(
+        select(UserChatSession)
+        .where(UserChatSession.user_id == user.id)
+        .options(selectinload(UserChatSession.subchats))
+    )
+    session = result.scalar_one_or_none()
+    if not session:
+        session = UserChatSession(user_id=user.id, title=f"Чат {user.full_name}")
+        db.add(session)
+        await db.commit()
+        await db.refresh(session)
+    return session
+
+
+async def create_subchat(
+    db: AsyncSession,
+    session_id: int,
+    task_id: int | None = None,
+) -> UserSubChat:
+    """Создать новый подчат в сессии."""
+    result = await db.execute(
+        select(UserSubChat)
+        .where(UserSubChat.session_id == session_id)
+        .order_by(UserSubChat.version.desc())
+    )
+    existing = result.scalars().all()
+    version = (max((s.version for s in existing), default=0) + 1) if task_id is None else len(
+        [s for s in existing if s.task_id == task_id]
+    ) + 1
+
+    subchat = UserSubChat(session_id=session_id, task_id=task_id, version=version)
+    db.add(subchat)
+    await db.commit()
+    await db.refresh(subchat)
+    return subchat
+
+
+async def get_subchat_messages(db: AsyncSession, subchat_id: int) -> list[UserChatMessage]:
+    """Получить все сообщения в подчате."""
+    result = await db.execute(
+        select(UserChatMessage)
+        .where(UserChatMessage.subchat_id == subchat_id)
+        .order_by(UserChatMessage.created_at)
+    )
+    return result.scalars().all()
+
+
+async def _autofill_task(
+    db: AsyncSession,
+    task: UserTask,
+    assistant_response: str,
+    history: list[UserChatMessage],
+) -> dict[str, str]:
+    """
+    Дозаполнить пустые поля задачи на основе диалога.
+    Фикс старого бага: извлечение вынесено в ОТДЕЛЬНЫЙ structured-вызов
+    (temperature=0, JSON), а не парсинг inline-JSON из основного ответа —
+    поэтому поля реально записываются в БД после опроса.
+    """
+    empty = {
+        f: lbl for f, lbl in _TASK_FIELD_LABELS.items()
+        if not (getattr(task, f) or "").strip()
+    }
+    if not empty:
+        return {}
+
+    convo_lines = [f"{m.role}: {m.content}" for m in history]
+    convo_lines.append(f"assistant: {assistant_response}")
+    conversation = "\n".join(convo_lines)
+    fields_desc = "\n".join(f"- {f}: {lbl}" for f, lbl in empty.items())
+
+    llm = get_llm(model=DeepSeekConfig.CHAT_MODEL, temperature=0.0)
+    chain = ChatPromptTemplate.from_template(_AUTOFILL_EXTRACT_PROMPT) | llm | JsonOutputParser()
+
+    try:
+        data = await chain.ainvoke({"empty_fields": fields_desc, "conversation": conversation})
+    except Exception:
+        return {}
+
+    if not isinstance(data, dict):
+        return {}
+
+    filled: dict[str, str] = {}
+    for key, value in data.items():
+        if key in empty and isinstance(value, str) and value.strip():
+            setattr(task, key, value.strip())
+            filled[_TASK_FIELD_LABELS[key]] = value.strip()
+
+    if filled:
+        await db.commit()
+    return filled
+
+
+async def _build_system_prompt(db: AsyncSession, subchat: UserSubChat) -> str:
+    """Построить системный промпт с контекстом задачи если есть."""
+    task_context = ""
+    if subchat.task_id and subchat.task:
+        task = subchat.task
+        client_name = task.client.name if task.client else "не указан"
+        task_context = _TASK_CONTEXT_TEMPLATE.format(
+            title=task.title,
+            client=client_name,
+            description=task.input_data or "не указано",
+            expected_result=task.expected_result or "не указано",
+            goal=task.goal or "не указано",
+        )
+        empty = [lbl for f, lbl in _TASK_FIELD_LABELS.items() if not (getattr(task, f) or "").strip()]
+        if empty:
+            task_context += (
+                "\n\nНезаполненные поля задачи: " + ", ".join(empty) + ".\n"
+                "Задавай пользователю уточняющие вопросы по этим полям — по одному за раз, "
+                "естественно и по делу. Поля будут сохранены автоматически, "
+                "тебе НЕ нужно выводить JSON."
+            )
+    return _CHAT_SYSTEM_PROMPT.format(task_context=task_context)
+
+
+async def stream_response(
+    db: AsyncSession,
+    subchat_id: int,
+    user_message: str,
+) -> AsyncGenerator[str, None]:
+    """
+    Стриминг ответа ИИ через LangChain.
+    Yield: SSE строки формата 'data: {...}\n\n'
+    Сохраняет user_message и ответ в БД.
+    """
+    # Загрузить подчат вместе с задачей и её клиентом.
+    # task.client грузим явно — иначе доступ к нему в async даст MissingGreenlet.
+    result = await db.execute(
+        select(UserSubChat)
+        .where(UserSubChat.id == subchat_id)
+        .options(selectinload(UserSubChat.task).selectinload(UserTask.client))
+    )
+    subchat = result.scalar_one_or_none()
+    if not subchat:
+        yield f"data: {json.dumps({'error': 'Subchat not found'})}\n\n"
+        return
+
+    # Сохранить сообщение пользователя в БД
+    user_msg_record = UserChatMessage(
+        subchat_id=subchat_id,
+        role="user",
+        content=user_message,
+    )
+    db.add(user_msg_record)
+    await db.commit()
+
+    # Загрузить историю
+    messages = await get_subchat_messages(db, subchat_id)
+    system_prompt = await _build_system_prompt(db, subchat)
+
+    # Построить LangChain messages
+    lc_messages: list = [SystemMessage(content=system_prompt)]
+    for msg in messages:
+        if msg.role == "user":
+            lc_messages.append(HumanMessage(content=msg.content))
+        elif msg.role == "assistant":
+            lc_messages.append(AIMessage(content=msg.content))
+
+    # Стримить ответ
+    llm = get_llm(
+        model=DeepSeekConfig.CHAT_MODEL,
+        temperature=0.7,
+        streaming=True,
+    )
+
+    full_response = ""
+    errored = False
+    try:
+        async for chunk in llm.astream(lc_messages):
+            delta = chunk.content
+            if delta:
+                full_response += delta
+                yield f"data: {json.dumps({'chunk': delta})}\n\n"
+    except Exception as e:
+        errored = True
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    # Сохранить ответ ассистента (даже частичный при ошибке)
+    if full_response:
+        db.add(UserChatMessage(subchat_id=subchat_id, role="assistant", content=full_response))
+        subchat.tokens_used += len(full_response.split()) + len(user_message.split())
+        await db.commit()
+
+    if errored:
+        return
+
+    # Auto-fill: если подчат привязан к задаче — дозаполнить её поля из диалога
+    if subchat.task_id and subchat.task:
+        filled = await _autofill_task(db, subchat.task, full_response, messages)
+        if filled:
+            yield f"data: {json.dumps({'filled': filled})}\n\n"
+
+    yield f"data: {json.dumps({'done': True})}\n\n"

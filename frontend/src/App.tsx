@@ -1,0 +1,42 @@
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import './styles/styles.css';
+import LoginPage from './pages/LoginPage';
+import Layout from './components/Layout';
+import HomePage from './pages/HomePage';
+import ClientsPage from './pages/ClientsPage';
+import ClientDetailPage from './pages/ClientDetailPage';
+import BriefFormPage from './pages/BriefFormPage';
+import CompanyPage from './pages/CompanyPage';
+import TasksPage from './pages/TasksPage';
+import ChatPage from './pages/ChatPage';
+
+function PrivateRoute({ children }: { children: React.ReactNode }) {
+  const token = localStorage.getItem('access_token');
+  return token ? <>{children}</> : <Navigate to="/login" replace />;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              <Layout />
+            </PrivateRoute>
+          }
+        >
+          <Route index element={<HomePage />} />
+          <Route path="clients" element={<ClientsPage />} />
+          <Route path="clients/:clientId" element={<ClientDetailPage />} />
+          <Route path="briefs/:briefId" element={<BriefFormPage />} />
+          <Route path="company" element={<CompanyPage />} />
+          <Route path="tasks" element={<TasksPage />} />
+          <Route path="chat" element={<ChatPage />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  );
+}
