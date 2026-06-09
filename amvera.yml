@@ -1,8 +1,6 @@
 meta:
   environment: python
-  toolchain:
-    name: pip
 
 run:
-  command: "gunicorn --workers 2 --threads 4 --timeout 180 --bind 0.0.0.0:5000 app:app"
+  command: gunicorn app:app --bind 0.0.0.0:5000 --workers 2 --timeout 180
   containerPort: 5000
