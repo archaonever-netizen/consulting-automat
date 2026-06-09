@@ -1408,9 +1408,13 @@ def agent_orchestrate_project(client_id):
                 )
                 with _tasks_lock:
                     if task_id in _tasks:
-                        _tasks[task_id]['status'] = 'done'
+                        if isinstance(result, dict) and result.get('status') == 'failed':
+                            _tasks[task_id]['status'] = 'failed'
+                            _tasks[task_id]['error'] = result.get('error', 'Неизвестная ошибка')
+                        else:
+                            _tasks[task_id]['status'] = 'done'
+                            _tasks[task_id]['result'] = result
                         _tasks[task_id]['phase'] = 'done'
-                        _tasks[task_id]['result'] = result
         except Exception as e:
             import traceback
             print(f"[TASK {task_id}] Exception: {e}")
