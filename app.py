@@ -109,6 +109,9 @@ with app.app_context():
     try:
         db.create_all()
         seed_functions()
+        # Инициализируем ИИ-агентов при старте приложения (один раз)
+        from agents import init_agents_on_startup
+        init_agents_on_startup(app)
     except Exception as e:
         print(f"Warning: Could not create tables or seed data: {e}")
         # Приложение продолжит работать даже если БД недоступна

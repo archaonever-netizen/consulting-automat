@@ -8,6 +8,7 @@ from models import Function, db
 # Глобальный кэш
 _orchestrator_cache = None
 _agents_cache = None
+_initialized = False
 
 
 def initialize_agents():
@@ -70,7 +71,7 @@ def get_agent_by_function_name(function_name: str):
 
 def get_orchestrator():
     """Получить главный координатор (кэшированный)."""
-    global _orchestrator_cache, _agents_cache
+    global _orchestrator_cache, _agents_cache, _initialized
 
     if _orchestrator_cache is not None:
         print("[AGENTS] Using cached orchestrator")
@@ -80,4 +81,18 @@ def get_orchestrator():
     orchestrator, agents = initialize_agents()
     _orchestrator_cache = orchestrator
     _agents_cache = agents
+    _initialized = True
     return orchestrator
+
+
+def init_agents_on_startup(app):
+    """Инициализировать агентов при старте приложения (один раз)."""
+    global _initialized
+
+    if _initialized:
+        return
+
+    print("[AGENTS] Initializing on app startup...")
+    with app.app_context():
+        get_orchestrator()
+    print("[AGENTS] Startup initialization complete")
