@@ -2,5 +2,5 @@ meta:
   environment: python
 
 run:
-  command: gunicorn app:app --bind 0.0.0.0:5000 --workers 2 --timeout 180
+  command: gunicorn app:app --bind 0.0.0.0:5000 --workers 1 --timeout 300 --worker-class gthread --threads 3
   containerPort: 5000

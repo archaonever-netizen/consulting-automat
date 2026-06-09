@@ -146,8 +146,8 @@ class Orchestrator:
                 agent_result = agent.analyze_project(client_obj, project_description)
                 return function_name, agent_result
 
-        # Используем ThreadPoolExecutor для параллельных запросов
-        with ThreadPoolExecutor(max_workers=9) as executor:
+        # max_workers=3: ограничиваем параллелизм чтобы не убить контейнер OOM
+        with ThreadPoolExecutor(max_workers=3) as executor:
             futures = {
                 executor.submit(analyze_function, func_name): func_name
                 for func_name in task_functions
