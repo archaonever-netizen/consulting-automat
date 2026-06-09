@@ -120,22 +120,77 @@ def health_spark_color_and_state(health):
     else:
         return '#BFC0C7', 'Нет данных'
 
-with app.app_context():
-    try:
-        print("[APP] Creating database tables...")
-        db.create_all()
-        print("[APP] Database tables created successfully")
+def init_db():
+    """Инициализировать БД с поддержкой миграций."""
+    with app.app_context():
+        try:
+            print("[APP] Creating database tables...")
+            db.create_all()
+            print("[APP] Database tables created successfully")
 
-        print("[APP] Seeding functions...")
-        seed_functions()
-        print("[APP] Functions seeded successfully")
+            # Выполнить SQL миграции для подчатов если нужно
+            try:
+                from sqlalchemy import text
 
-        print("[APP] Startup complete - agents will initialize lazily on first use")
-    except Exception as e:
-        print(f"[APP] ERROR during startup: {e}")
-        import traceback
-        traceback.print_exc()
-        # Приложение продолжит работать даже если БД недоступна
+                # Проверить существует ли таблица user_subchats
+                result = db.session.execute(text(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_subchats')"
+                )).scalar()
+
+                if not result:
+                    print("[APP] Creating user_subchats table...")
+                    db.session.execute(text("""
+                        CREATE TABLE user_subchats (
+                            id SERIAL PRIMARY KEY,
+                            session_id INTEGER NOT NULL REFERENCES user_chat_sessions(id) ON DELETE CASCADE,
+                            task_id INTEGER REFERENCES user_tasks(id) ON DELETE SET NULL,
+                            version INTEGER DEFAULT 1,
+                            tokens_used INTEGER DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
+                    """))
+                    print("[APP] user_subchats table created")
+
+                # Проверить есть ли столбец subchat_id в user_chat_messages
+                result = db.session.execute(text(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_chat_messages' AND column_name = 'subchat_id')"
+                )).scalar()
+
+                if not result:
+                    print("[APP] Adding subchat_id column to user_chat_messages...")
+                    db.session.execute(text("""
+                        ALTER TABLE user_chat_messages
+                        ADD COLUMN subchat_id INTEGER,
+                        ADD COLUMN tokens INTEGER DEFAULT 0
+                    """))
+                    print("[APP] Columns added")
+
+                # Проверить есть ли столбец version в user_chat_messages
+                result = db.session.execute(text(
+                    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_chat_messages' AND column_name = 'tokens')"
+                )).scalar()
+
+                if result:
+                    print("[APP] Columns already exist, skipping")
+
+                db.session.commit()
+            except Exception as e:
+                print(f"[APP] Migration warning: {e}")
+                db.session.rollback()
+
+            print("[APP] Seeding functions...")
+            seed_functions()
+            print("[APP] Functions seeded successfully")
+
+            print("[APP] Startup complete - agents will initialize lazily on first use")
+        except Exception as e:
+            print(f"[APP] ERROR during startup: {e}")
+            import traceback
+            traceback.print_exc()
+            # Приложение продолжит работать даже если БД недоступна
+
+init_db()
 
 # -------------------------------------------------------------------
 # Загрузка текущего пользователя и контекст-процессоры
