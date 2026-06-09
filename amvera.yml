@@ -4,9 +4,5 @@ meta:
     name: pip
 
 run:
-  command: gunicorn --workers 2 --threads 4 --timeout 180 --max-requests 1000 --bind 0.0.0.0:5000 app:app
+  command: "gunicorn --workers 2 --threads 4 --timeout 180 --bind 0.0.0.0:5000 app:app"
   containerPort: 5000
-  persistenceMount: /data
-
-env:
-  PYTHONUNBUFFERED: "1"
