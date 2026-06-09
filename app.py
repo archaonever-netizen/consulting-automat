@@ -1809,6 +1809,41 @@ def complete_task(task_id):
         return jsonify({'error': str(e), 'status': 'failed'}), 500
 
 
+@app.route('/tasks/<int:task_id>/update', methods=['PATCH'])
+@login_required
+def update_task_field(task_id):
+    """Обновить отдельное поле задачи (для inline edit)."""
+    try:
+        task = UserTask.query.get_or_404(task_id)
+
+        if task.created_by_id != g.user.id:
+            return jsonify({'error': 'Access denied'}), 403
+
+        data = request.get_json()
+        field = data.get('field')
+        value = data.get('value')
+
+        allowed_fields = ['title', 'input_data', 'goal', 'action_description', 'expected_result', 'start_time', 'duration_minutes', 'assigned_to_id']
+        if field not in allowed_fields:
+            return jsonify({'error': 'Invalid field'}), 400
+
+        # Парсить start_time если это DateTime поле
+        if field == 'start_time' and value:
+            try:
+                value = datetime.fromisoformat(value) if isinstance(value, str) else value
+            except ValueError:
+                value = None
+
+        setattr(task, field, value)
+        task.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({'success': True, field: getattr(task, field)}), 200
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/tasks/<int:task_id>/delete', methods=['POST'])
 @login_required
 def delete_task(task_id):

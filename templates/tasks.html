@@ -372,6 +372,51 @@
   white-space: pre-wrap;
 }
 
+.task-detail-editable {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.task-detail-editable:hover {
+  background-color: #efefef !important;
+}
+
+.task-detail-edit-input {
+  flex: 1;
+  padding: 0.5rem;
+  border: 2px solid #2563eb;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.task-detail-edit-btn-save, .task-detail-edit-btn-cancel {
+  padding: 0.5rem 0.75rem;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.task-detail-edit-btn-save {
+  background: #16a34a;
+  color: #fff;
+}
+
+.task-detail-edit-btn-save:hover {
+  background: #15803d;
+}
+
+.task-detail-edit-btn-cancel {
+  background: #ef4444;
+  color: #fff;
+}
+
+.task-detail-edit-btn-cancel:hover {
+  background: #dc2626;
+}
+
 .empty-state {
   text-align: center;
   padding: 2rem 1rem;
@@ -577,6 +622,69 @@
     return val;
   }
 
+  // Inline edit helper
+  function makeFieldEditable(taskId, fieldName, fieldLabel, fieldType = 'textarea') {
+    const container = event.target.closest('[data-field]');
+    if (!container || container.dataset.editing === 'true') return;
+
+    const currentValue = container.dataset.value || '';
+    container.dataset.editing = 'true';
+
+    let input;
+    if (fieldType === 'number') {
+      input = document.createElement('input');
+      input.type = 'number';
+      input.value = currentValue;
+    } else if (fieldType === 'datetime') {
+      input = document.createElement('input');
+      input.type = 'datetime-local';
+      input.value = currentValue;
+    } else {
+      input = document.createElement('textarea');
+      input.value = currentValue;
+      input.rows = 3;
+    }
+    input.className = 'task-detail-edit-input';
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = '✓';
+    saveBtn.className = 'task-detail-edit-btn-save';
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = '✕';
+    cancelBtn.className = 'task-detail-edit-btn-cancel';
+
+    function save() {
+      const newValue = input.value;
+      fetch(`/tasks/${taskId}/update`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ field: fieldName, value: newValue || null })
+      })
+      .then(r => r.json())
+      .then(() => {
+        container.innerHTML = newValue ? escapeHtml(newValue) : '(не заполнено)';
+        container.dataset.value = newValue;
+        container.dataset.editing = 'false';
+      })
+      .catch(err => alert(`Ошибка: ${err.message}`));
+    }
+
+    const wrapper = document.createElement('div');
+    wrapper.style.display = 'flex';
+    wrapper.style.gap = '0.5rem';
+    wrapper.appendChild(input);
+    wrapper.appendChild(saveBtn);
+    wrapper.appendChild(cancelBtn);
+
+    container.innerHTML = '';
+    container.appendChild(wrapper);
+    input.focus();
+
+    saveBtn.onclick = (e) => { e.preventDefault(); save(); };
+    cancelBtn.onclick = (e) => { e.preventDefault(); location.reload(); };
+  }
+
   // Load task details
   function loadTaskDetail(taskId) {
     fetch(`/tasks/${taskId}`)
@@ -594,55 +702,54 @@
                 <span class="task-detail-meta-label">Статус</span>
                 <span>${getStatusLabel(data.status)}</span>
               </div>
-              ${data.assigned_to_name ? `
-                <div class="task-detail-meta-item">
-                  <span class="task-detail-meta-label">Исполнитель</span>
-                  <span>${escapeHtml(data.assigned_to_name)}</span>
+              <div class="task-detail-meta-item">
+                <span class="task-detail-meta-label">Дата/время</span>
+                <div data-field="start_time" data-value="${data.start_time || ''}" class="task-detail-editable">
+                  ${data.start_time ? new Date(data.start_time).toLocaleString('ru-RU') : '(не заполнено)'}
                 </div>
-              ` : ''}
-              ${data.start_time ? `
-                <div class="task-detail-meta-item">
-                  <span class="task-detail-meta-label">Дата/время</span>
-                  <span>${new Date(data.start_time).toLocaleString('ru-RU')}</span>
+              </div>
+              <div class="task-detail-meta-item">
+                <span class="task-detail-meta-label">Длительность (мин)</span>
+                <div data-field="duration_minutes" data-value="${data.duration_minutes || ''}" class="task-detail-editable">
+                  ${data.duration_minutes ? data.duration_minutes : '(не заполнено)'}
                 </div>
-              ` : ''}
-              ${data.duration_minutes ? `
-                <div class="task-detail-meta-item">
-                  <span class="task-detail-meta-label">Длительность</span>
-                  <span>${data.duration_minutes} мин</span>
-                </div>
-              ` : ''}
+              </div>
             </div>
           </div>
 
-          ${data.input_data ? `
-            <div class="task-detail-section">
-              <h3>📋 Вводные данные</h3>
-              <div class="task-detail-content">${escapeHtml(data.input_data)}</div>
+          <div class="task-detail-section">
+            <h3>📋 Вводные данные</h3>
+            <div data-field="input_data" data-value="${data.input_data || ''}" class="task-detail-content task-detail-editable">
+              ${data.input_data ? escapeHtml(data.input_data) : '(не заполнено)'}
             </div>
-          ` : ''}
+          </div>
 
-          ${data.goal ? `
-            <div class="task-detail-section">
-              <h3>🎯 Цель действия</h3>
-              <div class="task-detail-content">${escapeHtml(data.goal)}</div>
+          <div class="task-detail-section">
+            <h3>🎯 Цель действия</h3>
+            <div data-field="goal" data-value="${data.goal || ''}" class="task-detail-content task-detail-editable">
+              ${data.goal ? escapeHtml(data.goal) : '(не заполнено)'}
             </div>
-          ` : ''}
+          </div>
 
-          ${data.action_description ? `
-            <div class="task-detail-section">
-              <h3>⚡ Само действие</h3>
-              <div class="task-detail-content">${escapeHtml(data.action_description)}</div>
+          <div class="task-detail-section">
+            <h3>⚡ Само действие</h3>
+            <div data-field="action_description" data-value="${data.action_description || ''}" class="task-detail-content task-detail-editable">
+              ${data.action_description ? escapeHtml(data.action_description) : '(не заполнено)'}
             </div>
-          ` : ''}
+          </div>
 
-          ${data.expected_result ? `
-            <div class="task-detail-section">
-              <h3>✅ Ожидаемый результат</h3>
-              <div class="task-detail-content">${escapeHtml(data.expected_result)}</div>
+          <div class="task-detail-section">
+            <h3>✅ Ожидаемый результат</h3>
+            <div data-field="expected_result" data-value="${data.expected_result || ''}" class="task-detail-content task-detail-editable">
+              ${data.expected_result ? escapeHtml(data.expected_result) : '(не заполнено)'}
             </div>
-          ` : ''}
+          </div>
         `;
+
+        // Attach click handlers
+        taskDetailContainer.querySelectorAll('.task-detail-editable').forEach(el => {
+          el.addEventListener('click', () => makeFieldEditable(taskId, el.dataset.field, '', el.dataset.field === 'duration_minutes' ? 'number' : 'textarea'));
+        });
       })
       .catch(err => {
         taskDetailContainer.innerHTML = `<p style="color: red;">Ошибка загрузки: ${escapeHtml(err.message)}</p>`;
