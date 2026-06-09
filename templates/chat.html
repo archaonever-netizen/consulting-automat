@@ -4,49 +4,92 @@
 {% block content %}
 <div class="chat-wrap" id="chatWrap">
 
-  {# ── Top bar ── #}
-  <div class="chat-head">
-    <button class="ic" type="button" title="История" id="btnHistory">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>
-      </svg>
-    </button>
-    <button class="ic" type="button" title="Поделиться">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-           stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 15V3"/><path d="m8 7 4-4 4 4"/>
-        <path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7"/>
-      </svg>
-    </button>
+  <!-- Левая панель: список чатов -->
+  <div class="chat-sidebar">
+    <div class="chat-sidebar-header">
+      <button class="btn-new-chat" id="btnNewChat">+ Новый чат</button>
+    </div>
+
+    <div class="chat-sidebar-list" id="sessionsList">
+      {% if sessions %}
+        {% for session in sessions %}
+          <a href="/chat?session_id={{ session.id }}" class="chat-session-item{% if active_session and active_session.id == session.id %} active{% endif %}" data-session-id="{{ session.id }}">
+            <div class="session-icon">
+              {% if session.context_type == 'task_manager' %}
+                📋
+              {% else %}
+                💬
+              {% endif %}
+            </div>
+            <div class="session-info">
+              <div class="session-title">{{ session.title }}</div>
+              <div class="session-time">{{ session.updated_at.strftime('%d.%m, %H:%M') }}</div>
+            </div>
+          </a>
+        {% endfor %}
+      {% else %}
+        <div style="padding: 1rem; text-align: center; color: #999; font-size: 0.9rem;">
+          Нет чатов. <br>Создайте новый 👉
+        </div>
+      {% endif %}
+    </div>
   </div>
 
-  {# ── Scrollable area ── #}
-  <div class="chat-scroll" id="chatScroll">
-    <div class="chat-inner" id="chatInner">
-
-      <h1 class="chat-hello rise">{{ greet }}, Алексей!</h1>
-      <p class="chat-sub rise d1">Чем займёмся сегодня?</p>
-
-      {# Suggestion chips #}
-      <div class="chips rise d2" id="chatChips">
-        {% for s in suggestions %}
-        <button class="chip-sug" onclick="sendMessage('{{ s.text }}')">
-          <svg class="ic" width="18" height="18" viewBox="0 0 24 24" fill="none"
-               stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            {{ s.icon_path | safe }}
-          </svg>
-          <span>{{ s.text }}</span>
-        </button>
-        {% endfor %}
+  <!-- Правая панель: чат -->
+  <div class="chat-main">
+    {% if active_session %}
+      <!-- Top bar -->
+      <div class="chat-head">
+        <h3 class="chat-title">{{ active_session.title }}</h3>
+        {% if active_session.context_type == 'task_manager' %}
+          <span class="session-badge">📋 Менеджер задач</span>
+        {% else %}
+          <span class="session-badge">💬 Общий чат</span>
+        {% endif %}
       </div>
 
-      {# Message list — seeded from server session #}
-      <div id="msgList">
-        {% for msg in messages %}
-          {% if msg.role == 'ai' %}
-          <div class="msg ai">
-            <div class="ava shef">
+      <!-- Scrollable area -->
+      <div class="chat-scroll" id="chatScroll">
+        <div class="chat-inner" id="chatInner">
+
+          <!-- Message list -->
+          <div id="msgList">
+            {% for msg in active_session.messages %}
+              {% if msg.role == 'assistant' %}
+                <div class="msg ai">
+                  <div class="ava shef">
+                    <svg width="22" height="22" viewBox="0 -5 720 236" xmlns="http://www.w3.org/2000/svg">
+                      <g fill="#fff">
+                        <path d="M0 0H48V200H0Z"/><path d="M0 155H160L120 200H0Z"/>
+                        <path d="M82 155V96L128 58V155Z"/><path d="M186 0H230V200H148L186 155Z"/>
+                        <path d="M268 0H318V200H268Z"/><path d="M268 0H478L438 50H268Z"/>
+                        <path d="M268 150H438L478 200H268Z"/>
+                        <path d="M585 -12H627V212H585Z"/>
+                        <path fill-rule="evenodd" clip-rule="evenodd" d="M508 100A98 82 0 1 0 704 100A98 82 0 1 0 508 100ZM554 100A52 42 0 1 0 658 100A52 42 0 1 0 554 100Z"/>
+                      </g>
+                      <path d="M352 78H404L364 128H312Z" fill="rgba(255,255,255,.55)"/>
+                    </svg>
+                  </div>
+                  <div class="msg-body">
+                    <div class="msg-name">ШЕФ<span class="role">· ИИ-ассистент</span><span class="t">{{ msg.created_at.strftime('%H:%M') }}</span></div>
+                    <div class="msg-text">{{ msg.content }}</div>
+                  </div>
+                </div>
+              {% else %}
+                <div class="msg user">
+                  <div class="ava">{{ current_user.full_name[:2].upper() }}</div>
+                  <div class="msg-body">
+                    <div class="bubble">{{ msg.content }}</div>
+                    <div class="t">{{ msg.created_at.strftime('%H:%M') }} ✓✓</div>
+                  </div>
+                </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <!-- Typing indicator (hidden) -->
+          <div class="msg ai" id="typingIndicator" style="display: none;">
+            <div class="ava shef thinking">
               <svg width="22" height="22" viewBox="0 -5 720 236" xmlns="http://www.w3.org/2000/svg">
                 <g fill="#fff">
                   <path d="M0 0H48V200H0Z"/><path d="M0 155H160L120 200H0Z"/>
@@ -60,120 +103,462 @@
               </svg>
             </div>
             <div class="msg-body">
-              <div class="msg-name">ШЕФ<span class="role">· ИИ-ассистент</span><span class="t">{{ msg.time }}</span></div>
-              <div class="msg-text">{{ msg.text }}</div>
+              <div class="msg-name">ШЕФ<span class="role">· ИИ-ассистент</span></div>
+              <div class="msg-text" style="width: fit-content;">
+                <div class="typing"><span></span><span></span><span></span></div>
+              </div>
             </div>
           </div>
-          {% else %}
-          <div class="msg user">
-            <div class="ava">АС</div>
-            <div class="msg-body">
-              <div class="bubble">{{ msg.text }}</div>
-              <div class="t">{{ msg.time }} ✓✓</div>
-            </div>
-          </div>
-          {% endif %}
-        {% endfor %}
-      </div>
 
-      {# Typing indicator (hidden) #}
-      <div class="msg ai" id="typingIndicator" style="display: none;">
-        <div class="ava shef thinking">
-          <svg width="22" height="22" viewBox="0 -5 720 236" xmlns="http://www.w3.org/2000/svg">
-            <g fill="#fff">
-              <path d="M0 0H48V200H0Z"/><path d="M0 155H160L120 200H0Z"/>
-              <path d="M82 155V96L128 58V155Z"/><path d="M186 0H230V200H148L186 155Z"/>
-              <path d="M268 0H318V200H268Z"/><path d="M268 0H478L438 50H268Z"/>
-              <path d="M268 150H438L478 200H268Z"/>
-              <path d="M585 -12H627V212H585Z"/>
-              <path fill-rule="evenodd" clip-rule="evenodd" d="M508 100A98 82 0 1 0 704 100A98 82 0 1 0 508 100ZM554 100A52 42 0 1 0 658 100A52 42 0 1 0 554 100Z"/>
-            </g>
-            <path d="M352 78H404L364 128H312Z" fill="rgba(255,255,255,.55)"/>
-          </svg>
-        </div>
-        <div class="msg-body">
-          <div class="msg-name">ШЕФ<span class="role">· ИИ-ассистент</span></div>
-          <div class="msg-text" style="width: fit-content;">
-            <div class="typing"><span></span><span></span><span></span></div>
-          </div>
         </div>
       </div>
 
-    </div>
-  </div>
-
-  {# ── Composer ── #}
-  <div class="composer-wrap">
-    <div class="composer">
-      <div class="quick">
-        <button type="button" onclick="sendMessage('Что предложишь?')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="12" cy="12" r="3"/><path d="m12 2 1 3.5M12 2l-1 3.5M22 12l-3.5 1M22 12l-3.5-1M12 22l1-3.5M12 22l-1-3.5M2 12l3.5 1M2 12l3.5-1"/>
-          </svg>
-          Что предложишь?
-        </button>
-        <button type="button" onclick="sendMessage('Покажи план действий')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M20 6 9 17l-5-5"/>
-          </svg>
-          Покажи план действий
-        </button>
-        <button type="button" onclick="sendMessage('Какие есть риски?')">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/>
-            <path d="M4 22v-7"/>
-          </svg>
-          Какие есть риски?
-        </button>
+      <!-- Composer -->
+      <div class="composer-wrap">
+        <div class="composer">
+          <div class="composer-box">
+            <input type="text" id="chatInput" placeholder="Напишите сообщение…" autocomplete="off"
+                   onkeydown="if(event.key==='Enter') sendMessage()">
+            <button class="send" type="button" onclick="sendMessage()" title="Отправить">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                   stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
+              </svg>
+            </button>
+          </div>
+          <div class="disc">ИИ может ошибаться. Проверяйте важную информацию.</div>
+        </div>
       </div>
-      <div class="composer-box">
-        <input type="text" id="chatInput" placeholder="Напишите сообщение…"
-               onkeydown="if(event.key==='Enter') sendMessage()">
-        <button class="ic-btn" type="button" title="Прикрепить">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57a4 4 0 0 1 5.66 5.66l-8.58 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>
-          </svg>
-        </button>
-        <button class="ic-btn" type="button" title="Голос">
-          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/>
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/><path d="M12 19v3"/><path d="M8 22h8"/>
-          </svg>
-        </button>
-        <button class="send" type="button" onclick="sendMessage()" title="Отправить">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>
-          </svg>
-        </button>
+    {% else %}
+      <!-- Empty state -->
+      <div class="chat-empty">
+        <div style="font-size: 4rem; margin-bottom: 1rem;">💬</div>
+        <h2>Начните новый чат</h2>
+        <p>Выберите чат слева или создайте новый</p>
+        <button class="btn btn-primary" id="btnNewChatEmpty">+ Новый чат</button>
       </div>
-      <div class="disc">ИИ может ошибаться. Проверяйте важную информацию.</div>
-    </div>
+    {% endif %}
   </div>
 
 </div>
-{% endblock %}
 
-{% block scripts %}
+<style>
+.chat-wrap {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  height: 100%;
+  overflow: hidden;
+  background: #fff;
+}
+
+.chat-sidebar {
+  background: #f9f9f9;
+  border-right: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-sidebar-header {
+  padding: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.btn-new-chat {
+  width: 100%;
+  padding: 0.75rem;
+  background: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+.btn-new-chat:hover {
+  background: #1d4ed8;
+}
+
+.chat-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.chat-session-item {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 4px;
+  cursor: pointer;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.2s;
+}
+
+.chat-session-item:hover {
+  background: #f0f7ff;
+  border-color: #2563eb;
+}
+
+.chat-session-item.active {
+  background: #e0eeff;
+  border-color: #2563eb;
+}
+
+.session-icon {
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f0f0f0;
+  border-radius: 4px;
+}
+
+.session-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.session-title {
+  font-weight: 600;
+  font-size: 0.95rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.25rem;
+}
+
+.session-time {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.chat-main {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.chat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  color: #999;
+}
+
+.chat-empty h2 {
+  margin: 0 0 0.5rem 0;
+  color: #333;
+}
+
+.chat-empty p {
+  margin: 0 0 1.5rem 0;
+  font-size: 0.95rem;
+}
+
+.chat-head {
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.chat-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.session-badge {
+  padding: 0.4rem 0.75rem;
+  background: #f0f0f0;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.chat-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+}
+
+.chat-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.msg {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.msg.ai .ava {
+  width: 40px;
+  height: 40px;
+  background: #2563eb;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: white;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.msg.ai .ava.shef {
+  background: linear-gradient(135deg, #2563eb 0%, #1e40af 100%);
+}
+
+.msg.user .ava {
+  width: 40px;
+  height: 40px;
+  background: #e0e0e0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: #333;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.msg-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.msg-name {
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.msg-name .role {
+  font-weight: 400;
+  color: #999;
+  font-size: 0.8rem;
+}
+
+.msg-name .t {
+  margin-left: auto;
+  color: #999;
+  font-size: 0.8rem;
+}
+
+.msg-text {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: #333;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.msg.user .msg-text {
+  background: #2563eb;
+  color: white;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  width: fit-content;
+  max-width: 80%;
+}
+
+.msg.user .t {
+  color: #999;
+  font-size: 0.8rem;
+  margin-top: 0.25rem;
+}
+
+.bubble {
+  display: inline;
+}
+
+.typing {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.typing span {
+  width: 8px;
+  height: 8px;
+  background: #999;
+  border-radius: 50%;
+  animation: pulse 1.4s infinite;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes pulse {
+  0%, 60%, 100% {
+    opacity: 0.5;
+  }
+  30% {
+    opacity: 1;
+  }
+}
+
+.composer-wrap {
+  border-top: 1px solid #e0e0e0;
+  background: #fff;
+  padding: 1rem;
+}
+
+.composer {
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.composer-box {
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end;
+  margin-bottom: 0.5rem;
+}
+
+.composer-box input {
+  flex: 1;
+  padding: 0.75rem 1rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  font-family: inherit;
+}
+
+.composer-box input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.1);
+}
+
+.composer-box .send {
+  width: 40px;
+  height: 40px;
+  background: #2563eb;
+  border: none;
+  border-radius: 4px;
+  color: white;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+}
+
+.composer-box .send:hover {
+  background: #1d4ed8;
+}
+
+.disc {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+@media (max-width: 768px) {
+  .chat-wrap {
+    grid-template-columns: 1fr;
+  }
+
+  .chat-sidebar {
+    display: none;
+  }
+
+  .msg.user .msg-text {
+    max-width: 95%;
+  }
+}
+</style>
+
 <script>
-  const msgList   = document.getElementById('msgList');
+(function() {
+  'use strict';
+
+  const msgList = document.getElementById('msgList');
   const chatScroll = document.getElementById('chatScroll');
-  const typing    = document.getElementById('typingIndicator');
-  const input     = document.getElementById('chatInput');
-  let   sending   = false;
+  const typing = document.getElementById('typingIndicator');
+  const input = document.getElementById('chatInput');
+  const sessionsList = document.getElementById('sessionsList');
+  let sending = false;
+
+  // Get session ID from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const currentSessionId = parseInt(urlParams.get('session_id') || '0', 10);
 
   function nowTime() {
     const d = new Date();
-    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+    return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
   }
 
   function scrollBottom() {
-    chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: 'smooth' });
+    setTimeout(() => {
+      chatScroll.scrollTo({ top: chatScroll.scrollHeight, behavior: 'smooth' });
+    }, 0);
+  }
+
+  function escapeHtml(text) {
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
   }
 
   function appendMsg(role, text, time) {
@@ -196,13 +581,13 @@
         </div>
         <div class="msg-body">
           <div class="msg-name">ШЕФ<span class="role">· ИИ-ассистент</span><span class="t">${time}</span></div>
-          <div class="msg-text">${escHtml(text)}</div>
+          <div class="msg-text">${escapeHtml(text)}</div>
         </div>`;
     } else {
       div.innerHTML = `
         <div class="ava">АС</div>
         <div class="msg-body">
-          <div class="bubble">${escHtml(text)}</div>
+          <div class="bubble">${escapeHtml(text)}</div>
           <div class="t">${time} ✓✓</div>
         </div>`;
     }
@@ -210,38 +595,84 @@
     scrollBottom();
   }
 
-  function escHtml(s) {
-    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  }
-
   function sendMessage(text) {
     const t = (text !== undefined ? text : input.value).trim();
-    if (!t || sending) return;
+    if (!t || sending || !currentSessionId) return;
     sending = true;
     input.value = '';
 
     appendMsg('user', t, nowTime());
 
-    // Show typing indicator
     typing.style.display = 'flex';
     scrollBottom();
 
-    fetch('/chat/send', {
+    fetch(`/chat/${currentSessionId}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: t })
+      body: JSON.stringify({ message: t })
     })
     .then(r => r.json())
     .then(data => {
       typing.style.display = 'none';
-      appendMsg('ai', data.reply, nowTime());
+      if (data.error) {
+        appendMsg('ai', 'Ошибка: ' + data.error, nowTime());
+      } else {
+        appendMsg('ai', data.response, nowTime());
+
+        // Если парсился JSON с заполненным полем - показать уведомление
+        if (data.parsed_json && data.parsed_json.field && data.parsed_json.value) {
+          showToast(`✅ Поле "${data.parsed_json.field}" заполнено`, 'success');
+        }
+
+        // Если сессия завершена - редирект в задачи
+        if (data.parsed_json && data.parsed_json.done) {
+          setTimeout(() => {
+            showToast('✨ Все поля заполнены!', 'success');
+            setTimeout(() => {
+              window.location.href = '/tasks';
+            }, 1500);
+          }, 500);
+        }
+      }
       sending = false;
     })
-    .catch(() => {
+    .catch(err => {
       typing.style.display = 'none';
-      appendMsg('ai', 'Произошла ошибка. Попробуйте ещё раз.', nowTime());
+      appendMsg('ai', 'Ошибка соединения. Попробуйте ещё раз.', nowTime());
       sending = false;
     });
   }
+
+  // New chat button
+  function createNewChat() {
+    fetch('/chat/session/new', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ title: 'Новый чат' })
+    })
+    .then(r => r.json())
+    .then(data => {
+      if (data.session_id) {
+        window.location.href = `/chat?session_id=${data.session_id}`;
+      }
+    })
+    .catch(err => showToast('Ошибка создания чата', 'error'));
+  }
+
+  document.getElementById('btnNewChat').addEventListener('click', createNewChat);
+  const btnNewChatEmpty = document.getElementById('btnNewChatEmpty');
+  if (btnNewChatEmpty) {
+    btnNewChatEmpty.addEventListener('click', createNewChat);
+  }
+
+  // Auto-focus input
+  if (input) {
+    input.focus();
+    scrollBottom();
+  }
+
+  // Expose to global
+  window.sendMessage = sendMessage;
+})();
 </script>
 {% endblock %}

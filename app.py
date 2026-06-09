@@ -5,10 +5,10 @@ import random
 import uuid
 import threading
 import time as _time
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort, flash
-from models import db, Client, Brief, User, Role, Function, Department, FunctionDepartmentLink, AITask, AIAgentRun
+from models import db, Client, Brief, User, Role, Function, Department, FunctionDepartmentLink, AITask, AIAgentRun, UserTask, TaskCompletion, UserChatSession, UserChatMessage
 from fpdf import FPDF
 from dotenv import load_dotenv
 
@@ -884,52 +884,6 @@ _CHAT_SUGGESTIONS = [
 ]
 
 
-@app.route('/chat')
-@login_required
-def chat():
-    """Чат с ИИ (UI-заглушка, B2)."""
-    hour = datetime.now().hour
-    if hour < 5:    greet = 'Доброй ночи'
-    elif hour < 12: greet = 'Доброе утро'
-    elif hour < 18: greet = 'Добрый день'
-    else:           greet = 'Добрый вечер'
-
-    messages = session.get('chat_messages', [
-        {'role': 'ai',
-         'time': '10:00',
-         'text': 'Привет, Алексей! Я здесь, чтобы помочь принимать лучшие решения '
-                 'и расти быстрее. Что хотите сделать?'},
-    ])
-    return render_template('chat.html',
-        greet=greet,
-        messages=messages,
-        suggestions=_CHAT_SUGGESTIONS,
-    )
-
-
-@app.route('/chat/send', methods=['POST'])
-@login_required
-def chat_send():
-    """Принимает сообщение пользователя, добавляет в сессию, возвращает мок-ответ ИИ."""
-    data = request.get_json()
-    if not data or not data.get('text', '').strip():
-        return jsonify({'error': 'empty'}), 400
-
-    text = data['text'].strip()
-    now = datetime.now().strftime('%H:%M')
-
-    msgs = session.get('chat_messages', [
-        {'role': 'ai', 'time': '10:00',
-         'text': 'Привет, Алексей! Я здесь, чтобы помочь принимать лучшие решения.'},
-    ])
-    msgs.append({'role': 'user', 'time': now, 'text': text})
-    reply = random.choice(_AI_REPLIES)
-    msgs.append({'role': 'ai', 'time': now, 'text': reply})
-    # Храним последние 40 сообщений
-    session['chat_messages'] = msgs[-40:]
-    session.modified = True
-
-    return jsonify({'reply': reply})
 
 
 # -------------------------------------------------------------------
@@ -1521,6 +1475,476 @@ def agent_function_checklist(function_id):
         return jsonify(result), 200
     except Exception as e:
         return jsonify({'error': str(e), 'status': 'failed'}), 500
+
+
+# -------------------------------------------------------------------
+# Яндекс.Календарь OAuth
+# -------------------------------------------------------------------
+
+@app.route('/auth/yandex', methods=['GET'])
+@login_required
+def auth_yandex():
+    """Редирект на Яндекс OAuth."""
+    try:
+        from yandex_calendar import get_oauth_url
+        oauth_url = get_oauth_url()
+        return redirect(oauth_url)
+    except Exception as e:
+        flash(f'Ошибка при подключении календаря: {str(e)}', 'error')
+        return redirect(url_for('home'))
+
+
+@app.route('/auth/yandex/callback', methods=['GET'])
+@login_required
+def auth_yandex_callback():
+    """Callback от Яндекс OAuth."""
+    try:
+        from yandex_calendar import exchange_code
+
+        code = request.args.get('code')
+        if not code:
+            flash('Ошибка: код авторизации не получен', 'error')
+            return redirect(url_for('home'))
+
+        token_data = exchange_code(code)
+
+        g.user.yandex_calendar_token = token_data['access_token']
+        g.user.yandex_calendar_refresh_token = token_data.get('refresh_token')
+        g.user.yandex_login = token_data['login']
+        expires_in = token_data.get('expires_in', 3600)
+        g.user.yandex_calendar_token_expiry = datetime.utcnow() + timedelta(seconds=expires_in)
+
+        db.session.commit()
+        flash('Яндекс.Календарь успешно подключён!', 'success')
+        return redirect(url_for('home'))
+    except Exception as e:
+        flash(f'Ошибка при подключении календаря: {str(e)}', 'error')
+        return redirect(url_for('home'))
+
+
+# -------------------------------------------------------------------
+# Задачи (Tasks)
+# -------------------------------------------------------------------
+
+@app.route('/tasks', methods=['GET'])
+@login_required
+def tasks():
+    """Список задач текущего пользователя."""
+    user_tasks = UserTask.query.filter_by(created_by_id=g.user.id).order_by(UserTask.created_at.desc()).all()
+    clients = Client.query.all()
+    return render_template('tasks.html', tasks=user_tasks, clients=clients)
+
+
+@app.route('/tasks/create', methods=['POST'])
+@login_required
+def create_task():
+    """Создать новую задачу."""
+    try:
+        title = request.form.get('title', '').strip()
+        client_id = request.form.get('client_id', type=int)
+        assigned_to_id = request.form.get('assigned_to_id', type=int) or None
+        start_time_str = request.form.get('start_time', '').strip()
+        duration_minutes = request.form.get('duration_minutes', type=int) or None
+        input_data = request.form.get('input_data', '').strip() or None
+        goal = request.form.get('goal', '').strip() or None
+        action_description = request.form.get('action_description', '').strip() or None
+        expected_result = request.form.get('expected_result', '').strip() or None
+
+        if not title or not client_id:
+            return jsonify({'error': 'title и client_id обязательны'}), 400
+
+        client = Client.query.get_or_404(client_id)
+
+        # Парсить дату/время если задано
+        start_time = None
+        if start_time_str:
+            try:
+                start_time = datetime.fromisoformat(start_time_str)
+            except ValueError:
+                pass
+
+        task = UserTask(
+            title=title,
+            client_id=client_id,
+            assigned_to_id=assigned_to_id,
+            created_by_id=g.user.id,
+            start_time=start_time,
+            duration_minutes=duration_minutes,
+            input_data=input_data,
+            goal=goal,
+            action_description=action_description,
+            expected_result=expected_result,
+            status='pending'
+        )
+
+        db.session.add(task)
+        db.session.flush()  # Получить ID для задачи
+
+        # Создать событие в Яндекс.Календаре если есть токен
+        if g.user.yandex_calendar_token:
+            try:
+                from yandex_calendar import create_event
+                task.calendar_event_uid = create_event(g.user, task)
+            except Exception as e:
+                print(f"Ошибка создания события календаря: {e}")
+                # Продолжить даже если календарь не работает
+
+        db.session.commit()
+        flash(f'Задача "{title}" создана', 'success')
+        return redirect(url_for('tasks'))
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Ошибка создания задачи: {str(e)}', 'error')
+        return redirect(url_for('tasks'))
+
+
+@app.route('/tasks/<int:task_id>', methods=['GET'])
+@login_required
+def get_task(task_id):
+    """Получить данные задачи (JSON)."""
+    task = UserTask.query.get_or_404(task_id)
+
+    # Проверить доступ
+    if task.created_by_id != g.user.id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    return jsonify({
+        'id': task.id,
+        'title': task.title,
+        'client_id': task.client_id,
+        'client_name': task.client.name,
+        'assigned_to_id': task.assigned_to_id,
+        'start_time': task.start_time.isoformat() if task.start_time else None,
+        'duration_minutes': task.duration_minutes,
+        'input_data': task.input_data,
+        'goal': task.goal,
+        'action_description': task.action_description,
+        'expected_result': task.expected_result,
+        'status': task.status,
+        'created_at': task.created_at.isoformat(),
+    }), 200
+
+
+@app.route('/tasks/<int:task_id>/start', methods=['POST'])
+@login_required
+def start_task(task_id):
+    """Начать выполнение задачи (изменить статус)."""
+    task = UserTask.query.get_or_404(task_id)
+
+    if task.created_by_id != g.user.id:
+        return jsonify({'error': 'Access denied'}), 403
+
+    task.status = 'in_progress'
+    db.session.commit()
+
+    return jsonify({'status': 'ok', 'task_status': task.status}), 200
+
+
+@app.route('/tasks/<int:task_id>/complete', methods=['POST'])
+@login_required
+def complete_task(task_id):
+    """Завершить задачу (сохранить результат, проверить незаполненные поля)."""
+    try:
+        task = UserTask.query.get_or_404(task_id)
+
+        if task.created_by_id != g.user.id:
+            return jsonify({'error': 'Access denied'}), 403
+
+        data = request.get_json()
+        actual_result = data.get('actual_result', '').strip() or None
+        is_failure = data.get('is_failure', False)
+        difficulties = data.get('difficulties', '').strip() or None
+        how_overcome = data.get('how_overcome', '').strip() or None
+        next_step = data.get('next_step', '').strip() or None
+
+        # Создать/обновить запись о выполнении
+        completion = TaskCompletion(
+            task_id=task_id,
+            actual_result=actual_result,
+            is_failure=is_failure,
+            difficulties=difficulties,
+            how_overcome=how_overcome,
+            next_step=next_step,
+        )
+        db.session.add(completion)
+
+        # Обновить статус задачи
+        task.status = 'failed' if is_failure else 'completed'
+        task.updated_at = datetime.utcnow()
+
+        db.session.commit()
+
+        # Проверить незаполненные обязательные поля
+        missing_fields = []
+        if not task.input_data:
+            missing_fields.append('input_data')
+        if not task.goal:
+            missing_fields.append('goal')
+        if not task.action_description:
+            missing_fields.append('action_description')
+        if not task.expected_result:
+            missing_fields.append('expected_result')
+
+        # Если есть незаполненные поля — создать чат с AI
+        if missing_fields:
+            session = UserChatSession(
+                user_id=g.user.id,
+                title=f'Дозаполнение: {task.title}',
+                context_type='task_manager',
+                context_id=task_id
+            )
+            db.session.add(session)
+            db.session.flush()
+
+            # Добавить первое системное сообщение AI
+            system_msg = UserChatMessage(
+                session_id=session.id,
+                role='assistant',
+                content=f'Помогу вам дозаполнить задачу "{task.title}". '
+                        f'Необходимо заполнить: {", ".join(missing_fields)}. '
+                        f'Давайте начнём с первого поля.'
+            )
+            db.session.add(system_msg)
+            db.session.commit()
+
+            return jsonify({
+                'status': 'ok',
+                'missing_fields': missing_fields,
+                'chat_session_id': session.id,
+                'needs_chat': True
+            }), 200
+
+        return jsonify({'status': 'ok', 'needs_chat': False}), 200
+
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e), 'status': 'failed'}), 500
+
+
+@app.route('/tasks/<int:task_id>/delete', methods=['POST'])
+@login_required
+def delete_task(task_id):
+    """Удалить задачу и её событие из календаря."""
+    try:
+        task = UserTask.query.get_or_404(task_id)
+
+        if task.created_by_id != g.user.id:
+            return jsonify({'error': 'Access denied'}), 403
+
+        # Удалить событие из календаря если оно есть
+        if task.calendar_event_uid and g.user.yandex_calendar_token:
+            try:
+                from yandex_calendar import delete_event
+                delete_event(g.user, task.calendar_event_uid)
+            except Exception as e:
+                print(f"Ошибка удаления события календаря: {e}")
+
+        db.session.delete(task)
+        db.session.commit()
+
+        flash(f'Задача "{task.title}" удалена', 'success')
+        return redirect(url_for('tasks'))
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Ошибка удаления задачи: {str(e)}', 'error')
+        return redirect(url_for('tasks'))
+
+
+# -------------------------------------------------------------------
+# ИИ-Чат (User Chat)
+# -------------------------------------------------------------------
+
+@app.route('/chat', methods=['GET'])
+@login_required
+def chat():
+    """Список всех чат-сессий пользователя или создание новой сессии."""
+    # Если это GET с параметром session_id - открыть конкретный чат
+    session_id = request.args.get('session_id', type=int)
+
+    if session_id:
+        session_obj = UserChatSession.query.filter_by(
+            id=session_id,
+            user_id=g.user.id
+        ).first_or_404()
+
+        return render_template('chat.html', active_session=session_obj)
+
+    # Иначе - показать список сессий
+    sessions = UserChatSession.query.filter_by(user_id=g.user.id).order_by(
+        UserChatSession.updated_at.desc()
+    ).all()
+
+    return render_template('chat.html', sessions=sessions)
+
+
+@app.route('/chat/session/new', methods=['POST'])
+@login_required
+def new_chat_session():
+    """Создать новую чат-сессию."""
+    try:
+        data = request.get_json()
+        title = data.get('title', 'Новый чат').strip() or 'Новый чат'
+
+        session = UserChatSession(
+            user_id=g.user.id,
+            title=title,
+            context_type='general'
+        )
+        db.session.add(session)
+        db.session.commit()
+
+        return jsonify({'session_id': session.id}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/chat/<int:session_id>/send', methods=['POST'])
+@login_required
+def chat_send_message(session_id):
+    """Отправить сообщение и получить ответ AI."""
+    try:
+        session_obj = UserChatSession.query.filter_by(
+            id=session_id,
+            user_id=g.user.id
+        ).first_or_404()
+
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+
+        if not user_message:
+            return jsonify({'error': 'Message is required'}), 400
+
+        # Сохранить сообщение пользователя
+        user_msg = UserChatMessage(
+            session_id=session_id,
+            role='user',
+            content=user_message
+        )
+        db.session.add(user_msg)
+        db.session.flush()
+
+        # Получить историю сессии для контекста
+        messages = UserChatMessage.query.filter_by(session_id=session_id).order_by(
+            UserChatMessage.created_at
+        ).all()
+
+        # Построить история для LLM
+        llm_messages = [
+            {'role': m.role, 'content': m.content}
+            for m in messages
+        ]
+
+        # Определить системный промпт в зависимости от типа сессии
+        system_prompt = None
+        if session_obj.context_type == 'task_manager' and session_obj.context_id:
+            task = UserTask.query.get(session_obj.context_id)
+            if task:
+                # Найти незаполненные поля
+                missing = []
+                if not task.input_data:
+                    missing.append('input_data')
+                if not task.goal:
+                    missing.append('goal')
+                if not task.action_description:
+                    missing.append('action_description')
+                if not task.expected_result:
+                    missing.append('expected_result')
+
+                field_names = {
+                    'input_data': 'Вводные данные',
+                    'goal': 'Цель действия',
+                    'action_description': 'Само действие',
+                    'expected_result': 'Ожидаемый результат'
+                }
+
+                missing_names = ', '.join(field_names.get(f, f) for f in missing)
+
+                system_prompt = f"""Ты — ИИ-менеджер задач в системе ШЕФ.
+Твоя задача помочь дозаполнить незаполненные поля задачи: "{task.title}"
+
+Текущие незаполненные поля: {missing_names}
+
+Инструкции:
+1. Задавай РОВНО ОДИН вопрос за раз
+2. После ответа пользователя определи: является ли ответ однозначным значением для поля?
+3. Если да и ответ полный - ОБЯЗАТЕЛЬНО в конце своего ответа вернися JSON: {{"field": "...", "value": "...", "done": false}}
+   где field может быть: input_data, goal, action_description, expected_result
+4. Структурируй значение емко и коротко (максимум 2-3 предложения)
+5. Если все поля заполнены - верни {{"done": true}}
+
+Говори кратко и по существу, на русском языке."""
+        else:
+            system_prompt = """Ты — полезный ИИ-ассистент в системе управления консалтингом ШЕФ.
+Помогаешь пользователю с аналитикой, стратегией и планированием.
+Отвечай кратко, структурированно и по существу."""
+
+        # Вызвать LLM
+        from promptra_client import PromtraClient
+        from deepseek_config import DeepSeekConfig
+
+        client = PromtraClient()
+        response = client.chat_completion(
+            messages=llm_messages,
+            system_prompt=system_prompt,
+            model=DeepSeekConfig.CHAT_MODEL,
+            temperature=0.5,
+            max_tokens=500
+        )
+
+        if response.get('error'):
+            return jsonify({'error': f"LLM error: {response['error']}"}), 500
+
+        ai_response = response['content']
+
+        # Сохранить ответ AI
+        ai_msg = UserChatMessage(
+            session_id=session_id,
+            role='assistant',
+            content=ai_response
+        )
+        db.session.add(ai_msg)
+
+        # Если это task_manager - попытаться парсить JSON и обновить задачу
+        parsed_json = None
+        if session_obj.context_type == 'task_manager' and session_obj.context_id:
+            try:
+                # Попытаться извлечь JSON из конца ответа
+                import json
+                if '{' in ai_response and '}' in ai_response:
+                    # Найти последний JSON объект в ответе
+                    start = ai_response.rfind('{')
+                    end = ai_response.rfind('}') + 1
+                    if start >= 0 and end > start:
+                        json_str = ai_response[start:end]
+                        parsed_json = json.loads(json_str)
+
+                        # Если есть field и value - обновить задачу
+                        if parsed_json.get('field') and parsed_json.get('value'):
+                            task = UserTask.query.get(session_obj.context_id)
+                            if task:
+                                setattr(task, parsed_json['field'], parsed_json['value'])
+                                task.updated_at = datetime.utcnow()
+
+                        # Если done: true - завершить сессию
+                        if parsed_json.get('done'):
+                            session_obj.context_type = 'completed'
+            except Exception as e:
+                print(f"Ошибка парсинга JSON: {e}")
+
+        db.session.commit()
+
+        return jsonify({
+            'response': ai_response,
+            'parsed_json': parsed_json
+        }), 200
+
+    except Exception as e:
+        db.session.rollback()
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e), 'status': 'failed'}), 500
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)

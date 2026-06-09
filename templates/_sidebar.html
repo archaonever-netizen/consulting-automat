@@ -10,9 +10,11 @@
                         'client_briefs','brief_form','update_brief_status',
                         'autosave_brief','generate_pdf'] -%}
 {%- set _company_eps = ['company','company_function_detail','company_department_detail','add_department','update_function_description','update_department_description','add_link','remove_link'] -%}
+{%- set _chat_eps = ['chat','new_chat_session','chat_send_message'] -%}
+{%- set _tasks_eps = ['tasks','create_task','get_task','start_task','complete_task','delete_task'] -%}
 {%- if _ep == 'home' -%}
   {%- set _active = 'home' -%}
-{%- elif _ep in ['chat','chat_send'] -%}
+{%- elif _ep in _chat_eps -%}
   {%- set _active = 'chat' -%}
 {%- elif _ep in _client_eps -%}
   {%- set _active = 'clients' -%}
@@ -20,7 +22,7 @@
   {%- set _active = 'company' -%}
 {%- elif _ep == 'analytics' -%}
   {%- set _active = 'analytics' -%}
-{%- elif _ep == 'tasks' -%}
+{%- elif _ep in _tasks_eps -%}
   {%- set _active = 'tasks' -%}
 {%- elif _ep == 'templates_view' -%}
   {%- set _active = 'templates' -%}
@@ -135,6 +137,10 @@
         <path d="m8.5 12 2.5 2.5 4.5-5"/>
       </svg>
       <span>Задачи</span>
+      {% set task_count = current_user.tasks | selectattr('status', 'in', ['pending', 'in_progress']) | list | length %}
+      {% if task_count > 0 %}
+        <span class="sb-count">{{ task_count }}</span>
+      {% endif %}
     </a>
 
     {# templates #}

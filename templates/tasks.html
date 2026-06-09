@@ -1,0 +1,771 @@
+{% extends "base.html" %}
+
+{% block title %}Задачи — ШЕФ{% endblock %}
+
+{% block content %}
+<div class="page page--tasks">
+  <div class="tasks-container">
+    <!-- Левая панель: список задач -->
+    <div class="tasks-list-panel">
+      <div class="tasks-header">
+        <input type="text" id="taskSearch" class="tasks-search" placeholder="🔍 Поиск..." autocomplete="off">
+        <button class="btn btn-primary" data-toggle="modal" data-target="#createTaskModal">
+          + Новая задача
+        </button>
+      </div>
+
+      <div class="tasks-scroll" id="tasksList">
+        {% if tasks %}
+          {% for task in tasks %}
+            <div class="task-card" data-task-id="{{ task.id }}" data-task-title="{{ task.title }}">
+              <div class="task-card-header">
+                <h4 class="task-card-title">{{ task.title }}</h4>
+                <span class="task-status-badge task-status-{{ task.status }}">
+                  {% if task.status == 'pending' %}
+                    ⏳ Ожидание
+                  {% elif task.status == 'in_progress' %}
+                    🔄 В процессе
+                  {% elif task.status == 'completed' %}
+                    ✅ Выполнено
+                  {% elif task.status == 'failed' %}
+                    ❌ Провал
+                  {% endif %}
+                </span>
+              </div>
+
+              <div class="task-card-info">
+                <p class="task-client">● {{ task.client.name }}</p>
+                {% if task.start_time %}
+                  <p class="task-time">⏰ {{ task.start_time.strftime('%H:%M') }}
+                    {% if task.duration_minutes %}
+                      — {{ task.duration_minutes }} мин
+                    {% endif %}
+                  </p>
+                {% endif %}
+              </div>
+
+              <div class="task-card-actions">
+                {% if task.status == 'pending' %}
+                  <button class="btn btn-sm btn-secondary btn-start-task" data-task-id="{{ task.id }}" title="Начать выполнение">
+                    ▶ Старт
+                  </button>
+                {% endif %}
+                {% if task.status in ['pending', 'in_progress'] %}
+                  <button class="btn btn-sm btn-success btn-complete-task" data-toggle="modal" data-target="#completeModal" data-task-id="{{ task.id }}" title="Завершить задачу">
+                    ✓ Выполнить
+                  </button>
+                {% endif %}
+              </div>
+            </div>
+          {% endfor %}
+        {% else %}
+          <div class="empty-state">
+            <div style="font-size: 3rem; margin-bottom: 1rem;">📭</div>
+            <p>Нет задач. <a href="#" data-toggle="modal" data-target="#createTaskModal">Создайте первую</a></p>
+          </div>
+        {% endif %}
+      </div>
+    </div>
+
+    <!-- Правая панель: детали задачи -->
+    <div class="tasks-detail-panel">
+      <div id="taskDetailContainer" class="task-detail">
+        <div style="text-align: center; padding: 2rem; color: #999;">
+          Выберите задачу слева
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- =====================================================
+     Модал создания задачи
+     ===================================================== -->
+<div id="createTaskModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 class="modal-title">Новая задача</h2>
+      <button type="button" class="modal-close" data-dismiss="modal">×</button>
+    </div>
+
+    <form method="POST" action="{{ url_for('create_task') }}" class="modal-body">
+      <div class="form-group">
+        <label for="taskTitle">Название задачи *</label>
+        <input type="text" id="taskTitle" name="title" required placeholder="Например: Связаться с клиентом">
+        <small>Можно заполнить только название — ИИ-ассистент дозаполнит остальное</small>
+      </div>
+
+      <div class="form-group">
+        <label for="taskClient">Клиент *</label>
+        <select id="taskClient" name="client_id" required>
+          <option value="">Выберите клиента</option>
+          {% for client in clients %}
+            <option value="{{ client.id }}">{{ client.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="taskAssigned">Исполнитель</label>
+        <input type="text" id="taskAssigned" placeholder="Не заполнено (можно указать позже)">
+      </div>
+
+      <div class="form-row">
+        <div class="form-group form-col">
+          <label for="taskStartTime">Дата/время начала</label>
+          <input type="datetime-local" id="taskStartTime" name="start_time">
+        </div>
+        <div class="form-group form-col">
+          <label for="taskDuration">Длительность (мин)</label>
+          <input type="number" id="taskDuration" name="duration_minutes" min="1" max="480">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="taskInputData">Вводные данные</label>
+        <textarea id="taskInputData" name="input_data" placeholder="Кто, телефон, компания и т.д." rows="2"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="taskGoal">Цель действия</label>
+        <textarea id="taskGoal" name="goal" placeholder="Что нужно достичь" rows="2"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="taskAction">Само действие</label>
+        <textarea id="taskAction" name="action_description" placeholder="Конкретные шаги для выполнения" rows="2"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="taskResult">Ожидаемый результат</label>
+        <textarea id="taskResult" name="expected_result" placeholder="Измеримый результат" rows="2"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-primary">Создать задачу</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- =====================================================
+     Модал выполнения задачи
+     ===================================================== -->
+<div id="completeModal" class="modal-overlay">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h2 class="modal-title">Завершить задачу</h2>
+      <button type="button" class="modal-close" data-dismiss="modal">×</button>
+    </div>
+
+    <form id="completeTaskForm" class="modal-body">
+      <input type="hidden" id="completeTaskId" name="task_id">
+
+      <div class="form-group">
+        <label for="completeResult">Фактический результат</label>
+        <textarea id="completeResult" name="actual_result" placeholder="Что было достигнуто" rows="3"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="completeFailure" name="is_failure" value="true">
+          Это был провал / задача не выполнена
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label for="completeDifficulties">Сложности при выполнении</label>
+        <textarea id="completeDifficulties" name="difficulties" placeholder="Какие проблемы возникли" rows="2"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="completeOvercome">Как сложности были преодолены</label>
+        <textarea id="completeOvercome" name="how_overcome" placeholder="Способ решения" rows="2"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label for="completeNextStep">Следующий шаг</label>
+        <textarea id="completeNextStep" name="next_step" placeholder="Какую следующую задачу нужно поставить" rows="2"></textarea>
+      </div>
+
+      <div class="modal-actions">
+        <button type="button" class="btn btn-secondary" data-dismiss="modal">Отмена</button>
+        <button type="submit" class="btn btn-success">Завершить и сохранить</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<style>
+.page--tasks {
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.tasks-container {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  height: 100%;
+  gap: 1px;
+  background: #f0f0f0;
+}
+
+.tasks-list-panel {
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e0e0e0;
+}
+
+.tasks-header {
+  padding: 1rem;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.tasks-search {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 0.9rem;
+}
+
+.tasks-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.task-card {
+  background: #f9f9f9;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-bottom: 0.5rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.task-card:hover {
+  background: #f0f7ff;
+  border-color: #2563eb;
+}
+
+.task-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.5rem;
+}
+
+.task-card-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  flex: 1;
+}
+
+.task-status-badge {
+  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  white-space: nowrap;
+  margin-left: 0.5rem;
+}
+
+.task-status-pending { background: #ffe5cc; color: #8b4513; }
+.task-status-in_progress { background: #cce5ff; color: #003d99; }
+.task-status-completed { background: #ccffcc; color: #006600; }
+.task-status-failed { background: #ffcccc; color: #cc0000; }
+
+.task-card-info {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 0.5rem;
+}
+
+.task-card-info p {
+  margin: 0.25rem 0;
+}
+
+.task-card-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.btn-sm {
+  padding: 0.4rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+.tasks-detail-panel {
+  background: #fff;
+  overflow-y: auto;
+  padding: 1.5rem;
+}
+
+.task-detail {
+  max-width: 100%;
+}
+
+.task-detail-header {
+  margin-bottom: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 1rem;
+}
+
+.task-detail-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem 0;
+}
+
+.task-detail-meta {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.task-detail-meta-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.task-detail-meta-label {
+  color: #999;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+}
+
+.task-detail-section {
+  margin-bottom: 1.5rem;
+}
+
+.task-detail-section h3 {
+  font-size: 0.95rem;
+  color: #333;
+  margin: 0 0 0.5rem 0;
+  text-transform: uppercase;
+  color: #999;
+}
+
+.task-detail-content {
+  background: #f9f9f9;
+  padding: 0.75rem;
+  border-radius: 4px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #999;
+}
+
+.empty-state a {
+  color: #2563eb;
+  text-decoration: none;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.form-col {
+  margin-bottom: 0;
+}
+
+/* Modal styles */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  z-index: 1000;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-overlay.active {
+  display: flex;
+}
+
+.modal-card {
+  background: #fff;
+  border-radius: 8px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+}
+
+.modal-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e0e0e0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.modal-title {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #999;
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e0e0e0;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.form-group small {
+  display: block;
+  margin-top: 0.25rem;
+  color: #999;
+  font-size: 0.85rem;
+}
+
+.form-group input,
+.form-group textarea,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+
+.form-group input:focus,
+.form-group textarea:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37,99,235,0.1);
+}
+
+.form-group input[type="checkbox"] {
+  width: auto;
+  margin-right: 0.5rem;
+}
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: #2563eb;
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background: #1d4ed8;
+}
+
+.btn-success {
+  background: #16a34a;
+  color: #fff;
+}
+
+.btn-success:hover {
+  background: #15803d;
+}
+
+.btn-secondary {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.btn-secondary:hover {
+  background: #d0d0d0;
+}
+
+@media (max-width: 1024px) {
+  .tasks-container {
+    grid-template-columns: 1fr;
+  }
+
+  .tasks-list-panel {
+    display: none;
+  }
+
+  .task-detail-meta {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+<script>
+(function() {
+  'use strict';
+
+  // DOM elements
+  const tasksList = document.getElementById('tasksList');
+  const taskDetailContainer = document.getElementById('taskDetailContainer');
+  const completeModal = document.getElementById('completeModal');
+  const completeTaskForm = document.getElementById('completeTaskForm');
+  const completeTaskId = document.getElementById('completeTaskId');
+
+  // Modal utilities
+  function openModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.add('active');
+  }
+
+  function closeModal(modalId) {
+    const modal = document.getElementById(modalId);
+    if (modal) modal.classList.remove('active');
+  }
+
+  // Data attribute helpers
+  function getAttr(el, attr, type) {
+    const val = el.getAttribute(`data-${attr}`);
+    if (type === 'int') return parseInt(val, 10);
+    return val;
+  }
+
+  // Load task details
+  function loadTaskDetail(taskId) {
+    fetch(`/tasks/${taskId}`)
+      .then(r => r.json())
+      .then(data => {
+        taskDetailContainer.innerHTML = `
+          <div class="task-detail-header">
+            <h2 class="task-detail-title">${escapeHtml(data.title)}</h2>
+            <div class="task-detail-meta">
+              <div class="task-detail-meta-item">
+                <span class="task-detail-meta-label">Клиент</span>
+                <span>${escapeHtml(data.client_name)}</span>
+              </div>
+              <div class="task-detail-meta-item">
+                <span class="task-detail-meta-label">Статус</span>
+                <span>${getStatusLabel(data.status)}</span>
+              </div>
+              ${data.start_time ? `
+                <div class="task-detail-meta-item">
+                  <span class="task-detail-meta-label">Время</span>
+                  <span>${new Date(data.start_time).toLocaleString('ru-RU')}</span>
+                </div>
+              ` : ''}
+              ${data.duration_minutes ? `
+                <div class="task-detail-meta-item">
+                  <span class="task-detail-meta-label">Длительность</span>
+                  <span>${data.duration_minutes} мин</span>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+
+          ${data.input_data ? `
+            <div class="task-detail-section">
+              <h3>📋 Вводные данные</h3>
+              <div class="task-detail-content">${escapeHtml(data.input_data)}</div>
+            </div>
+          ` : ''}
+
+          ${data.goal ? `
+            <div class="task-detail-section">
+              <h3>🎯 Цель действия</h3>
+              <div class="task-detail-content">${escapeHtml(data.goal)}</div>
+            </div>
+          ` : ''}
+
+          ${data.action_description ? `
+            <div class="task-detail-section">
+              <h3>⚡ Само действие</h3>
+              <div class="task-detail-content">${escapeHtml(data.action_description)}</div>
+            </div>
+          ` : ''}
+
+          ${data.expected_result ? `
+            <div class="task-detail-section">
+              <h3>✅ Ожидаемый результат</h3>
+              <div class="task-detail-content">${escapeHtml(data.expected_result)}</div>
+            </div>
+          ` : ''}
+        `;
+      })
+      .catch(err => {
+        taskDetailContainer.innerHTML = `<p style="color: red;">Ошибка загрузки: ${escapeHtml(err.message)}</p>`;
+      });
+  }
+
+  function getStatusLabel(status) {
+    const labels = {
+      'pending': '⏳ Ожидание',
+      'in_progress': '🔄 В процессе',
+      'completed': '✅ Выполнено',
+      'failed': '❌ Провал'
+    };
+    return labels[status] || status;
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
+  }
+
+  // Event: Click on task card
+  tasksList.addEventListener('click', (e) => {
+    const card = e.target.closest('.task-card');
+    if (!card) return;
+
+    document.querySelectorAll('.task-card').forEach(c => c.style.background = '');
+    card.style.background = '#f0f7ff';
+
+    const taskId = getAttr(card, 'task-id', 'int');
+    loadTaskDetail(taskId);
+  });
+
+  // Event: Start task button
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('btn-start-task')) {
+      const taskId = getAttr(e.target, 'task-id', 'int');
+      fetch(`/tasks/${taskId}/start`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+          if (data.status === 'ok') {
+            showToast('Задача начата', 'success');
+            location.reload();
+          } else {
+            showToast('Ошибка: ' + (data.error || 'неизвестная'), 'error');
+          }
+        })
+        .catch(err => showToast('Ошибка: ' + err.message, 'error'));
+    }
+  });
+
+  // Event: Complete task modal
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('btn-complete-task')) {
+      const taskId = getAttr(e.target, 'task-id', 'int');
+      completeTaskId.value = taskId;
+      openModal('completeModal');
+    }
+  });
+
+  // Event: Submit complete form
+  completeTaskForm.addEventListener('submit', (e) => {
+    e.preventDefault();
+
+    const taskId = parseInt(completeTaskId.value, 10);
+    const data = {
+      actual_result: document.getElementById('completeResult').value,
+      is_failure: document.getElementById('completeFailure').checked,
+      difficulties: document.getElementById('completeDifficulties').value,
+      how_overcome: document.getElementById('completeOvercome').value,
+      next_step: document.getElementById('completeNextStep').value
+    };
+
+    fetch(`/tasks/${taskId}/complete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(data => {
+      closeModal('completeModal');
+      completeTaskForm.reset();
+
+      if (data.needs_chat && data.chat_session_id) {
+        // Редирект в чат для дозаполнения
+        window.location.href = `/chat?session_id=${data.chat_session_id}`;
+      } else {
+        showToast('Задача завершена', 'success');
+        location.reload();
+      }
+    })
+    .catch(err => {
+      showToast('Ошибка: ' + err.message, 'error');
+    });
+  });
+
+  // Modal close buttons
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal-close') || e.target.getAttribute('data-dismiss') === 'modal') {
+      const modal = e.target.closest('.modal-overlay');
+      if (modal) modal.classList.remove('active');
+    }
+  });
+
+  // Modal background click
+  document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('modal-overlay')) {
+      e.target.classList.remove('active');
+    }
+  });
+
+  // Modal open via data-toggle
+  document.addEventListener('click', (e) => {
+    if (e.target.getAttribute('data-toggle') === 'modal') {
+      const targetId = e.target.getAttribute('data-target');
+      if (targetId) openModal(targetId.slice(1)); // Remove #
+    }
+  });
+
+  // Task search
+  document.getElementById('taskSearch').addEventListener('input', (e) => {
+    const query = e.target.value.toLowerCase();
+    document.querySelectorAll('.task-card').forEach(card => {
+      const title = getAttr(card, 'task-title', '').toLowerCase();
+      card.style.display = title.includes(query) ? '' : 'none';
+    });
+  });
+})();
+</script>
+{% endblock %}

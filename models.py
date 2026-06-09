@@ -25,11 +25,17 @@ class User(db.Model):
     is_founder = db.Column(db.Boolean, default=False, nullable=False)
     role_id = db.Column(db.Integer, db.ForeignKey('roles.id'), nullable=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
+    yandex_calendar_token = db.Column(db.String(2048), nullable=True)
+    yandex_calendar_refresh_token = db.Column(db.String(2048), nullable=True)
+    yandex_calendar_token_expiry = db.Column(db.DateTime, nullable=True)
+    yandex_login = db.Column(db.String(255), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     role = db.relationship('Role', backref='users', lazy=True)
     clients = db.relationship('Client', backref='assigned_employee', lazy=True)
+    tasks = db.relationship('UserTask', backref='created_by_user', lazy=True, foreign_keys='UserTask.created_by_id')
+    chat_sessions = db.relationship('UserChatSession', backref='user', lazy=True, cascade='all, delete-orphan')
 
     __table_args__ = (
         db.Index('uq_users_single_founder', 'is_founder', unique=True,
@@ -269,3 +275,67 @@ class AIAgentRun(db.Model):
     execution_time = db.Column(db.Float)  # в секундах
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     completed_at = db.Column(db.DateTime)
+
+
+class UserTask(db.Model):
+    """Пользовательская задача с интеграцией в Яндекс.Календарь."""
+    __tablename__ = 'user_tasks'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(255), nullable=False)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False)
+    assigned_to_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    input_data = db.Column(db.Text)
+    start_time = db.Column(db.DateTime)
+    duration_minutes = db.Column(db.Integer)
+    expected_result = db.Column(db.Text)
+    goal = db.Column(db.Text)
+    action_description = db.Column(db.Text)
+    status = db.Column(db.String(20), default='pending')
+    calendar_event_uid = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    client = db.relationship('Client', backref=db.backref('tasks', lazy=True, cascade='all, delete-orphan'))
+    assigned_to = db.relationship('User', foreign_keys=[assigned_to_id], lazy=True)
+    completion = db.relationship('TaskCompletion', backref='task', uselist=False, cascade='all, delete-orphan')
+
+
+class TaskCompletion(db.Model):
+    """Результаты выполнения задачи."""
+    __tablename__ = 'task_completions'
+    id = db.Column(db.Integer, primary_key=True)
+    task_id = db.Column(db.Integer, db.ForeignKey('user_tasks.id'), unique=True, nullable=False)
+    actual_result = db.Column(db.Text)
+    is_failure = db.Column(db.Boolean, default=False)
+    difficulties = db.Column(db.Text)
+    how_overcome = db.Column(db.Text)
+    next_step = db.Column(db.Text)
+    next_task_id = db.Column(db.Integer, db.ForeignKey('user_tasks.id'))
+    completed_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    next_task = db.relationship('UserTask', foreign_keys=[next_task_id], lazy=True)
+
+
+class UserChatSession(db.Model):
+    """Сессия чата пользователя с ИИ-ассистентом."""
+    __tablename__ = 'user_chat_sessions'
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    context_type = db.Column(db.String(30), default='general')  # 'general', 'task_manager'
+    context_id = db.Column(db.Integer)  # task_id при task_manager
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages = db.relationship('UserChatMessage', backref='session', lazy=True, cascade='all, delete-orphan')
+
+
+class UserChatMessage(db.Model):
+    """Сообщение в чате пользователя."""
+    __tablename__ = 'user_chat_messages'
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('user_chat_sessions.id'), nullable=False)
+    role = db.Column(db.String(10), nullable=False)  # 'user', 'assistant'
+    content = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
