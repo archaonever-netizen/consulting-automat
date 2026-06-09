@@ -41,7 +41,9 @@ const BRIEF_DESCS: Record<string, string> = {
   point_a: 'Боли, цели и ресурсы для аудита',
   docs: 'Организационные схемы, процессы и отчётность',
 };
-const BRIEF_TYPES = ['sales', 'briefing', 'point_a', 'docs'];
+// Создавать пока можно только «Продажи». Остальные типы остаются для отображения
+// уже существующих брифов (из ранних тестов), но в списке создания их нет.
+const BRIEF_TYPES = ['sales'];
 const TAB_LABELS: Record<Tab, string> = {
   overview: 'Обзор', briefs: 'Брифы', docs: 'Документы', analytics: 'Аналитика', tasks: 'Задачи',
 };
@@ -58,6 +60,8 @@ export default function ClientDetailPage() {
   const [client, setClient] = useState<ClientDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('overview');
+  const [briefModal, setBriefModal] = useState(false);
+  const [newBriefType, setNewBriefType] = useState('');
 
   useEffect(() => {
     api.get(`/api/clients/${clientId}`)
@@ -72,13 +76,19 @@ export default function ClientDetailPage() {
   }
 
   async function createBrief(briefType: string) {
-    if (!client) return;
+    if (!client || !briefType) return;
     try {
       await api.post('/api/briefs', { brief_type: briefType, client_id: client.id });
+      setBriefModal(false);
       await reload();
     } catch (e: any) {
       alert(e.response?.data?.detail || 'Ошибка создания брифа');
     }
+  }
+
+  function openBriefModal() {
+    setNewBriefType(available[0] || '');
+    setBriefModal(true);
   }
 
   async function deleteBrief(briefId: number) {
@@ -269,13 +279,9 @@ export default function ClientDetailPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 700 }}>Брифы</h3>
               {available.length > 0 && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  {available.map(t => (
-                    <button key={t} className="btn btn-primary btn-sm" onClick={() => createBrief(t)}>
-                      <Icon name="plus" size={15} />{BRIEF_NAMES[t] || t}
-                    </button>
-                  ))}
-                </div>
+                <button className="btn btn-primary btn-sm" onClick={openBriefModal}>
+                  <Icon name="plus" size={15} />Создать бриф
+                </button>
               )}
             </div>
 
@@ -333,6 +339,25 @@ export default function ClientDetailPage() {
           </div>
         )}
       </div>
+
+      {briefModal && (
+        <div className="modal-overlay" style={{ display: 'flex' }} onClick={e => { if (e.target === e.currentTarget) setBriefModal(false); }}>
+          <div className="modal-card">
+            <h3 className="modal-title">Создать бриф</h3>
+            <p className="modal-text">Выберите тип брифа для этого клиента.</p>
+            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+              <label className="form-label" htmlFor="brief_type">Тип брифа</label>
+              <select id="brief_type" className="form-input" value={newBriefType} onChange={e => setNewBriefType(e.target.value)}>
+                {available.map(t => <option key={t} value={t}>{BRIEF_NAMES[t] || t}</option>)}
+              </select>
+            </div>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setBriefModal(false)}>Отмена</button>
+              <button type="button" className="btn btn-primary" onClick={() => createBrief(newBriefType)} disabled={!newBriefType}>Создать</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
