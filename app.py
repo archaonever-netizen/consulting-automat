@@ -144,10 +144,18 @@ with app.app_context():
 @app.before_request
 def load_logged_in_user():
     """Загрузить текущего пользователя из сессии."""
-    if request.endpoint and request.endpoint == 'static':
-        return
-    user_id = session.get('user_id')
-    g.user = User.query.get(user_id) if user_id else None
+    try:
+        print(f"[HTTP] {request.method} {request.path} - processing")
+        if request.endpoint and request.endpoint == 'static':
+            return
+        user_id = session.get('user_id')
+        g.user = User.query.get(user_id) if user_id else None
+        print(f"[HTTP] {request.method} {request.path} - user loaded: {g.user is not None}")
+    except Exception as e:
+        print(f"[HTTP] ERROR in before_request: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 @app.context_processor
 def inject_current_user():
@@ -1841,12 +1849,6 @@ def chat_send_message(session_id):
             UserChatMessage.created_at
         ).all()
 
-        # Построить история для LLM
-        llm_messages = [
-            {'role': m.role, 'content': m.content}
-            for m in messages
-        ]
-
         # Определить системный промпт в зависимости от типа сессии
         system_prompt = None
         if session_obj.context_type == 'task_manager' and session_obj.context_id:
@@ -1891,6 +1893,15 @@ def chat_send_message(session_id):
 Помогаешь пользователю с аналитикой, стратегией и планированием.
 Отвечай кратко, структурированно и по существу."""
 
+        # Построить история для LLM с системным сообщением в начале
+        llm_messages = [
+            {'role': 'system', 'content': system_prompt}
+        ]
+        llm_messages.extend([
+            {'role': m.role, 'content': m.content}
+            for m in messages
+        ])
+
         # Вызвать LLM
         from promptra_client import PromtraClient
         from deepseek_config import DeepSeekConfig
@@ -1898,7 +1909,6 @@ def chat_send_message(session_id):
         client = PromtraClient()
         response = client.chat_completion(
             messages=llm_messages,
-            system_prompt=system_prompt,
             model=DeepSeekConfig.CHAT_MODEL,
             temperature=0.5,
             max_tokens=500
