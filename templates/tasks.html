@@ -107,7 +107,12 @@
 
       <div class="form-group">
         <label for="taskAssigned">Исполнитель</label>
-        <input type="text" id="taskAssigned" placeholder="Не заполнено (можно указать позже)">
+        <select id="taskAssigned" name="assigned_to_id">
+          <option value="">Не заполнено (можно указать позже)</option>
+          {% for user in users %}
+            <option value="{{ user.id }}">{{ user.full_name or user.username }}</option>
+          {% endfor %}
+        </select>
       </div>
 
       <div class="form-row">
@@ -589,9 +594,15 @@
                 <span class="task-detail-meta-label">Статус</span>
                 <span>${getStatusLabel(data.status)}</span>
               </div>
+              ${data.assigned_to_name ? `
+                <div class="task-detail-meta-item">
+                  <span class="task-detail-meta-label">Исполнитель</span>
+                  <span>${escapeHtml(data.assigned_to_name)}</span>
+                </div>
+              ` : ''}
               ${data.start_time ? `
                 <div class="task-detail-meta-item">
-                  <span class="task-detail-meta-label">Время</span>
+                  <span class="task-detail-meta-label">Дата/время</span>
                   <span>${new Date(data.start_time).toLocaleString('ru-RU')}</span>
                 </div>
               ` : ''}

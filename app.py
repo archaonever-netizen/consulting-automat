@@ -1618,7 +1618,8 @@ def tasks():
     """Список задач текущего пользователя."""
     user_tasks = UserTask.query.filter_by(created_by_id=g.user.id).order_by(UserTask.created_at.desc()).all()
     clients = Client.query.all()
-    return render_template('tasks.html', tasks=user_tasks, clients=clients)
+    users = User.query.all()
+    return render_template('tasks.html', tasks=user_tasks, clients=clients, users=users)
 
 
 @app.route('/tasks/create', methods=['POST'])
@@ -1700,6 +1701,7 @@ def get_task(task_id):
         'client_id': task.client_id,
         'client_name': task.client.name,
         'assigned_to_id': task.assigned_to_id,
+        'assigned_to_name': task.assigned_to.full_name or task.assigned_to.username if task.assigned_to else None,
         'start_time': task.start_time.isoformat() if task.start_time else None,
         'duration_minutes': task.duration_minutes,
         'input_data': task.input_data,
