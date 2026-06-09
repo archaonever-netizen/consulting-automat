@@ -924,11 +924,6 @@ _EMPTY_SECTIONS = {
 def analytics():
     return render_template('empty_section.html', section=_EMPTY_SECTIONS['analytics'])
 
-@app.route('/tasks')
-@login_required
-def tasks():
-    return render_template('empty_section.html', section=_EMPTY_SECTIONS['tasks'])
-
 @app.route('/templates')
 @login_required
 def templates_view():
