@@ -2267,9 +2267,11 @@ def check_incomplete_tasks():
 
 
 # Запустить worker в фоновом потоке при старте приложения
-_worker_thread = threading.Thread(target=check_incomplete_tasks, daemon=True)
-_worker_thread.start()
-print("[APP] Background task worker started")
+# TODO: переделать worker чтобы он не падал
+# _worker_thread = threading.Thread(target=check_incomplete_tasks, daemon=True)
+# _worker_thread.start()
+# print("[APP] Background task worker started")
+print("[APP] Background task worker DISABLED for now")
 
 
 if __name__ == '__main__':
