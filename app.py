@@ -2130,15 +2130,24 @@ def send_message_to_subchat(subchat_id):
                     missing.append('action_description')
                 if not task.expected_result:
                     missing.append('expected_result')
+                if not task.start_time:
+                    missing.append('start_time')
+                if not task.duration_minutes:
+                    missing.append('duration_minutes')
+                if not task.assigned_to_id:
+                    missing.append('assigned_to_id')
 
                 if missing:
                     field_names = {
                         'input_data': 'Вводные данные',
                         'goal': 'Цель действия',
                         'action_description': 'Само действие',
-                        'expected_result': 'Ожидаемый результат'
+                        'expected_result': 'Ожидаемый результат',
+                        'start_time': 'Дата/время назначения',
+                        'duration_minutes': 'Длительность (мин)',
+                        'assigned_to_id': 'Ответственный'
                     }
-                    field_order = ['input_data', 'goal', 'action_description', 'expected_result']
+                    field_order = ['input_data', 'goal', 'action_description', 'expected_result', 'start_time', 'duration_minutes', 'assigned_to_id']
                     missing_ordered = [f for f in field_order if f in missing]
 
                     # Построить актуальный план с чекбоксами
@@ -2149,39 +2158,49 @@ def send_message_to_subchat(subchat_id):
                     plan = '\n'.join(plan_items)
 
                     field_examples = {
-                        'input_data': 'Какие вводные данные есть для этой задачи? (пример: "Есть данные 100 клиентов", "Бюджет 500k")',
-                        'goal': 'В чём ЦЕЛЬ? Что нужно достичь? (пример: "Увеличить продажи на 30%", "Внедрить CRM в отдел")',
-                        'action_description': 'КАК это сделать? Какие действия нужны? (пример: "Обучить команду, настроить процессы, провести встречи")',
-                        'expected_result': 'РЕЗУЛЬТАТ? Как узнаем что выполнено? (пример: "Отчет с метриками за месяц", "Все настроено и тестировано")'
+                        'input_data': 'Какие вводные данные есть для этой задачи? (пример: "Есть список 100 клиентов", "Бюджет 500k")',
+                        'goal': 'В чём ЦЕЛЬ? Что нужно достичь? (пример: "Увеличить продажи на 30%")',
+                        'action_description': 'КАК это сделать? Конкретные шаги (пример: "Обучить команду, настроить процессы")',
+                        'expected_result': 'РЕЗУЛЬТАТ? Как узнаем что выполнено? (пример: "Отчет с метриками")',
+                        'start_time': 'На какое время/дату назначена эта задача? (свободный ответ)',
+                        'duration_minutes': 'Сколько времени (в минутах или часах) закладываешь на выполнение?',
+                        'assigned_to_id': 'Кто это будет выполнять — ты сам или кто-то другой из команды?'
                     }
 
                     system_prompt = f"""Ты — ИИ-менеджер задач ШЕФ. Дозаполняешь задачу: "{task.title}"
 
-📋 ТЕКУЩИЙ ПЛАН:
+ЭТАП 1️⃣: ЗАПОЛНЕНИЕ ПОЛЕЙ
+📋 ПЛАН:
 {plan}
 
-ПОЛЯ, КОТОРЫЕ НУЖНО ЗАПОЛНИТЬ (в этом порядке!):
-{chr(10).join(f"- {field_names[f]}: {field_examples[f]}" for f in missing_ordered)}
+СПРАШИВАЙ В ПОРЯДКЕ:
+{chr(10).join(f"{i+1}. {field_names[f]}: {field_examples[f]}" for i, f in enumerate(missing_ordered))}
 
-КАК РАБОТАТЬ:
-1️⃣ Спроси ТОЛЬКО ОДНО из незаполненных полей (☐ в плане выше, в порядке списка)
-2️⃣ Получил ответ пользователя:
-   • Если ответ полный и в точку → переходи к пункту 3
-   • Если ответ неполный/странный (тип "11", "да", "мм") → попроси уточнение
-   • Если пользователь спросил что-то не по теме → вежливо верни его к плану
-3️⃣ Когда ответ хороший:
-   • Предложи улучшение формулировки (сделай текст четче, профессиональнее)
-   • Подтверди что поле заполнено: "✓ Принял!"
-   • ЗАТЕМ отправь JSON: {{"field": "input_data" или "goal" или "action_description" или "expected_result", "value": "финальный текст максимум 3 предложения", "done": false}}
-   • ЗАТЕМ покажи обновленный ПЛАН (какие ☐ осталось, какие ✓ готово)
-4️⃣ Когда ВСЕ поля заполнены: {{"done": true}}
+ПРАВИЛА ЭТАПА 1:
+- Спроси ОДНО поле (в порядке выше)
+- Если ответ неполный/странный → попроси уточнение
+- Когда ответ хороший:
+  • Предложи улучшение формулировки
+  • Подтверди: "✓ Принял!"
+  • Отправь JSON: {{"field": "имя", "value": "значение", "done": false}}
+  • Покажи обновленный ПЛАН
+
+ЭТАП 2️⃣: SMART АНАЛИЗ (когда все ☐ станут ✓)
+Проверишь задачу по SMART:
+- ✓ Specific: Цель четко сформулирована?
+- ✓ Measurable: Результаты измеримы?
+- ✓ Achievable: Реалистично ли за указанное время?
+- ✓ Relevant: Актуальна ли?
+- ✓ Time-bound: Четко ли определены сроки?
+
+Если проблемы → предложи корректировки (какие поля отредактировать)
+Если всё ок → похвали и попроси подтверждение: "Всё готово? Подтверди 'да'"
+После подтверждения → {{"phase": "submit", "done": true}}
 
 ТРЕБОВАНИЯ:
-✓ Всегда помни о ПЛАНЕ выше
-✓ Если пользователь отвлёкся — верни его к плану с кратким напоминанием
-✓ После каждого заполненного поля — покажи прогресс (сколько ещё осталось)
-✓ Говори кратко и по-русски
-✓ JSON обязателен после каждого заполненного поля"""
+✓ Кратко, по-русски, по существу
+✓ JSON обязателен
+✓ Помни о плане и показывай прогресс"""
 
         # Собрать сообщения для LLM
         llm_messages = [
@@ -2350,9 +2369,13 @@ def check_incomplete_tasks():
                                         'input_data': '📥 Вводные данные',
                                         'goal': '🎯 Цель действия',
                                         'action_description': '🔧 Само действие',
-                                        'expected_result': '✅ Ожидаемый результат'
+                                        'expected_result': '✅ Ожидаемый результат',
+                                        'start_time': '📅 Дата/время назначения',
+                                        'duration_minutes': '⏱ Длительность (мин)',
+                                        'assigned_to_id': '👤 Ответственный'
                                     }
-                                    plan_lines = [f"{'☐ ' if f in missing else '✓ '}{field_labels[f]}" for f in ['input_data', 'goal', 'action_description', 'expected_result']]
+                                    field_order = ['input_data', 'goal', 'action_description', 'expected_result', 'start_time', 'duration_minutes', 'assigned_to_id']
+                                    plan_lines = [f"{'☐ ' if f in missing else '✓ '}{field_labels[f]}" for f in field_order]
                                     plan = '\n'.join(plan_lines)
 
                                     initial_msg = UserChatMessage(
