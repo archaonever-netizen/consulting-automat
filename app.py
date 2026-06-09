@@ -134,42 +134,37 @@ def init_db():
 
                 print("[APP] Checking database schema...")
 
-                # Пересоздать user_chat_sessions если нужно (удалить старые столбцы)
+                # Полностью пересоздать таблицы если нужно (избавиться от старых данных)
                 try:
-                    has_context_type = db.session.execute(text(
-                        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_chat_sessions' AND column_name = 'context_type')"
-                    )).scalar()
-
-                    if has_context_type:
-                        print("[APP] Cleaning up user_chat_sessions table...")
-                        # Сохраним данные
-                        db.session.execute(text("""
-                            ALTER TABLE user_chat_sessions
-                            DROP COLUMN IF EXISTS context_type,
-                            DROP COLUMN IF EXISTS context_id
-                        """))
-                        print("[APP] Old columns removed")
+                    print("[APP] Dropping old chat tables...")
+                    db.session.execute(text("DROP TABLE IF EXISTS user_chat_messages CASCADE"))
+                    db.session.execute(text("DROP TABLE IF EXISTS user_subchats CASCADE"))
+                    db.session.execute(text("DROP TABLE IF EXISTS user_chat_sessions CASCADE"))
+                    db.session.commit()
+                    print("[APP] Old tables dropped")
                 except Exception as e:
-                    print(f"[APP] Could not clean columns: {e}")
+                    print(f"[APP] Error dropping tables: {e}")
+                    db.session.rollback()
 
-                # Добавить UNIQUE constraint если его нет
+                # Создать user_chat_sessions новую
                 try:
                     db.session.execute(text("""
-                        ALTER TABLE user_chat_sessions
-                        ADD CONSTRAINT uq_user_chat_sessions_user_id UNIQUE (user_id)
+                        CREATE TABLE IF NOT EXISTS user_chat_sessions (
+                            id SERIAL PRIMARY KEY,
+                            user_id INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+                            title VARCHAR(255) NOT NULL,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
                     """))
+                    print("[APP] user_chat_sessions table created")
                 except Exception as e:
-                    print(f"[APP] UNIQUE constraint already exists: {e}")
+                    print(f"[APP] user_chat_sessions exists: {e}")
 
-                # Создать user_subchats если её нет
-                result = db.session.execute(text(
-                    "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_subchats')"
-                )).scalar()
-
-                if not result:
-                    print("[APP] Creating user_subchats table...")
+                # Создать user_subchats
+                try:
                     db.session.execute(text("""
-                        CREATE TABLE user_subchats (
+                        CREATE TABLE IF NOT EXISTS user_subchats (
                             id SERIAL PRIMARY KEY,
                             session_id INTEGER NOT NULL REFERENCES user_chat_sessions(id) ON DELETE CASCADE,
                             task_id INTEGER REFERENCES user_tasks(id) ON DELETE SET NULL,
@@ -180,25 +175,29 @@ def init_db():
                         )
                     """))
                     print("[APP] user_subchats table created")
+                except Exception as e:
+                    print(f"[APP] user_subchats exists: {e}")
 
-                # Добавить subchat_id в user_chat_messages если его нет
-                result = db.session.execute(text(
-                    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_chat_messages' AND column_name = 'subchat_id')"
-                )).scalar()
-
-                if not result:
-                    print("[APP] Adding subchat_id column to user_chat_messages...")
+                # Создать user_chat_messages новую
+                try:
                     db.session.execute(text("""
-                        ALTER TABLE user_chat_messages
-                        ADD COLUMN subchat_id INTEGER,
-                        ADD COLUMN tokens INTEGER DEFAULT 0
+                        CREATE TABLE IF NOT EXISTS user_chat_messages (
+                            id SERIAL PRIMARY KEY,
+                            subchat_id INTEGER NOT NULL REFERENCES user_subchats(id) ON DELETE CASCADE,
+                            role VARCHAR(10) NOT NULL,
+                            content TEXT NOT NULL,
+                            tokens INTEGER DEFAULT 0,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        )
                     """))
-                    print("[APP] Columns added")
+                    print("[APP] user_chat_messages table created")
+                except Exception as e:
+                    print(f"[APP] user_chat_messages exists: {e}")
 
                 db.session.commit()
                 print("[APP] Database schema check completed successfully")
             except Exception as e:
-                print(f"[APP] Migration warning: {e}")
+                print(f"[APP] Migration error: {e}")
                 import traceback
                 traceback.print_exc()
                 db.session.rollback()
