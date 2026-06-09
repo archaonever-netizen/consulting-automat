@@ -2037,5 +2037,87 @@ def send_message_to_subchat(subchat_id):
         return jsonify({'error': str(e), 'status': 'failed'}), 500
 
 
+# -------------------------------------------------------------------
+# Фоновый worker для проверки незаполненных задач
+# -------------------------------------------------------------------
+
+def check_incomplete_tasks():
+    """Проверяет все незаполненные задачи и создаёт подчаты для них."""
+    while True:
+        try:
+            with app.app_context():
+                # Найти все пользователей
+                users = User.query.all()
+
+                for user in users:
+                    try:
+                        # Получить основную сессию пользователя
+                        session = get_or_create_main_session(user.id)
+
+                        # Найти все задачи с незаполненными полями
+                        incomplete_tasks = UserTask.query.filter_by(
+                            created_by_id=user.id,
+                            status='pending'
+                        ).all()
+
+                        for task in incomplete_tasks:
+                            # Проверить незаполненные поля
+                            missing = []
+                            if not task.input_data:
+                                missing.append('input_data')
+                            if not task.goal:
+                                missing.append('goal')
+                            if not task.action_description:
+                                missing.append('action_description')
+                            if not task.expected_result:
+                                missing.append('expected_result')
+
+                            # Если есть незаполненные - создать подчат
+                            if missing:
+                                # Проверить нет ли уже активного подчата для этой задачи
+                                existing = UserSubChat.query.filter_by(
+                                    session_id=session.id,
+                                    task_id=task.id
+                                ).filter(UserSubChat.tokens_used < 100000).first()
+
+                                if not existing:
+                                    # Создать новый подчат
+                                    subchat = UserSubChat(
+                                        session_id=session.id,
+                                        task_id=task.id,
+                                        version=1
+                                    )
+                                    db.session.add(subchat)
+                                    db.session.flush()
+
+                                    # Добавить первое сообщение от ассистента
+                                    initial_msg = UserChatMessage(
+                                        subchat_id=subchat.id,
+                                        role='assistant',
+                                        content=f'Привет! Помогу заполнить задачу "{task.title}". '
+                                               f'Давайте начнём с первого поля.'
+                                    )
+                                    db.session.add(initial_msg)
+
+                                db.session.commit()
+
+                    except Exception as e:
+                        print(f"[WORKER] Ошибка при проверке задач пользователя {user.id}: {e}")
+                        db.session.rollback()
+
+            # Проверять каждые 5 секунд
+            _time.sleep(5)
+
+        except Exception as e:
+            print(f"[WORKER] Критическая ошибка в worker: {e}")
+            _time.sleep(10)
+
+
+# Запустить worker в фоновом потоке при старте приложения
+_worker_thread = threading.Thread(target=check_incomplete_tasks, daemon=True)
+_worker_thread.start()
+print("[APP] Background task worker started")
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0', debug=True)
