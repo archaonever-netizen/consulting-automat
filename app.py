@@ -1987,6 +1987,21 @@ def get_subchats():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/chat/subchat/new', methods=['POST'])
+@login_required
+def create_subchat():
+    """Создать новый общий подчат (без привязки к задаче)."""
+    try:
+        session = get_or_create_main_session(g.user.id)
+        subchat = UserSubChat(session_id=session.id, version=1)
+        db.session.add(subchat)
+        db.session.commit()
+        return jsonify({'id': subchat.id, 'version': subchat.version, 'tokens_used': 0}), 201
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/chat/subchat/<int:subchat_id>/messages', methods=['GET'])
 @login_required
 def get_subchat_messages(subchat_id):
@@ -2268,11 +2283,9 @@ def check_incomplete_tasks():
 
 
 # Запустить worker в фоновом потоке при старте приложения
-# TODO: переделать worker чтобы он не падал
-# _worker_thread = threading.Thread(target=check_incomplete_tasks, daemon=True)
-# _worker_thread.start()
-# print("[APP] Background task worker started")
-print("[APP] Background task worker DISABLED for now")
+_worker_thread = threading.Thread(target=check_incomplete_tasks, daemon=True)
+_worker_thread.start()
+print("[APP] Background task worker started")
 
 
 if __name__ == '__main__':

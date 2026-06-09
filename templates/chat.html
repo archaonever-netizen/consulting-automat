@@ -64,7 +64,10 @@
   <div class="chat-subchats-panel" id="subchatsPanel">
     <div class="subchats-header">
       <h4>Подчаты</h4>
-      <button id="btnRefreshSubchats" title="Обновить" style="background: none; border: none; cursor: pointer; font-size: 1.2rem;">🔄</button>
+      <div style="display:flex;gap:0.5rem;align-items:center;">
+        <button id="btnNewSubchat" title="Новый чат" style="background:#4f46e5;color:#fff;border:none;border-radius:6px;padding:0.3rem 0.7rem;cursor:pointer;font-size:0.85rem;">+ Новый</button>
+        <button id="btnRefreshSubchats" title="Обновить" style="background: none; border: none; cursor: pointer; font-size: 1.2rem;">🔄</button>
+      </div>
     </div>
     <div class="subchats-list" id="subchatsList"></div>
   </div>
@@ -645,15 +648,30 @@ function showToast(message, type = 'info') {
   setTimeout(() => toast.remove(), 3000);
 }
 
+async function createSubchat() {
+  try {
+    const res = await fetch('/api/chat/subchat/new', { method: 'POST' });
+    if (!res.ok) { showToast('Ошибка создания чата', 'error'); return; }
+    await loadSubchats();
+    // Автоматически выбрать только что созданный (первый в списке)
+    if (subchats.length > 0) selectSubchat(subchats[0].id, subchats[0].task_title);
+  } catch (e) {
+    showToast('Ошибка создания чата', 'error');
+  }
+}
+
 // Event listeners
 document.getElementById('btnSend').onclick = sendMessage;
 document.getElementById('msgInput').onkeypress = (e) => {
   if (e.key === 'Enter') sendMessage();
 };
 document.getElementById('btnRefreshSubchats').onclick = loadSubchats;
+document.getElementById('btnNewSubchat').onclick = createSubchat;
 
-// Load on start
-loadSubchats();
-setInterval(loadSubchats, 10000); // Обновлять подчаты каждые 10 сек
+// Load on start — авто-создать чат если список пуст
+loadSubchats().then(async () => {
+  if (subchats.length === 0) await createSubchat();
+});
+setInterval(loadSubchats, 10000);
 </script>
 {% endblock %}
