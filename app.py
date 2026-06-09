@@ -8,7 +8,7 @@ import time as _time
 from datetime import datetime, timedelta
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, jsonify, make_response, session, g, abort, flash
-from models import db, Client, Brief, User, Role, Function, Department, FunctionDepartmentLink, AITask, AIAgentRun, UserTask, TaskCompletion, UserChatSession, UserChatMessage
+from models import db, Client, Brief, User, Role, Function, Department, FunctionDepartmentLink, AITask, AIAgentRun, UserTask, TaskCompletion, UserChatSession, UserSubChat, UserChatMessage
 from fpdf import FPDF
 from dotenv import load_dotenv
 
@@ -1771,63 +1771,132 @@ def delete_task(task_id):
 
 
 # -------------------------------------------------------------------
-# ИИ-Чат (User Chat)
+# ИИ-Чат (User Chat with SubChats)
 # -------------------------------------------------------------------
+
+def get_or_create_main_session(user_id):
+    """Получить или создать основную чат-сессию 'AI Assistant' для пользователя."""
+    session = UserChatSession.query.filter_by(user_id=user_id).first()
+    if not session:
+        session = UserChatSession(
+            user_id=user_id,
+            title='AI Assistant'
+        )
+        db.session.add(session)
+        db.session.commit()
+    return session
+
+
+def get_or_create_subchat(session_id, task_id=None):
+    """Получить существующий подчат или создать новый для задачи."""
+    if task_id:
+        # Найти последний подчат для этой задачи
+        subchat = UserSubChat.query.filter_by(
+            session_id=session_id,
+            task_id=task_id
+        ).order_by(UserSubChat.version.desc()).first()
+
+        # Если существует и имеет < 100K токенов - использовать его
+        if subchat and subchat.tokens_used < 100000:
+            return subchat
+
+        # Иначе создать новый с увеличенной версией
+        new_version = (subchat.version + 1) if subchat else 1
+        new_subchat = UserSubChat(
+            session_id=session_id,
+            task_id=task_id,
+            version=new_version
+        )
+        db.session.add(new_subchat)
+        db.session.commit()
+        return new_subchat
+    else:
+        # Общий чат (без привязки к задаче)
+        subchat = UserSubChat.query.filter_by(
+            session_id=session_id,
+            task_id=None
+        ).order_by(UserSubChat.version.desc()).first()
+
+        if subchat and subchat.tokens_used < 100000:
+            return subchat
+
+        new_version = (subchat.version + 1) if subchat else 1
+        new_subchat = UserSubChat(
+            session_id=session_id,
+            version=new_version
+        )
+        db.session.add(new_subchat)
+        db.session.commit()
+        return new_subchat
+
 
 @app.route('/chat', methods=['GET'])
 @login_required
 def chat():
-    """Список всех чат-сессий пользователя или создание новой сессии."""
-    # Если это GET с параметром session_id - открыть конкретный чат
-    session_id = request.args.get('session_id', type=int)
+    """Главная страница чата с AI Assistant."""
+    session = get_or_create_main_session(g.user.id)
+    return render_template('chat.html', session=session)
 
-    if session_id:
-        session_obj = UserChatSession.query.filter_by(
-            id=session_id,
-            user_id=g.user.id
-        ).first_or_404()
 
-        return render_template('chat.html', active_session=session_obj)
-
-    # Иначе - показать список сессий
-    sessions = UserChatSession.query.filter_by(user_id=g.user.id).order_by(
-        UserChatSession.updated_at.desc()
+@app.route('/api/chat/subchats', methods=['GET'])
+@login_required
+def get_subchats():
+    """Получить список подчатов в сессии пользователя."""
+    session = get_or_create_main_session(g.user.id)
+    subchats = UserSubChat.query.filter_by(session_id=session.id).order_by(
+        UserSubChat.created_at.desc()
     ).all()
 
-    return render_template('chat.html', sessions=sessions)
+    return jsonify([{
+        'id': sc.id,
+        'task_id': sc.task_id,
+        'task_title': sc.task.title if sc.task else 'Общий чат',
+        'version': sc.version,
+        'tokens_used': sc.tokens_used,
+        'created_at': sc.created_at.isoformat(),
+        'message_count': len(sc.messages)
+    } for sc in subchats]), 200
 
 
-@app.route('/chat/session/new', methods=['POST'])
+@app.route('/api/chat/subchat/<int:subchat_id>/messages', methods=['GET'])
 @login_required
-def new_chat_session():
-    """Создать новую чат-сессию."""
-    try:
-        data = request.get_json()
-        title = data.get('title', 'Новый чат').strip() or 'Новый чат'
+def get_subchat_messages(subchat_id):
+    """Получить сообщения из подчата."""
+    subchat = UserSubChat.query.get_or_404(subchat_id)
+    session = subchat.session
 
-        session = UserChatSession(
-            user_id=g.user.id,
-            title=title,
-            context_type='general'
-        )
-        db.session.add(session)
-        db.session.commit()
+    # Проверка доступа
+    if session.user_id != g.user.id:
+        abort(403)
 
-        return jsonify({'session_id': session.id}), 201
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'error': str(e)}), 500
+    messages = UserChatMessage.query.filter_by(subchat_id=subchat_id).order_by(
+        UserChatMessage.created_at.asc()
+    ).all()
+
+    return jsonify([{
+        'id': m.id,
+        'role': m.role,
+        'content': m.content,
+        'tokens': m.tokens,
+        'created_at': m.created_at.isoformat()
+    } for m in messages]), 200
 
 
-@app.route('/chat/<int:session_id>/send', methods=['POST'])
+@app.route('/api/chat/subchat/<int:subchat_id>/send', methods=['POST'])
 @login_required
-def chat_send_message(session_id):
-    """Отправить сообщение и получить ответ AI."""
+def send_message_to_subchat(subchat_id):
+    """Отправить сообщение в подчат и получить ответ AI."""
     try:
-        session_obj = UserChatSession.query.filter_by(
-            id=session_id,
-            user_id=g.user.id
-        ).first_or_404()
+        subchat = UserSubChat.query.get_or_404(subchat_id)
+        session = subchat.session
+
+        # Проверка доступа
+        if session.user_id != g.user.id:
+            abort(403)
+
+        # Проверка лимита токенов
+        if subchat.tokens_used >= 100000:
+            return jsonify({'error': 'Подчат достиг лимита токенов. Создан новый.', 'need_new_subchat': True}), 429
 
         data = request.get_json()
         user_message = data.get('message', '').strip()
@@ -1837,24 +1906,28 @@ def chat_send_message(session_id):
 
         # Сохранить сообщение пользователя
         user_msg = UserChatMessage(
-            session_id=session_id,
+            subchat_id=subchat_id,
             role='user',
-            content=user_message
+            content=user_message,
+            tokens=len(user_message.split()) * 1.3  # приблизительно
         )
         db.session.add(user_msg)
         db.session.flush()
 
-        # Получить историю сессии для контекста
-        messages = UserChatMessage.query.filter_by(session_id=session_id).order_by(
-            UserChatMessage.created_at
+        # Получить историю из подчата
+        messages = UserChatMessage.query.filter_by(subchat_id=subchat_id).order_by(
+            UserChatMessage.created_at.asc()
         ).all()
 
-        # Определить системный промпт в зависимости от типа сессии
-        system_prompt = None
-        if session_obj.context_type == 'task_manager' and session_obj.context_id:
-            task = UserTask.query.get(session_obj.context_id)
+        # Определить системный промпт
+        system_prompt = """Ты — полезный ИИ-ассистент в системе управления консалтингом ШЕФ.
+Помогаешь пользователю с аналитикой, стратегией и планированием.
+Отвечай кратко, структурированно и по существу."""
+
+        # Если подчат привязан к задаче - использовать task_manager промпт
+        if subchat.task_id:
+            task = subchat.task
             if task:
-                # Найти незаполненные поля
                 missing = []
                 if not task.input_data:
                     missing.append('input_data')
@@ -1865,16 +1938,16 @@ def chat_send_message(session_id):
                 if not task.expected_result:
                     missing.append('expected_result')
 
-                field_names = {
-                    'input_data': 'Вводные данные',
-                    'goal': 'Цель действия',
-                    'action_description': 'Само действие',
-                    'expected_result': 'Ожидаемый результат'
-                }
+                if missing:
+                    field_names = {
+                        'input_data': 'Вводные данные',
+                        'goal': 'Цель действия',
+                        'action_description': 'Само действие',
+                        'expected_result': 'Ожидаемый результат'
+                    }
+                    missing_names = ', '.join(field_names.get(f, f) for f in missing)
 
-                missing_names = ', '.join(field_names.get(f, f) for f in missing)
-
-                system_prompt = f"""Ты — ИИ-менеджер задач в системе ШЕФ.
+                    system_prompt = f"""Ты — ИИ-менеджер задач в системе ШЕФ.
 Твоя задача помочь дозаполнить незаполненные поля задачи: "{task.title}"
 
 Текущие незаполненные поля: {missing_names}
@@ -1882,18 +1955,14 @@ def chat_send_message(session_id):
 Инструкции:
 1. Задавай РОВНО ОДИН вопрос за раз
 2. После ответа пользователя определи: является ли ответ однозначным значением для поля?
-3. Если да и ответ полный - ОБЯЗАТЕЛЬНО в конце своего ответа вернися JSON: {{"field": "...", "value": "...", "done": false}}
+3. Если да и ответ полный - ОБЯЗАТЕЛЬНО в конце своего ответа верни JSON: {{"field": "...", "value": "...", "done": false}}
    где field может быть: input_data, goal, action_description, expected_result
 4. Структурируй значение емко и коротко (максимум 2-3 предложения)
 5. Если все поля заполнены - верни {{"done": true}}
 
 Говори кратко и по существу, на русском языке."""
-        else:
-            system_prompt = """Ты — полезный ИИ-ассистент в системе управления консалтингом ШЕФ.
-Помогаешь пользователю с аналитикой, стратегией и планированием.
-Отвечай кратко, структурированно и по существу."""
 
-        # Построить история для LLM с системным сообщением в начале
+        # Собрать сообщения для LLM
         llm_messages = [
             {'role': 'system', 'content': system_prompt}
         ]
@@ -1918,39 +1987,37 @@ def chat_send_message(session_id):
             return jsonify({'error': f"LLM error: {response['error']}"}), 500
 
         ai_response = response['content']
+        tokens_used = response.get('tokens_used', 0)
 
         # Сохранить ответ AI
         ai_msg = UserChatMessage(
-            session_id=session_id,
+            subchat_id=subchat_id,
             role='assistant',
-            content=ai_response
+            content=ai_response,
+            tokens=tokens_used
         )
         db.session.add(ai_msg)
 
+        # Обновить счётчик токенов в подчате
+        subchat.tokens_used += tokens_used
+
         # Если это task_manager - попытаться парсить JSON и обновить задачу
         parsed_json = None
-        if session_obj.context_type == 'task_manager' and session_obj.context_id:
+        if subchat.task_id:
             try:
-                # Попытаться извлечь JSON из конца ответа
                 import json
                 if '{' in ai_response and '}' in ai_response:
-                    # Найти последний JSON объект в ответе
                     start = ai_response.rfind('{')
                     end = ai_response.rfind('}') + 1
                     if start >= 0 and end > start:
                         json_str = ai_response[start:end]
                         parsed_json = json.loads(json_str)
 
-                        # Если есть field и value - обновить задачу
                         if parsed_json.get('field') and parsed_json.get('value'):
-                            task = UserTask.query.get(session_obj.context_id)
+                            task = subchat.task
                             if task:
                                 setattr(task, parsed_json['field'], parsed_json['value'])
                                 task.updated_at = datetime.utcnow()
-
-                        # Если done: true - завершить сессию
-                        if parsed_json.get('done'):
-                            session_obj.context_type = 'completed'
             except Exception as e:
                 print(f"Ошибка парсинга JSON: {e}")
 
@@ -1958,7 +2025,9 @@ def chat_send_message(session_id):
 
         return jsonify({
             'response': ai_response,
-            'parsed_json': parsed_json
+            'parsed_json': parsed_json,
+            'tokens_used': tokens_used,
+            'subchat_tokens': subchat.tokens_used
         }), 200
 
     except Exception as e:
