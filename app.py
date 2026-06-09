@@ -2101,9 +2101,15 @@ def send_message_to_subchat(subchat_id):
                         'action_description': 'Само действие',
                         'expected_result': 'Ожидаемый результат'
                     }
-                    missing_order = ['input_data', 'goal', 'action_description', 'expected_result']
-                    missing_ordered = [f for f in missing_order if f in missing]
-                    missing_names = ', '.join(field_names.get(f, f) for f in missing_ordered)
+                    field_order = ['input_data', 'goal', 'action_description', 'expected_result']
+                    missing_ordered = [f for f in field_order if f in missing]
+
+                    # Построить актуальный план с чекбоксами
+                    plan_items = []
+                    for f in field_order:
+                        status = '✓' if f not in missing else '☐'
+                        plan_items.append(f"{status} {field_names[f]}")
+                    plan = '\n'.join(plan_items)
 
                     field_examples = {
                         'input_data': 'Какие вводные данные есть для этой задачи? (пример: "Есть данные 100 клиентов", "Бюджет 500k")',
@@ -2114,24 +2120,31 @@ def send_message_to_subchat(subchat_id):
 
                     system_prompt = f"""Ты — ИИ-менеджер задач ШЕФ. Дозаполняешь задачу: "{task.title}"
 
-ПОРЯДОК ЗАПОЛНЕНИЯ (в этом порядке!):
+📋 ТЕКУЩИЙ ПЛАН:
+{plan}
+
+ПОЛЯ, КОТОРЫЕ НУЖНО ЗАПОЛНИТЬ (в этом порядке!):
 {chr(10).join(f"- {field_names[f]}: {field_examples[f]}" for f in missing_ordered)}
 
 КАК РАБОТАТЬ:
-1️⃣ Спроси ТОЛЬКО ОДНО из незаполненных полей (в порядке выше)
+1️⃣ Спроси ТОЛЬКО ОДНО из незаполненных полей (☐ в плане выше, в порядке списка)
 2️⃣ Получил ответ пользователя:
    • Если ответ полный и в точку → переходи к пункту 3
-   • Если ответ неполный/неправильный (тип "11", "да", "мм") → попроси уточнение
+   • Если ответ неполный/странный (тип "11", "да", "мм") → попроси уточнение
+   • Если пользователь спросил что-то не по теме → вежливо верни его к плану
 3️⃣ Когда ответ хороший:
    • Предложи улучшение формулировки (сделай текст четче, профессиональнее)
+   • Подтверди что поле заполнено: "✓ Принял!"
    • ЗАТЕМ отправь JSON: {{"field": "input_data" или "goal" или "action_description" или "expected_result", "value": "финальный текст максимум 3 предложения", "done": false}}
+   • ЗАТЕМ покажи обновленный ПЛАН (какие ☐ осталось, какие ✓ готово)
 4️⃣ Когда ВСЕ поля заполнены: {{"done": true}}
 
 ТРЕБОВАНИЯ:
+✓ Всегда помни о ПЛАНЕ выше
+✓ Если пользователь отвлёкся — верни его к плану с кратким напоминанием
+✓ После каждого заполненного поля — покажи прогресс (сколько ещё осталось)
 ✓ Говори кратко и по-русски
-✓ JSON обязателен после каждого заполненного поля
-✓ Помогай улучшать формулировки
-✓ Не прыгай на следующее поле пока текущее не заполнено"""
+✓ JSON обязателен после каждого заполненного поля"""
 
         # Собрать сообщения для LLM
         llm_messages = [
@@ -2295,12 +2308,25 @@ def check_incomplete_tasks():
                                     db.session.add(subchat)
                                     db.session.flush()
 
-                                    # Добавить первое сообщение от ассистента
+                                    # Создать план заполнения
+                                    field_labels = {
+                                        'input_data': '📥 Вводные данные',
+                                        'goal': '🎯 Цель действия',
+                                        'action_description': '🔧 Само действие',
+                                        'expected_result': '✅ Ожидаемый результат'
+                                    }
+                                    plan_lines = [f"{'☐ ' if f in missing else '✓ '}{field_labels[f]}" for f in ['input_data', 'goal', 'action_description', 'expected_result']]
+                                    plan = '\n'.join(plan_lines)
+
                                     initial_msg = UserChatMessage(
                                         subchat_id=subchat.id,
                                         role='assistant',
-                                        content=f'Привет! Помогу заполнить задачу "{task.title}". '
-                                               f'Давайте начнём с первого поля.'
+                                        content=f'''Привет! Помогу дозаполнить задачу "{task.title}".
+
+📋 ПЛАН ЗАПОЛНЕНИЯ:
+{plan}
+
+Давайте начнём! Спрошу по одному полю в порядке списка.'''
                                     )
                                     db.session.add(initial_msg)
 
