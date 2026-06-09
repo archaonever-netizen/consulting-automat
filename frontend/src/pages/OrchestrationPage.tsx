@@ -28,7 +28,7 @@ interface OrchestrationRead {
 
 type Mode = 'network' | 'pipeline';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 export default function OrchestrationPage() {

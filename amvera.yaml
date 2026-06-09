@@ -1,6 +1,9 @@
 meta:
-  environment: python
+  environment: docker
+
+build:
+  dockerfile: Dockerfile
 
 run:
-  command: gunicorn backend.main:app --bind 0.0.0.0:5000 --workers 1 --timeout 300 --worker-class uvicorn.workers.UvicornWorker
-  containerPort: 5000
+  persistenceMount: /data
+  containerPort: 80
