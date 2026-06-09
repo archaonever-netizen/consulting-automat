@@ -298,7 +298,6 @@ class UserTask(db.Model):
 
     client = db.relationship('Client', backref=db.backref('tasks', lazy=True, cascade='all, delete-orphan'))
     assigned_to = db.relationship('User', foreign_keys=[assigned_to_id], lazy=True)
-    completion = db.relationship('TaskCompletion', foreign_keys='TaskCompletion.task_id', backref='task', uselist=False, cascade='all, delete-orphan')
 
 
 class TaskCompletion(db.Model):
@@ -314,6 +313,7 @@ class TaskCompletion(db.Model):
     next_task_id = db.Column(db.Integer, db.ForeignKey('user_tasks.id'))
     completed_at = db.Column(db.DateTime, default=datetime.utcnow)
 
+    task = db.relationship('UserTask', foreign_keys=[task_id], backref=db.backref('completion', uselist=False, cascade='all, delete-orphan'))
     next_task = db.relationship('UserTask', foreign_keys=[next_task_id], lazy=True)
 
 
