@@ -4,8 +4,14 @@ import os
 import requests
 from datetime import datetime, timedelta
 from urllib.parse import urlencode
-import caldav
-from caldav.elements import dav
+
+try:
+    import caldav
+    from caldav.elements import dav
+    CALDAV_AVAILABLE = True
+except ImportError:
+    print("[CALENDAR] Warning: caldav not installed, calendar integration disabled")
+    CALDAV_AVAILABLE = False
 
 
 YANDEX_OAUTH_AUTH_URL = 'https://oauth.yandex.ru/authorize'
