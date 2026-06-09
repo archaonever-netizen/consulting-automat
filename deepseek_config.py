@@ -18,10 +18,10 @@ class DeepSeekConfig:
 
     # Max tokens для разных типов операций
     TOKENS = {
-        'analyze_project': 1500,      # анализ проекта — коротко, только суть
-        'create_plan': 2000,          # план действий
-        'generate_checklist': 2000,   # чек-лист
-        'consolidate': 2500,          # консолидация — сжато
+        'analyze_project': 10000,
+        'create_plan': 10000,
+        'generate_checklist': 10000,
+        'consolidate': 10000,
     }
 
     # Промпт-инструкции специфичные для DeepSeek
