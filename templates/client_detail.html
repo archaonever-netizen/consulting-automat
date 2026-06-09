@@ -571,8 +571,13 @@
       clearInterval(_pollInterval);
       clearInterval(_timerInterval);
       document.getElementById('analysisLoading').style.display = 'none';
-      displayAnalysisResults(data.result);
-      document.getElementById('analysisResults').style.display = 'block';
+      try {
+        displayAnalysisResults(data.result);
+        document.getElementById('analysisResults').style.display = 'block';
+      } catch (displayErr) {
+        console.error('displayAnalysisResults error:', displayErr, data.result);
+        showError('Результат получен, но не удалось отобразить: ' + displayErr.message);
+      }
       analyzeBtn.disabled = false;
     } else if (data.status === 'failed') {
       clearInterval(_pollInterval);

@@ -1386,6 +1386,8 @@ def agent_orchestrate_project(client_id):
             from agents import get_orchestrator
             with app.app_context():
                 _cleanup_tasks()
+                task_client = Client.query.get(client_id)
+                client_name = task_client.name  # загружаем пока сессия открыта
                 orchestrator = get_orchestrator()
 
                 def on_progress(event, payload):
@@ -1400,9 +1402,6 @@ def agent_orchestrate_project(client_id):
                         elif event == 'function_done':
                             task['completed_functions'].append(payload['function'])
 
-                with app.app_context():
-                    task_client = Client.query.get(client_id)
-
                 result = orchestrator.orchestrate_project(
                     task_client, project_description, task_functions,
                     progress_callback=on_progress
@@ -1413,7 +1412,9 @@ def agent_orchestrate_project(client_id):
                         _tasks[task_id]['phase'] = 'done'
                         _tasks[task_id]['result'] = result
         except Exception as e:
+            import traceback
             print(f"[TASK {task_id}] Exception: {e}")
+            traceback.print_exc()
             with _tasks_lock:
                 if task_id in _tasks:
                     _tasks[task_id]['status'] = 'failed'
