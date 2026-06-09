@@ -26,6 +26,20 @@ export function ShefWordmark({ className = '' }: { className?: string }) {
   );
 }
 
+// Монограмма-глиф (без тёмной плашки) — для вставки внутрь .shef-mono span,
+// который сам даёт тёмный фон. Используется в ШЕФ-байлайнах.
+export function ShefMonoGlyph({ className = '' }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="-20 -18 268 236" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g fill="#fff">
+        <path d="M0 0H46V200H0Z" /><path d="M91 0H137V200H91Z" />
+        <path d="M182 0H228V200H182Z" /><path d="M0 156H228V200H0Z" />
+      </g>
+      <path d="M188 156H228L184 200H144Z" fill="#2563EB" />
+    </svg>
+  );
+}
+
 export function ShefMono({ className = '' }: { className?: string }) {
   return (
     <svg className={className} viewBox="-20 -18 268 236" xmlns="http://www.w3.org/2000/svg" aria-label="ШЕФ" role="img">
