@@ -132,7 +132,36 @@ def init_db():
             try:
                 from sqlalchemy import text
 
-                # Проверить существует ли таблица user_subchats
+                print("[APP] Checking database schema...")
+
+                # Пересоздать user_chat_sessions если нужно (удалить старые столбцы)
+                try:
+                    has_context_type = db.session.execute(text(
+                        "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_chat_sessions' AND column_name = 'context_type')"
+                    )).scalar()
+
+                    if has_context_type:
+                        print("[APP] Cleaning up user_chat_sessions table...")
+                        # Сохраним данные
+                        db.session.execute(text("""
+                            ALTER TABLE user_chat_sessions
+                            DROP COLUMN IF EXISTS context_type,
+                            DROP COLUMN IF EXISTS context_id
+                        """))
+                        print("[APP] Old columns removed")
+                except Exception as e:
+                    print(f"[APP] Could not clean columns: {e}")
+
+                # Добавить UNIQUE constraint если его нет
+                try:
+                    db.session.execute(text("""
+                        ALTER TABLE user_chat_sessions
+                        ADD CONSTRAINT uq_user_chat_sessions_user_id UNIQUE (user_id)
+                    """))
+                except Exception as e:
+                    print(f"[APP] UNIQUE constraint already exists: {e}")
+
+                # Создать user_subchats если её нет
                 result = db.session.execute(text(
                     "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'user_subchats')"
                 )).scalar()
@@ -152,7 +181,7 @@ def init_db():
                     """))
                     print("[APP] user_subchats table created")
 
-                # Проверить есть ли столбец subchat_id в user_chat_messages
+                # Добавить subchat_id в user_chat_messages если его нет
                 result = db.session.execute(text(
                     "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_chat_messages' AND column_name = 'subchat_id')"
                 )).scalar()
@@ -166,17 +195,12 @@ def init_db():
                     """))
                     print("[APP] Columns added")
 
-                # Проверить есть ли столбец version в user_chat_messages
-                result = db.session.execute(text(
-                    "SELECT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name = 'user_chat_messages' AND column_name = 'tokens')"
-                )).scalar()
-
-                if result:
-                    print("[APP] Columns already exist, skipping")
-
                 db.session.commit()
+                print("[APP] Database schema check completed successfully")
             except Exception as e:
                 print(f"[APP] Migration warning: {e}")
+                import traceback
+                traceback.print_exc()
                 db.session.rollback()
 
             print("[APP] Seeding functions...")
@@ -1831,15 +1855,25 @@ def delete_task(task_id):
 
 def get_or_create_main_session(user_id):
     """Получить или создать основную чат-сессию 'AI Assistant' для пользователя."""
-    session = UserChatSession.query.filter_by(user_id=user_id).first()
-    if not session:
-        session = UserChatSession(
-            user_id=user_id,
-            title='AI Assistant'
-        )
-        db.session.add(session)
-        db.session.commit()
-    return session
+    try:
+        session = UserChatSession.query.filter_by(user_id=user_id).first()
+        if not session:
+            print(f"[CHAT] Creating main session for user {user_id}")
+            session = UserChatSession(
+                user_id=user_id,
+                title='AI Assistant'
+            )
+            db.session.add(session)
+            db.session.commit()
+            print(f"[CHAT] Main session created: {session.id}")
+        else:
+            print(f"[CHAT] Using existing session: {session.id}")
+        return session
+    except Exception as e:
+        print(f"[CHAT] ERROR in get_or_create_main_session: {e}")
+        import traceback
+        traceback.print_exc()
+        raise
 
 
 def get_or_create_subchat(session_id, task_id=None):
