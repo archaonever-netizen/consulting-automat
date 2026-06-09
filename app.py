@@ -2105,12 +2105,12 @@ def send_message_to_subchat(subchat_id):
                     missing_ordered = [f for f in missing_order if f in missing]
                     missing_names = ', '.join(field_names.get(f, f) for f in missing_ordered)
 
-                    field_examples = {{
+                    field_examples = {
                         'input_data': 'Какие вводные данные есть для этой задачи? (пример: "Есть данные 100 клиентов", "Бюджет 500k")',
                         'goal': 'В чём ЦЕЛЬ? Что нужно достичь? (пример: "Увеличить продажи на 30%", "Внедрить CRM в отдел")',
                         'action_description': 'КАК это сделать? Какие действия нужны? (пример: "Обучить команду, настроить процессы, провести встречи")',
                         'expected_result': 'РЕЗУЛЬТАТ? Как узнаем что выполнено? (пример: "Отчет с метриками за месяц", "Все настроено и тестировано")'
-                    }}
+                    }
 
                     system_prompt = f"""Ты — ИИ-менеджер задач ШЕФ. Дозаполняешь задачу: "{task.title}"
 
