@@ -1911,7 +1911,7 @@ def chat_send_message(session_id):
             messages=llm_messages,
             model=DeepSeekConfig.CHAT_MODEL,
             temperature=0.5,
-            max_tokens=500
+            max_tokens=300
         )
 
         if response.get('error'):
