@@ -4,10 +4,10 @@
 class DeepSeekConfig:
     """Конфигурация для работы с DeepSeek моделями."""
 
-    # Модели (flash версия для скорости: в 2x быстрее, в 2x дешевле)
+    # Модели (flash версия для скорости и экономии)
     ORCHESTRATOR_MODEL = 'deepseek/deepseek-v4-flash'
     FUNCTION_AGENT_MODEL = 'deepseek/deepseek-v4-flash'
-    CHAT_MODEL = 'qwen/qwen3.7-max'
+    CHAT_MODEL = 'deepseek/deepseek-v4-flash'
 
     # Температура (0-1): низкая = детерминированный ответ, высокая = творческий
     # DeepSeek требует НИЗКУЮ температуру чтобы не галлюцинировать
