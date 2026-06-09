@@ -133,14 +133,18 @@ class Orchestrator:
         print(f"[ORCHESTRATOR] Starting parallel analysis for {len(task_functions)} functions")
 
         def analyze_function(function_name):
-            """Вспомогательная функция для параллельного анализа."""
-            if function_name not in self.agents:
-                return function_name, None
+            """Вспомогательная функция для параллельного анализа.
+            Каждый поток должен иметь свой app context."""
+            from app import app
 
-            agent = self.agents[function_name]
-            print(f"[ORCHESTRATOR] Analyzing function: {function_name}")
-            agent_result = agent.analyze_project(client_obj, project_description)
-            return function_name, agent_result
+            with app.app_context():
+                if function_name not in self.agents:
+                    return function_name, None
+
+                agent = self.agents[function_name]
+                print(f"[ORCHESTRATOR] Analyzing function: {function_name}")
+                agent_result = agent.analyze_project(client_obj, project_description)
+                return function_name, agent_result
 
         # Используем ThreadPoolExecutor для параллельных запросов
         with ThreadPoolExecutor(max_workers=9) as executor:
