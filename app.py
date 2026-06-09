@@ -134,19 +134,7 @@ def init_db():
 
                 print("[APP] Checking database schema...")
 
-                # Полностью пересоздать таблицы если нужно (избавиться от старых данных)
-                try:
-                    print("[APP] Dropping old chat tables...")
-                    db.session.execute(text("DROP TABLE IF EXISTS user_chat_messages CASCADE"))
-                    db.session.execute(text("DROP TABLE IF EXISTS user_subchats CASCADE"))
-                    db.session.execute(text("DROP TABLE IF EXISTS user_chat_sessions CASCADE"))
-                    db.session.commit()
-                    print("[APP] Old tables dropped")
-                except Exception as e:
-                    print(f"[APP] Error dropping tables: {e}")
-                    db.session.rollback()
-
-                # Создать user_chat_sessions новую
+                # Создать user_chat_sessions если не существует
                 try:
                     db.session.execute(text("""
                         CREATE TABLE IF NOT EXISTS user_chat_sessions (
