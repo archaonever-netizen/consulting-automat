@@ -85,14 +85,14 @@ def get_orchestrator():
     return orchestrator
 
 
-def init_agents_on_startup(app):
-    """Инициализировать агентов при старте приложения (один раз)."""
+def init_agents_on_startup():
+    """Инициализировать агентов при старте приложения (один раз).
+    Вызывается внутри app.app_context(), не нужно создавать свой."""
     global _initialized
 
     if _initialized:
         return
 
     print("[AGENTS] Initializing on app startup...")
-    with app.app_context():
-        get_orchestrator()
+    get_orchestrator()
     print("[AGENTS] Startup initialization complete")
