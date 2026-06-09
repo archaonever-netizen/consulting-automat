@@ -35,7 +35,7 @@ class User(db.Model):
     role = db.relationship('Role', backref='users', lazy=True)
     clients = db.relationship('Client', backref='assigned_employee', lazy=True)
     tasks = db.relationship('UserTask', backref='created_by_user', lazy=True, foreign_keys='UserTask.created_by_id')
-    chat_sessions = db.relationship('UserChatSession', backref='user', lazy=True, cascade='all, delete-orphan')
+    chat_session = db.relationship('UserChatSession', backref='user', lazy=True, cascade='all, delete-orphan', uselist=False)
 
     __table_args__ = (
         db.Index('uq_users_single_founder', 'is_founder', unique=True,
@@ -318,24 +318,38 @@ class TaskCompletion(db.Model):
 
 
 class UserChatSession(db.Model):
-    """Сессия чата пользователя с ИИ-ассистентом."""
+    """Основная сессия чата пользователя с ИИ-ассистентом (одна на пользователя)."""
     __tablename__ = 'user_chat_sessions'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    title = db.Column(db.String(255), nullable=False)
-    context_type = db.Column(db.String(30), default='general')  # 'general', 'task_manager'
-    context_id = db.Column(db.Integer)  # task_id при task_manager
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, unique=True)
+    title = db.Column(db.String(255), nullable=False)  # "AI Assistant"
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
-    messages = db.relationship('UserChatMessage', backref='session', lazy=True, cascade='all, delete-orphan')
+    subchats = db.relationship('UserSubChat', backref='session', lazy=True, cascade='all, delete-orphan')
+
+
+class UserSubChat(db.Model):
+    """Подчат для конкретной задачи (может быть несколько версий)."""
+    __tablename__ = 'user_subchats'
+    id = db.Column(db.Integer, primary_key=True)
+    session_id = db.Column(db.Integer, db.ForeignKey('user_chat_sessions.id'), nullable=False)
+    task_id = db.Column(db.Integer, db.ForeignKey('user_tasks.id'), nullable=True)
+    version = db.Column(db.Integer, default=1)  # v1, v2, v3... при достижении 100K токенов
+    tokens_used = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    messages = db.relationship('UserChatMessage', backref='subchat', lazy=True, cascade='all, delete-orphan')
+    task = db.relationship('UserTask', foreign_keys=[task_id], lazy=True)
 
 
 class UserChatMessage(db.Model):
-    """Сообщение в чате пользователя."""
+    """Сообщение в подчате."""
     __tablename__ = 'user_chat_messages'
     id = db.Column(db.Integer, primary_key=True)
-    session_id = db.Column(db.Integer, db.ForeignKey('user_chat_sessions.id'), nullable=False)
+    subchat_id = db.Column(db.Integer, db.ForeignKey('user_subchats.id'), nullable=False)
     role = db.Column(db.String(10), nullable=False)  # 'user', 'assistant'
     content = db.Column(db.Text, nullable=False)
+    tokens = db.Column(db.Integer, default=0)  # токены используемые в этом сообщении
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
