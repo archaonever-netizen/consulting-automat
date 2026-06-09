@@ -2176,14 +2176,33 @@ def send_message_to_subchat(subchat_id):
 СПРАШИВАЙ В ПОРЯДКЕ:
 {chr(10).join(f"{i+1}. {field_names[f]}: {field_examples[f]}" for i, f in enumerate(missing_ordered))}
 
-ПРАВИЛА ЭТАПА 1:
-- Спроси ОДНО поле (в порядке выше)
-- Если ответ неполный/странный → попроси уточнение
-- Когда ответ хороший:
-  • Предложи улучшение формулировки
-  • Подтверди: "✓ Принял!"
-  • Отправь JSON: {{"field": "имя", "value": "значение", "done": false}}
-  • Покажи обновленный ПЛАН
+СТРОГИЕ ПРАВИЛА ЭТАПА 1 - СЛЕДУЙ БУКВАЛЬНО:
+
+ШАБЛОН ДЛЯ КАЖДОГО ЦИКЛА:
+
+🔄 ЦИКЛ 1 (и так для каждого поля):
+  А) ТЫ спрашиваешь одно поле (№1)
+  Б) ПОЛЬЗОВАТЕЛЬ отвечает
+  В) ТЫ проверяешь ответ:
+     - Если неполный/странный → попроси уточнение (ТОЛЬКО ВСЁ, потом жди ответа)
+     - Если хороший → переходи к пункту Г
+  Г) ТЫ предлагаешь улучшение формулировки
+  Д) ТЫ спрашиваешь: "Согласны?"
+  Е) ПОЛЬЗОВАТЕЛЬ подтверждает ("да" / "согласен" / "подтверждаю")
+  Ж) ТЫ МОЛЧА отправляешь JSON (БЕЗ упоминания JSON, БЕЗ уведомления): {{"field": "имя_поля", "value": "финальное значение", "done": false}}
+  З) ТОЛЬКО ПОТОМ (в НОВОМ сообщении) ТЫ спрашиваешь СЛЕДУЮЩЕЕ поле (№2)
+
+КРИТИЧЕСКИ ВАЖНО:
+❌ НЕ смешивай в одном сообщении:
+   - Вопрос про поле + вопрос про подтверждение предыдущего
+   - Подтверждение поля + вопрос про следующее поле
+   - JSON + новый вопрос
+
+✅ КАЖДОЕ ТВОЁ СООБЩЕНИЕ = ОДНА ОПЕРАЦИЯ (для пользователя видна только суть):
+   1) Либо ВОПРОС про поле
+   2) Либо ПРОСЬБА УТОЧНИТЬ (если ответ неполный)
+   3) Либо ПРЕДЛОЖЕНИЕ УЛУЧШЕНИЯ + "Согласны?"
+   4) Либо (после "да") ТОЛЬКО СЛЕДУЮЩИЙ ВОПРОС (техника в фоне)
 
 ЭТАП 2️⃣: SMART АНАЛИЗ (когда все ☐ станут ✓)
 Проверишь задачу по SMART:
@@ -2193,14 +2212,15 @@ def send_message_to_subchat(subchat_id):
 - ✓ Relevant: Актуальна ли?
 - ✓ Time-bound: Четко ли определены сроки?
 
-Если проблемы → предложи корректировки (какие поля отредактировать)
-Если всё ок → похвали и попроси подтверждение: "Всё готово? Подтверди 'да'"
+Если проблемы → предложи корректировки
+Если всё ок → похвали и попроси подтверждение "да"
 После подтверждения → {{"phase": "submit", "done": true}}
 
 ТРЕБОВАНИЯ:
-✓ Кратко, по-русски, по существу
-✓ JSON обязателен
-✓ Помни о плане и показывай прогресс"""
+✓ Кратко, деловой тон, по существу
+✓ Никогда не упоминай JSON, переходы между полями и техничные детали
+✓ Говори как менеджер с менеджером, не как программист с пользователем
+✓ Строго следуй циклу - одна операция = одно сообщение"""
 
         # Собрать сообщения для LLM
         llm_messages = [
@@ -2231,17 +2251,24 @@ def send_message_to_subchat(subchat_id):
                         messages=llm_messages,
                         model=DeepSeekConfig.CHAT_MODEL,
                         temperature=0.5,
-                        max_tokens=300
+                        max_tokens=1500
                     ):
                         if chunk:
                             q.put(('chunk', chunk))
                     q.put(('end', None))
                 except Exception as e:
-                    q.put(('error', str(e)))
+                    error_msg = str(e)
+                    # Обработать 429 (Rate Limit) ошибку специально
+                    if '429' in error_msg or 'Capacity exhausted' in error_msg:
+                        q.put(('error', 'ИИ-сервер сейчас перегружен (429). Попробуйте еще раз через минуту.'))
+                    else:
+                        q.put(('error', error_msg))
 
             _th.Thread(target=_stream, daemon=True).start()
 
             full_response = ''
+            chunks_to_send = []  # Накапливаем chunks до конца
+
             while True:
                 try:
                     kind, val = q.get(timeout=10)
@@ -2252,15 +2279,39 @@ def send_message_to_subchat(subchat_id):
 
                 if kind == 'chunk':
                     full_response += val
-                    yield f'data: {json.dumps({"chunk": val})}\n\n'
+                    chunks_to_send.append(val)  # Накапливаем, не отправляем сразу
                 elif kind == 'end':
-                    # Сохранить ответ AI в БД
+                    # Парсить JSON и убрать его из видимого текста
+                    parsed_json = None
+                    display_response = full_response
+
+                    if task_id and '{' in full_response and '}' in full_response:
+                        try:
+                            s = full_response.rfind('{')
+                            e2 = full_response.rfind('}') + 1
+                            if s >= 0 and e2 > s:
+                                json_str = full_response[s:e2]
+                                parsed_json = json.loads(json_str)
+                                # Убрать JSON из видимого текста для пользователя
+                                display_response = full_response[:s].rstrip()
+                        except Exception as je:
+                            print(f'Ошибка парсинга JSON: {je}')
+
+                    # Отправить чистый текст пользователю (без JSON)
+                    # Убираем JSON из всех accumulated chunks
+                    display_text = display_response
+                    for chunk in chunks_to_send:
+                        # Отправляем chunk только если он не является JSON
+                        if not (chunk.strip().startswith('{') or chunk.strip().startswith('}')):
+                            yield f'data: {json.dumps({"chunk": chunk})}\n\n'
+
+                    # Сохранить ответ AI в БД с чистым текстом
                     try:
-                        tokens_approx = int(len(full_response.split()) * 1.3)
+                        tokens_approx = int(len(display_response.split()) * 1.3)
                         ai_msg = UserChatMessage(
                             subchat_id=subchat_id,
                             role='assistant',
-                            content=full_response,
+                            content=display_response,  # Сохраняем чистую версию без JSON
                             tokens=tokens_approx
                         )
                         db.session.add(ai_msg)
@@ -2268,24 +2319,14 @@ def send_message_to_subchat(subchat_id):
                         sc = UserSubChat.query.get(subchat_id)
                         sc.tokens_used += tokens_approx
 
-                        parsed_json = None
-                        if task_id:
-                            try:
-                                if '{' in full_response and '}' in full_response:
-                                    s = full_response.rfind('{')
-                                    e2 = full_response.rfind('}') + 1
-                                    if s >= 0 and e2 > s:
-                                        parsed_json = json.loads(full_response[s:e2])
-                                        if parsed_json.get('field') and parsed_json.get('value'):
-                                            task = sc.task
-                                            if task:
-                                                setattr(task, parsed_json['field'], parsed_json['value'])
-                                                task.updated_at = datetime.utcnow()
-                            except Exception as je:
-                                print(f'Ошибка парсинга JSON: {je}')
+                        if task_id and parsed_json and parsed_json.get('field') and parsed_json.get('value'):
+                            task = sc.task
+                            if task:
+                                setattr(task, parsed_json['field'], parsed_json['value'])
+                                task.updated_at = datetime.utcnow()
 
                         db.session.commit()
-                        yield f'data: {json.dumps({"done": True, "subchat_tokens": sc.tokens_used, "parsed_json": parsed_json})}\n\n'
+                        yield f'data: {json.dumps({"done": True, "subchat_tokens": sc.tokens_used})}\n\n'
                     except Exception as e:
                         db.session.rollback()
                         yield f'data: {json.dumps({"error": f"DB error: {str(e)}"})}\n\n'

@@ -413,6 +413,7 @@
 <script>
 let currentSubchatId = null;
 let subchats = [];
+let currentAbortController = null;  // Для остановки текущего запроса
 
 // Загрузить список подчатов
 async function loadSubchats() {
@@ -463,11 +464,29 @@ async function loadMessages() {
 
   try {
     const res = await fetch(`/api/chat/subchat/${currentSubchatId}/messages`);
-    const messages = await res.json();
+
+    if (!res.ok) {
+      console.error(`Ошибка загрузки сообщений: ${res.status}`);
+      const text = await res.text();
+      console.error('Ответ сервера:', text.substring(0, 200));
+      showToast(`Ошибка загрузки сообщений (${res.status})`, 'error');
+      return;
+    }
+
+    let messages;
+    try {
+      messages = await res.json();
+    } catch (jsonErr) {
+      const text = await res.text();
+      console.error('Ошибка парсинга JSON, ответ:', text.substring(0, 200));
+      showToast('Ошибка формата ответа от сервера', 'error');
+      return;
+    }
     renderMessages(messages);
     scrollToBottom();
   } catch (e) {
     console.error('Error loading messages:', e);
+    showToast('Ошибка загрузки сообщений', 'error');
   }
 }
 
@@ -537,15 +556,31 @@ async function sendMessage() {
   `;
   scrollToBottom();
 
-  // Показать typing indicator
+  // Создать AbortController для отмены запроса
+  currentAbortController = new AbortController();
+
+  // Показать typing indicator с кнопкой STOP
   document.getElementById('typingIndicator').style.display = 'flex';
   document.getElementById('btnSend').disabled = true;
+  input.disabled = true;  // Блокировать ввод во время обработки
+
+  // Добавить кнопку STOP
+  const stopBtn = document.createElement('button');
+  stopBtn.textContent = '⏹ STOP';
+  stopBtn.className = 'btn btn-sm btn-secondary';
+  stopBtn.style.marginLeft = '0.5rem';
+  stopBtn.onclick = () => {
+    currentAbortController.abort();
+    showToast('Запрос отменён', 'info');
+  };
+  document.getElementById('typingIndicator').appendChild(stopBtn);
 
   try {
     const res = await fetch(`/api/chat/subchat/${currentSubchatId}/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message })
+      body: JSON.stringify({ message }),
+      signal: currentAbortController.signal  // Передать сигнал отмены
     });
 
     if (!res.ok) {
@@ -602,18 +637,22 @@ async function sendMessage() {
             document.getElementById('tokenCount').textContent = evt.subchat_tokens;
             await loadMessages(); // синхронизировать с БД (заменяет temp элемент)
           } else if (evt.error) {
-            showToast(`Ошибка: ${evt.error}`, 'error');
+            showToast(evt.error, 'error');
           }
         } catch (_) {}
       }
     }
   } catch (e) {
     console.error('Error sending message:', e);
-    showToast('Ошибка отправки', 'error');
+    if (e.name !== 'AbortError') {  // Не показывать ошибку если это была отмена
+      showToast('Ошибка отправки', 'error');
+    }
   } finally {
     document.getElementById('typingIndicator').style.display = 'none';
     document.getElementById('btnSend').disabled = false;
+    document.getElementById('msgInput').disabled = false;  // Разблокировать ввод
     document.getElementById('msgInput').focus();
+    currentAbortController = null;  // Очистить controller
   }
 }
 
