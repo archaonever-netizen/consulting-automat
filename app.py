@@ -2135,59 +2135,80 @@ def send_message_to_subchat(subchat_id):
         def generate():
             from promptra_client import PromtraClient
             from deepseek_config import DeepSeekConfig
+            import queue as _q
+            import threading as _th
 
             client = PromtraClient()
+            q = _q.Queue()
+
+            def _stream():
+                try:
+                    for chunk in client.chat_completion_stream(
+                        messages=llm_messages,
+                        model=DeepSeekConfig.CHAT_MODEL,
+                        temperature=0.5,
+                        max_tokens=300
+                    ):
+                        if chunk:
+                            q.put(('chunk', chunk))
+                    q.put(('end', None))
+                except Exception as e:
+                    q.put(('error', str(e)))
+
+            _th.Thread(target=_stream, daemon=True).start()
+
             full_response = ''
+            while True:
+                try:
+                    kind, val = q.get(timeout=10)
+                except _q.Empty:
+                    # Heartbeat — не даём nginx закрыть соединение по таймауту
+                    yield ': ping\n\n'
+                    continue
 
-            try:
-                for chunk in client.chat_completion_stream(
-                    messages=llm_messages,
-                    model=DeepSeekConfig.CHAT_MODEL,
-                    temperature=0.5,
-                    max_tokens=300
-                ):
-                    if chunk:
-                        full_response += chunk
-                        yield f'data: {json.dumps({"chunk": chunk})}\n\n'
-            except Exception as e:
-                yield f'data: {json.dumps({"error": str(e)})}\n\n'
-                return
-
-            # Сохранить ответ AI в БД
-            try:
-                tokens_approx = int(len(full_response.split()) * 1.3)
-                ai_msg = UserChatMessage(
-                    subchat_id=subchat_id,
-                    role='assistant',
-                    content=full_response,
-                    tokens=tokens_approx
-                )
-                db.session.add(ai_msg)
-
-                sc = UserSubChat.query.get(subchat_id)
-                sc.tokens_used += tokens_approx
-
-                parsed_json = None
-                if task_id:
+                if kind == 'chunk':
+                    full_response += val
+                    yield f'data: {json.dumps({"chunk": val})}\n\n'
+                elif kind == 'end':
+                    # Сохранить ответ AI в БД
                     try:
-                        if '{' in full_response and '}' in full_response:
-                            s = full_response.rfind('{')
-                            e2 = full_response.rfind('}') + 1
-                            if s >= 0 and e2 > s:
-                                parsed_json = json.loads(full_response[s:e2])
-                                if parsed_json.get('field') and parsed_json.get('value'):
-                                    task = sc.task
-                                    if task:
-                                        setattr(task, parsed_json['field'], parsed_json['value'])
-                                        task.updated_at = datetime.utcnow()
-                    except Exception as je:
-                        print(f'Ошибка парсинга JSON: {je}')
+                        tokens_approx = int(len(full_response.split()) * 1.3)
+                        ai_msg = UserChatMessage(
+                            subchat_id=subchat_id,
+                            role='assistant',
+                            content=full_response,
+                            tokens=tokens_approx
+                        )
+                        db.session.add(ai_msg)
 
-                db.session.commit()
-                yield f'data: {json.dumps({"done": True, "subchat_tokens": sc.tokens_used, "parsed_json": parsed_json})}\n\n'
-            except Exception as e:
-                db.session.rollback()
-                yield f'data: {json.dumps({"error": f"DB error: {str(e)}"})}\n\n'
+                        sc = UserSubChat.query.get(subchat_id)
+                        sc.tokens_used += tokens_approx
+
+                        parsed_json = None
+                        if task_id:
+                            try:
+                                if '{' in full_response and '}' in full_response:
+                                    s = full_response.rfind('{')
+                                    e2 = full_response.rfind('}') + 1
+                                    if s >= 0 and e2 > s:
+                                        parsed_json = json.loads(full_response[s:e2])
+                                        if parsed_json.get('field') and parsed_json.get('value'):
+                                            task = sc.task
+                                            if task:
+                                                setattr(task, parsed_json['field'], parsed_json['value'])
+                                                task.updated_at = datetime.utcnow()
+                            except Exception as je:
+                                print(f'Ошибка парсинга JSON: {je}')
+
+                        db.session.commit()
+                        yield f'data: {json.dumps({"done": True, "subchat_tokens": sc.tokens_used, "parsed_json": parsed_json})}\n\n'
+                    except Exception as e:
+                        db.session.rollback()
+                        yield f'data: {json.dumps({"error": f"DB error: {str(e)}"})}\n\n'
+                    break
+                elif kind == 'error':
+                    yield f'data: {json.dumps({"error": val})}\n\n'
+                    break
 
         return Response(
             stream_with_context(generate()),

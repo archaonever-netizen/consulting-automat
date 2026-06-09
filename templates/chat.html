@@ -549,9 +549,9 @@ async function sendMessage() {
     });
 
     if (!res.ok) {
-      const data = await res.json();
-      showToast(`Ошибка: ${data.error}`, 'error');
-      if (data.need_new_subchat) loadSubchats();
+      let errMsg = `Ошибка ${res.status}`;
+      try { const d = await res.json(); errMsg = d.error || errMsg; if (d.need_new_subchat) loadSubchats(); } catch (_) {}
+      showToast(errMsg, 'error');
       return;
     }
 
