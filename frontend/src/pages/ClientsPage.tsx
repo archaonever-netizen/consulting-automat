@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import Icon from '../components/Icon';
 
 interface ClientListItem {
   id: number;
@@ -9,403 +10,257 @@ interface ClientListItem {
   color: string;
   health: number;
   health_label: string;
-  health_cls: string;
+  health_cls: string; // up | warn | down | flat
   ring_filled: number;
   ring_empty: number;
   done: number;
   total: number;
-  bd_briefing: string;
+  bd_briefing: string; // done | work | none
   bd_point_a: string;
   bd_docs: string;
 }
 
+const RING_STROKE: Record<string, string> = {
+  up: '#1F9D57', warn: '#C2820F', down: '#E23D32', flat: '#BFC0C7',
+};
+const PILL_CLS: Record<string, string> = {
+  up: 'pill-green', warn: 'pill-amber', down: 'pill-red', flat: 'pill-gray',
+};
+
+function HealthRing({ c, size }: { c: ClientListItem; size: number }) {
+  return (
+    <svg viewBox="0 0 42 42" width={size} height={size} style={{ transform: 'rotate(-90deg)', flex: '0 0 auto' }}>
+      <circle cx="21" cy="21" r="18" fill="none" stroke="var(--border-2)" strokeWidth="3" />
+      <circle
+        cx="21" cy="21" r="18" fill="none"
+        stroke={RING_STROKE[c.health_cls] || RING_STROKE.flat}
+        strokeWidth="3"
+        strokeDasharray={`${c.ring_filled} ${c.ring_empty}`}
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
+function BriefDots({ c }: { c: ClientListItem }) {
+  return (
+    <span className="brief-dots" title="Брифинг · Точка А · Документы">
+      <span className={'bd ' + c.bd_briefing} />
+      <span className={'bd ' + c.bd_point_a} />
+      <span className={'bd ' + c.bd_docs} />
+    </span>
+  );
+}
+
 export default function ClientsPage() {
+  const navigate = useNavigate();
   const [clients, setClients] = useState<ClientListItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showModal, setShowModal] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [query, setQuery] = useState('');
+  const [filter, setFilter] = useState<'all' | 'active' | 'new'>('all');
+  const [view, setView] = useState<'grid' | 'list'>('grid');
 
-  useEffect(() => {
-    api
-      .get('/api/clients')
-      .then(r => setClients(r.data))
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  const [modal, setModal] = useState<null | { mode: 'add' | 'edit'; client?: ClientListItem }>(null);
+  const [confirm, setConfirm] = useState<ClientListItem | null>(null);
+  const [nameInput, setNameInput] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  async function handleCreate(e: React.FormEvent) {
+  useEffect(() => { reload(); }, []);
+
+  async function reload() {
+    const r = await api.get('/api/clients');
+    setClients(r.data);
+    setLoading(false);
+  }
+
+  function openAdd() { setNameInput(''); setModal({ mode: 'add' }); }
+  function openEdit(c: ClientListItem) { setNameInput(c.name); setModal({ mode: 'edit', client: c }); }
+
+  async function saveClient(e: React.FormEvent) {
     e.preventDefault();
-    if (!newName.trim()) return;
-    setCreating(true);
+    if (!nameInput.trim()) return;
+    setBusy(true);
     try {
-      await api.post('/api/clients', { name: newName.trim() });
-      const r = await api.get('/api/clients');
-      setClients(r.data);
-      setShowModal(false);
-      setNewName('');
+      if (modal?.mode === 'edit' && modal.client) {
+        await api.put(`/api/clients/${modal.client.id}`, { name: nameInput.trim() });
+      } else {
+        await api.post('/api/clients', { name: nameInput.trim() });
+      }
+      await reload();
+      setModal(null);
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Ошибка создания клиента');
+      alert(err.response?.data?.detail || 'Ошибка сохранения');
     } finally {
-      setCreating(false);
+      setBusy(false);
     }
   }
+
+  async function doDelete() {
+    if (!confirm) return;
+    setBusy(true);
+    try {
+      await api.delete(`/api/clients/${confirm.id}`);
+      await reload();
+      setConfirm(null);
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Ошибка удаления');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const q = query.trim().toLowerCase();
+  const filtered = clients.filter(c => {
+    const matchQ = !q || c.name.toLowerCase().includes(q);
+    const matchF = filter === 'all'
+      || (filter === 'active' && c.health > 0)
+      || (filter === 'new' && c.health === 0);
+    return matchQ && matchF;
+  });
+
+  const total = clients.length;
+  const active = clients.filter(c => c.health > 0).length;
+  const briefsDone = clients.reduce((a, c) => a + c.done, 0);
+  const briefsTotal = clients.reduce((a, c) => a + c.total, 0);
+  const healthy = clients.filter(c => c.health > 0);
+  const avgHealth = healthy.length ? Math.round(healthy.reduce((a, c) => a + c.health, 0) / healthy.length) : 0;
 
   if (loading) return <div className="page"><div className="loading-bar"></div></div>;
 
   return (
     <div className="page">
-      <div className="page-header rise">
+      <div className="page-head rise">
         <div>
-          <h1 className="text-h1">Клиенты</h1>
-          <p className="text-body">Картотека бизнесов под управлением.</p>
+          <h1>Клиенты</h1>
+          <p>Картотека бизнесов под управлением. ИИ отслеживает состояние и подсказывает следующий шаг.</p>
         </div>
         <div className="head-actions">
-          <button className="btn btn-primary" onClick={() => setShowModal(true)}>Добавить клиента</button>
+          <button className="btn btn-primary" onClick={openAdd}><Icon name="plus" size={17} />Добавить клиента</button>
         </div>
       </div>
 
-      <div className="clients-list">
-        {clients.length === 0 ? (
-          <div className="empty-state">
-            <p>Нет клиентов. Начните с добавления нового.</p>
-          </div>
-        ) : (
-          clients.map((c) => (
-            <Link
-              key={c.id}
-              to={`/clients/${c.id}`}
-              className="client-item"
-            >
-              {/* Avatar & Name */}
-              <div className="client-head">
-                <div
-                  className={`client-avatar health-${c.health_cls}`}
-                  style={{ backgroundColor: c.color }}
-                  title={c.health_label}
-                >
-                  <span className="avatar-text">{c.initials}</span>
-                </div>
-                <div className="client-meta">
-                  <h3 className="client-name">{c.name}</h3>
-                  <p className="client-health">
-                    <span className={`badge health-${c.health_cls}`}>
-                      {c.health}% — {c.health_label}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              {/* Health Ring */}
-              <div className="client-ring">
-                <svg viewBox="0 0 42 42" className="ring-svg">
-                  <circle
-                    cx="21"
-                    cy="21"
-                    r="18"
-                    className="ring-bg"
-                    fill="none"
-                    strokeWidth="2"
-                  />
-                  <circle
-                    cx="21"
-                    cy="21"
-                    r="18"
-                    className={`ring-fill ring-${c.health_cls}`}
-                    fill="none"
-                    strokeWidth="2"
-                    strokeDasharray={`${c.ring_filled} ${c.ring_empty}`}
-                    strokeLinecap="round"
-                  />
-                </svg>
-              </div>
-
-              {/* Brief Status Dots */}
-              <div className="client-briefs">
-                <div className="brief-label">Брифы:</div>
-                <div className="brief-dots">
-                  <div
-                    className={`brief-dot bd-${c.bd_briefing}`}
-                    title="Брифинг"
-                  />
-                  <div
-                    className={`brief-dot bd-${c.bd_point_a}`}
-                    title="Точка А"
-                  />
-                  <div
-                    className={`brief-dot bd-${c.bd_docs}`}
-                    title="Документы"
-                  />
-                </div>
-              </div>
-
-              {/* Stats */}
-              <div className="client-stats">
-                <div className="stat">
-                  <span className="stat-label">Заполнено:</span>
-                  <span className="stat-value">
-                    {c.done}/{c.total}
-                  </span>
-                </div>
-              </div>
-            </Link>
-          ))
-        )}
+      <div className="stats-strip rise d1">
+        <div className="stat"><div className="k"><Icon name="users" size={15} />Всего клиентов</div><div className="v">{total}</div></div>
+        <div className="stat"><div className="k"><Icon name="bolt" size={15} />Активные</div><div className="v">{active}</div><div className="d flat">{total ? Math.round(active / total * 100) : 0}% базы</div></div>
+        <div className="stat"><div className="k"><Icon name="check" size={15} />Брифы заполнены</div><div className="v">{briefsDone}<small> / {briefsTotal}</small></div><div className="d up">{briefsTotal ? Math.round(briefsDone / briefsTotal * 100) : 0}% готовности</div></div>
+        <div className="stat"><div className="k"><Icon name="trendUp" size={15} />Средний health</div><div className="v">{avgHealth || '—'}</div></div>
       </div>
 
-      <style>{`
-        .clients-list {
-          display: flex;
-          flex-direction: column;
-          gap: 1rem;
-        }
+      <div className="toolbar rise d2">
+        <div className="search">
+          <Icon name="search" size={17} />
+          <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Поиск по названию…" />
+        </div>
+        <div className="seg">
+          {([['all', 'Все'], ['active', 'Активные'], ['new', 'Новые']] as const).map(([k, l]) => (
+            <button key={k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)}>{l}</button>
+          ))}
+        </div>
+        <div className="view-toggle">
+          <button className={view === 'grid' ? 'on' : ''} onClick={() => setView('grid')} title="Сетка"><Icon name="grid" size={16} /></button>
+          <button className={view === 'list' ? 'on' : ''} onClick={() => setView('list')} title="Список"><Icon name="list" size={16} /></button>
+        </div>
+      </div>
 
-        .client-item {
-          display: grid;
-          grid-template-columns: 1fr auto auto;
-          align-items: center;
-          gap: 1.5rem;
-          padding: 1rem;
-          background: var(--bg-secondary, #f5f5f5);
-          border-radius: var(--radius-md, 8px);
-          border-left: 4px solid;
-          text-decoration: none;
-          color: inherit;
-          transition: all 0.2s ease;
-          cursor: pointer;
-        }
+      {filtered.length === 0 && (
+        <div className="empty-tab">
+          <div className="ei"><Icon name="users" size={24} /></div>
+          <b>{clients.length === 0 ? 'Пока нет клиентов' : 'Ничего не найдено'}</b>
+          <span>{clients.length === 0 ? 'Добавьте первый бизнес в картотеку — ИИ подготовит брифы.' : 'Измените запрос или фильтр.'}</span>
+        </div>
+      )}
 
-        .client-item:hover {
-          background: var(--bg-secondary-hover, #eee);
-          transform: translateX(4px);
-        }
+      {view === 'grid' && filtered.length > 0 && (
+        <div className="clients-grid">
+          {filtered.map((c, i) => (
+            <div key={c.id} className={'client-card rise d' + Math.min(i + 1, 6)} onClick={() => navigate(`/clients/${c.id}`)}>
+              <div className="cc-top">
+                <span className="big-av av-md" style={{ background: c.color }}>{c.initials}</span>
+                <div className="cc-id" style={{ flex: 1, minWidth: 0 }}>
+                  <div className="cc-name">
+                    <span>{c.name}</span>
+                    <span className={'pill ' + (PILL_CLS[c.health_cls] || 'pill-gray')}>{c.health_label}</span>
+                  </div>
+                  <div className="cc-meta">{c.done}/{c.total} брифов заполнено</div>
+                </div>
+                <div className="cc-actions" onClick={e => e.stopPropagation()}>
+                  <button title="Открыть" onClick={() => navigate(`/clients/${c.id}`)}><Icon name="arrowRight" size={15} /></button>
+                  <button title="Переименовать" onClick={() => openEdit(c)}><Icon name="edit" size={15} /></button>
+                  <button className="del" title="Удалить" onClick={() => setConfirm(c)}><Icon name="trash" size={15} /></button>
+                </div>
+              </div>
 
-        .client-head {
-          display: flex;
-          align-items: center;
-          gap: 1rem;
-          min-width: 0;
-        }
+              <div className="cc-health">
+                <HealthRing c={c} size={50} />
+                <div className="health-info">
+                  <b>{c.health_label}</b>
+                  <span>{c.health > 0 ? `health ${c.health}%` : 'нужен брифинг'}</span>
+                </div>
+              </div>
 
-        .client-avatar {
-          flex-shrink: 0;
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: white;
-          font-weight: 700;
-          font-size: 18px;
-        }
+              <div className="cc-foot">
+                <span>Заполнено: {c.done}/{c.total}</span>
+                <BriefDots c={c} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-        .client-avatar.health-up {
-          box-shadow: 0 0 0 2px rgba(22, 163, 74, 0.2);
-        }
+      {view === 'list' && filtered.length > 0 && (
+        <div className="clients-table">
+          <div className="ct-row head">
+            <span>Клиент</span><span>Health</span><span>Брифы</span><span>Готово</span>
+          </div>
+          {filtered.map(c => (
+            <div key={c.id} className="ct-row" onClick={() => navigate(`/clients/${c.id}`)}>
+              <div className="ct-client" style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <span className="big-av av-sm" style={{ background: c.color }}>{c.initials}</span>
+                <div style={{ minWidth: 0 }}>
+                  <b style={{ display: 'block', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.name}</b>
+                  <span style={{ fontSize: 12.5, color: 'var(--ink-3)', fontWeight: 600 }}>{c.health_label}</span>
+                </div>
+              </div>
+              <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}><HealthRing c={c} size={38} /></span>
+              <BriefDots c={c} />
+              <span style={{ fontSize: 13, color: 'var(--ink-3)', fontWeight: 700 }}>{c.done}/{c.total}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
-        .client-avatar.health-warn {
-          box-shadow: 0 0 0 2px rgba(194, 116, 11, 0.2);
-        }
-
-        .client-avatar.health-down {
-          box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.2);
-        }
-
-        .avatar-text {
-          display: block;
-        }
-
-        .client-meta {
-          flex: 1;
-          min-width: 0;
-        }
-
-        .client-name {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 600;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-
-        .client-health {
-          margin: 0.25rem 0 0 0;
-        }
-
-        .badge {
-          display: inline-block;
-          font-size: 12px;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-weight: 500;
-        }
-
-        .badge.health-up {
-          background: rgba(22, 163, 74, 0.1);
-          color: #16a34a;
-        }
-
-        .badge.health-warn {
-          background: rgba(194, 116, 11, 0.1);
-          color: #c2740b;
-        }
-
-        .badge.health-down {
-          background: rgba(220, 38, 38, 0.1);
-          color: #dc2626;
-        }
-
-        .badge.health-flat {
-          background: rgba(191, 192, 199, 0.1);
-          color: #6b7280;
-        }
-
-        .client-ring {
-          flex-shrink: 0;
-          width: 60px;
-          height: 60px;
-        }
-
-        .ring-svg {
-          width: 100%;
-          height: 100%;
-          transform: rotate(-90deg);
-        }
-
-        .ring-bg {
-          stroke: var(--border-color, #e0e0e0);
-        }
-
-        .ring-fill.ring-up {
-          stroke: #16a34a;
-        }
-
-        .ring-fill.ring-warn {
-          stroke: #c2740b;
-        }
-
-        .ring-fill.ring-down {
-          stroke: #dc2626;
-        }
-
-        .ring-fill.ring-flat {
-          stroke: #bfc0c7;
-        }
-
-        .client-briefs {
-          display: flex;
-          align-items: center;
-          gap: 0.75rem;
-          flex-shrink: 0;
-        }
-
-        .brief-label {
-          font-size: 12px;
-          color: var(--text-secondary, #666);
-          font-weight: 500;
-          white-space: nowrap;
-        }
-
-        .brief-dots {
-          display: flex;
-          gap: 0.5rem;
-        }
-
-        .brief-dot {
-          width: 12px;
-          height: 12px;
-          border-radius: 50%;
-          transition: all 0.2s ease;
-        }
-
-        .brief-dot.bd-done {
-          background: #16a34a;
-        }
-
-        .brief-dot.bd-work {
-          background: #c2740b;
-        }
-
-        .brief-dot.bd-none {
-          background: #e0e0e0;
-        }
-
-        .client-stats {
-          flex-shrink: 0;
-          display: flex;
-          gap: 1rem;
-          font-size: 13px;
-        }
-
-        .stat {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-        }
-
-        .stat-label {
-          color: var(--text-secondary, #666);
-          margin-bottom: 2px;
-        }
-
-        .stat-value {
-          font-weight: 600;
-          font-size: 16px;
-        }
-
-        .empty-state {
-          text-align: center;
-          padding: 3rem;
-          color: var(--text-secondary, #666);
-        }
-
-        @media (max-width: 768px) {
-          .client-item {
-            grid-template-columns: 1fr;
-            gap: 1rem;
-          }
-
-          .client-briefs {
-            order: -1;
-          }
-
-          .client-ring {
-            display: none;
-          }
-        }
-      `}</style>
-
-      {showModal && (
-        <div
-          className="modal-overlay"
-          style={{ display: 'flex' }}
-          onClick={e => { if (e.target === e.currentTarget) setShowModal(false); }}
-        >
+      {modal && (
+        <div className="modal-overlay" style={{ display: 'flex' }} onClick={e => { if (e.target === e.currentTarget) setModal(null); }}>
           <div className="modal-card">
-            <h3 className="modal-title">Новый клиент</h3>
-            <form onSubmit={handleCreate}>
+            <h3 className="modal-title">{modal.mode === 'edit' ? 'Переименовать клиента' : 'Новый клиент'}</h3>
+            <form onSubmit={saveClient}>
               <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                 <label className="form-label" htmlFor="client_name">Название компании</label>
-                <input
-                  id="client_name"
-                  type="text"
-                  className="form-input"
-                  value={newName}
-                  onChange={e => setNewName(e.target.value)}
-                  required
-                  autoFocus
-                  placeholder="ООО «Пример»"
-                />
+                <input id="client_name" type="text" className="form-input" value={nameInput}
+                  onChange={e => setNameInput(e.target.value)} required autoFocus placeholder="ООО «Пример»" />
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-                <button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Отмена</button>
-                <button type="submit" className="btn btn-primary" disabled={creating}>
-                  {creating ? 'Создание...' : 'Создать'}
+                <button type="button" className="btn btn-ghost" onClick={() => setModal(null)}>Отмена</button>
+                <button type="submit" className="btn btn-primary" disabled={busy}>
+                  {busy ? 'Сохранение…' : modal.mode === 'edit' ? 'Сохранить' : 'Создать'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {confirm && (
+        <div className="modal-overlay" style={{ display: 'flex' }} onClick={e => { if (e.target === e.currentTarget) setConfirm(null); }}>
+          <div className="modal-card">
+            <h3 className="modal-title">Удалить клиента?</h3>
+            <p className="modal-text">Клиент «{confirm.name}» и все его данные будут удалены без возможности восстановления.</p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn btn-ghost" onClick={() => setConfirm(null)}>Отмена</button>
+              <button type="button" className="btn btn-primary" style={{ background: 'var(--danger)', boxShadow: 'none' }} disabled={busy} onClick={doDelete}>
+                {busy ? 'Удаление…' : 'Удалить'}
+              </button>
+            </div>
           </div>
         </div>
       )}
