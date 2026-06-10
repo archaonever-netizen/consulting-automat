@@ -146,8 +146,8 @@ a:hover { color: var(--accent-hover); }
 /* === Кнопки === */
 .btn {
   display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  padding: .7rem 1.1rem; border-radius: var(--radius-md);
-  font-family: var(--font-body); font-weight: 700; font-size: .95rem; line-height: 1;
+  padding: .6rem 1rem; border-radius: var(--radius-md);
+  font-family: var(--font-body); font-weight: 600; font-size: .9rem; line-height: 1;
   border: none; cursor: pointer; transition: var(--transition); background: transparent; color: inherit;
   text-decoration: none; user-select: none; -webkit-tap-highlight-color: transparent; white-space: nowrap;
 }
@@ -155,13 +155,11 @@ a:hover { color: var(--accent-hover); }
 .btn:disabled { opacity: .5; pointer-events: none; }
 
 .btn-primary {
-  color: #fff; position: relative; overflow: hidden;
-  background: linear-gradient(180deg, #3B78F0 0%, var(--accent) 52%, var(--accent-ink) 100%);
-  box-shadow: var(--shadow-blue), inset 0 1px 0 rgba(255,255,255,.32);
+  color: #fff; background: var(--accent);
+  box-shadow: 0 1px 2px rgba(37,99,235,.18);
 }
-.btn-primary::after { content: ''; position: absolute; inset: 0 0 50% 0; background: linear-gradient(180deg, rgba(255,255,255,.26), transparent); pointer-events: none; }
-.btn-primary:hover { transform: translateY(-1.5px); box-shadow: 0 10px 24px -6px rgba(37,99,235,.5), inset 0 1px 0 rgba(255,255,255,.32); }
-.btn-primary:active { transform: scale(.96); }
+.btn-primary:hover { background: var(--accent-ink); transform: translateY(-1px); box-shadow: 0 4px 12px -4px rgba(37,99,235,.4); }
+.btn-primary:active { transform: scale(.97); }
 
 .btn-secondary {
   color: var(--text-primary); background: rgba(255,255,255,.7);
@@ -347,14 +345,11 @@ a:hover { color: var(--accent-hover); }
 .view-toggle button.on { background: var(--accent-weak); color: var(--accent-ink); }
 .view-toggle button:hover:not(.on) { background: var(--surface-2); color: var(--text-primary); }
 
-/* ---- Brand avatar (45° cut) — big-av variants ---- */
-.big-av { width: 64px; height: 64px; border-radius: 18px; border-top-right-radius: 4px; display: grid; place-items: center; color: #fff; font-weight: 800; font-size: 20px; flex: 0 0 auto; position: relative; overflow: hidden; }
-.big-av::before { content: ''; position: absolute; inset: 0; background: linear-gradient(150deg, rgba(255,255,255,.16), rgba(255,255,255,0) 55%); }
-.big-av::after { content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 18px 18px 0; border-color: transparent var(--accent) transparent transparent; }
-.big-av.av-md { width: 48px; height: 48px; border-radius: 14px; border-top-right-radius: 3px; font-size: 16px; }
-.big-av.av-md::after { border-width: 0 14px 14px 0; }
-.big-av.av-sm { width: 40px; height: 40px; border-radius: 11px; border-top-right-radius: 3px; font-size: 14px; }
-.big-av.av-sm::after { border-width: 0 12px 12px 0; }
+/* ---- Brand avatar — мягкий скруглённый квадрат, спокойный тон ---- */
+.big-av { width: 60px; height: 60px; border-radius: 16px; display: grid; place-items: center; color: #fff; font-weight: 700; font-size: 19px; flex: 0 0 auto; position: relative; overflow: hidden; box-shadow: inset 0 1px 0 rgba(255,255,255,.12); letter-spacing: .01em; }
+.big-av::before { content: ''; position: absolute; inset: 0; background: linear-gradient(155deg, rgba(255,255,255,.12), rgba(255,255,255,0) 62%); }
+.big-av.av-md { width: 46px; height: 46px; border-radius: 13px; font-size: 15px; }
+.big-av.av-sm { width: 38px; height: 38px; border-radius: 11px; font-size: 13.5px; }
 
 /* ---- Clients grid ---- */
 .clients-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(345px,1fr)); gap: 16px; }

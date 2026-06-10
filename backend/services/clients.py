@@ -4,7 +4,9 @@ from sqlalchemy.orm import selectinload
 from ..models import Client, Brief
 from ..schemas.clients import ClientCreate, ClientUpdate
 
-_PALETTE = ['#1D1D1F', '#2563EB', '#16A34A', '#7C3AED', '#0891B2', '#DB2777', '#EA580C']
+# Спокойные приглушённые сланцевые тона (не яркие/разноцветные): аватары мягкие,
+# различимы по оттенку, но единым спокойным семейством. Текст белый читается.
+_PALETTE = ['#3B4252', '#434C5E', '#4C566A', '#41505F', '#4A4F5E', '#445163', '#3F4756']
 
 
 def _brief_state(brief) -> str:
