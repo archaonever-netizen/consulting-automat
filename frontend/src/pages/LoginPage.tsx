@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
+import { ShefWordmark } from '../components/Logo';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -37,12 +38,11 @@ export default function LoginPage() {
     <div className="login-page">
       <div className="login-container">
         <div className="login-header">
-          <svg className="logo" viewBox="0 0 82 44" xmlns="http://www.w3.org/2000/svg">
-            <text x="8" y="34" className="logo-text" fontSize="32" fontWeight="800">ШЕФ</text>
-          </svg>
+          <span className="login-mark"><ShefWordmark /></span>
           <h1>ШЕФ Консалтинг</h1>
           <p>Платформа для управления проектами и консалтингом</p>
         </div>
+        <style>{`.login-mark{display:block;width:130px;margin:0 auto 14px}.login-mark svg{width:100%;height:auto}`}</style>
 
         <form onSubmit={handleSubmit} className="login-form">
           {error && <div className="form-error">{error}</div>}
