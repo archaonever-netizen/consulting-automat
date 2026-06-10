@@ -7,8 +7,17 @@ interface Space { id: number; title: string; }
 interface Board { id: number; title: string; }
 interface Column { id: number; title: string; sort_order?: number; type?: number; }
 interface Lane { id: number; title: string; sort_order?: number; }
-interface Member { id: number; full_name?: string; username?: string; initials?: string; }
+interface Member { id: number; full_name?: string; username?: string; email?: string; initials?: string; }
 interface KUser { id: number; full_name?: string; username?: string; email?: string; initials?: string; }
+interface AppUser { id: number; email: string; full_name: string; is_founder: boolean; role_name?: string | null; }
+
+// Резолв исполнителя: если email Kaiten-профиля совпал с сотрудником ШЕФ — показываем ШЕФ.
+interface ResolvedMember { name: string; initials: string; sub: string; shef: boolean; }
+function resolveMember(m: { full_name?: string; username?: string; email?: string; initials?: string }, shefByEmail: Map<string, AppUser>): ResolvedMember {
+  const su = m.email ? shefByEmail.get(m.email.toLowerCase()) : undefined;
+  if (su) return { name: su.full_name, initials: initialsOf({ full_name: su.full_name }), sub: su.role_name || (su.is_founder ? 'Основатель' : 'Сотрудник'), shef: true };
+  return { name: m.full_name || m.username || '?', initials: initialsOf(m), sub: 'Kaiten', shef: false };
+}
 interface Card {
   id: number;
   title: string;
@@ -52,6 +61,7 @@ export default function TrackerPage() {
   const [lanes, setLanes] = useState<Lane[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
   const [users, setUsers] = useState<KUser[]>([]);
+  const [appUsers, setAppUsers] = useState<AppUser[]>([]);
   const [loadingBoard, setLoadingBoard] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,6 +78,7 @@ export default function TrackerPage() {
         setConnected(r.data.connected);
         if (r.data.connected) {
           api.get('/api/kaiten/users').then(u => setUsers(u.data || [])).catch(() => {});
+          api.get('/api/users').then(u => setAppUsers(u.data || [])).catch(() => {});
           return api.get('/api/kaiten/spaces');
         }
       })
@@ -110,6 +121,7 @@ export default function TrackerPage() {
 
   const multiLane = lanes.length > 1;
   const laneIds = new Set(lanes.map(l => l.id));
+  const shefByEmail = new Map(appUsers.map(u => [u.email.toLowerCase(), u]));
 
   // Карточки ячейки (lane × column). Карточки с неизвестной дорожкой падают в первую.
   function cellCards(laneId: number, colId: number, isFirstLane: boolean): Card[] {
@@ -225,7 +237,10 @@ export default function TrackerPage() {
                 <div className="kanban-card-foot">
                   {due ? <span className={`due-pill${due.overdue ? ' overdue' : ''}`}><Icon name="clock" size={12} />{due.text}</span> : <span />}
                   <span className="card-avatars">
-                    {mem.slice(0, 3).map(m => <span key={m.id} className="avatar-sm" title={m.full_name || m.username}>{initialsOf(m)}</span>)}
+                    {mem.slice(0, 3).map(m => {
+                      const rm = resolveMember(m, shefByEmail);
+                      return <span key={m.id} className={`avatar-sm${rm.shef ? ' shef' : ''}`} title={`${rm.name}${rm.shef ? ' · ' + rm.sub : ''}`}>{rm.initials}</span>;
+                    })}
                     {mem.length > 3 && <span className="avatar-sm more">+{mem.length - 3}</span>}
                   </span>
                 </div>
@@ -308,7 +323,7 @@ export default function TrackerPage() {
       )}
 
       {selectedCard && (
-        <CardDrawer card={selectedCard} users={users} onClose={() => setSelectedId(null)} onPatchLocal={patchLocal} onError={setError} onDelete={handleDelete} />
+        <CardDrawer card={selectedCard} users={users} appUsers={appUsers} onClose={() => setSelectedId(null)} onPatchLocal={patchLocal} onError={setError} onDelete={handleDelete} />
       )}
 
       <style>{`
@@ -338,6 +353,7 @@ export default function TrackerPage() {
         .avatar-sm { width: 22px; height: 22px; border-radius: 999px; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #2563EB, #1D4ED8); border: 1.5px solid var(--surface); margin-left: -6px; }
         .avatar-sm:first-child { margin-left: 0; }
         .avatar-sm.more { background: var(--ink-4); }
+        .avatar-sm.shef { background: linear-gradient(135deg, #0d9488, #0f766e); }
         .kanban-card-del { position: absolute; top: 8px; right: 8px; border: none; background: none; color: var(--ink-4); cursor: pointer; opacity: 0; transition: var(--transition); display: flex; }
         .kanban-card:hover .kanban-card-del { opacity: 1; }
         .kanban-card-del:hover { color: #c0392b; }
@@ -351,8 +367,8 @@ export default function TrackerPage() {
 }
 
 // ── Панель деталей карточки ──
-function CardDrawer({ card, users, onClose, onPatchLocal, onError, onDelete }: {
-  card: Card; users: KUser[]; onClose: () => void;
+function CardDrawer({ card, users, appUsers, onClose, onPatchLocal, onError, onDelete }: {
+  card: Card; users: KUser[]; appUsers: AppUser[]; onClose: () => void;
   onPatchLocal: (cardId: number, patch: Partial<Card>) => void;
   onError: (msg: string) => void; onDelete: (card: Card) => void;
 }) {
@@ -370,8 +386,18 @@ function CardDrawer({ card, users, onClose, onPatchLocal, onError, onDelete }: {
   }, [card.id]);
 
   const members = card.members || [];
-  const available = users.filter(u => !members.some(m => m.id === u.id));
   const dirty = title !== card.title || desc !== (card.description || '') || due !== toDateInput(card.due_date);
+
+  // Мост по email: пикер из сотрудников ШЕФ (резолв в Kaiten-аккаунт) + Kaiten-only «хвост».
+  const shefByEmail = new Map(appUsers.map(u => [u.email.toLowerCase(), u]));
+  const kaitenByEmail = new Map(users.filter(u => u.email).map(u => [u.email!.toLowerCase(), u]));
+  const assignedEmails = new Set(members.map(m => (m.email || '').toLowerCase()).filter(Boolean));
+  const assignedIds = new Set(members.map(m => m.id));
+  const shefItems = appUsers
+    .filter(su => !assignedEmails.has(su.email.toLowerCase()))
+    .map(su => ({ su, ku: kaitenByEmail.get(su.email.toLowerCase()) }));
+  const kaitenOnly = users.filter(u => !assignedIds.has(u.id) && !(u.email && shefByEmail.has(u.email.toLowerCase())));
+  const hasPickable = shefItems.length > 0 || kaitenOnly.length > 0;
 
   async function save() {
     setSaving(true);
@@ -388,7 +414,7 @@ function CardDrawer({ card, users, onClose, onPatchLocal, onError, onDelete }: {
     setMemBusy(true); setShowPicker(false);
     try {
       await api.post(`/api/kaiten/cards/${card.id}/members`, { user_id: u.id });
-      onPatchLocal(card.id, { members: [...members, { id: u.id, full_name: u.full_name, username: u.username, initials: u.initials }] });
+      onPatchLocal(card.id, { members: [...members, { id: u.id, full_name: u.full_name, username: u.username, email: u.email, initials: u.initials }] });
     } catch (e: any) {
       onError(e?.response?.data?.detail || 'Не удалось назначить исполнителя');
     } finally { setMemBusy(false); }
@@ -419,20 +445,31 @@ function CardDrawer({ card, users, onClose, onPatchLocal, onError, onDelete }: {
         <div className="field">
           <span>Исполнители</span>
           <div className="mem-list">
-            {members.map(m => (
-              <span key={m.id} className="mem-chip">
-                <span className="avatar-sm" style={{ margin: 0 }}>{initialsOf(m)}</span>
-                {m.full_name || m.username}
-                <button disabled={memBusy} onClick={() => removeMember(m)}><Icon name="close" size={12} /></button>
-              </span>
-            ))}
+            {members.map(m => {
+              const rm = resolveMember(m, shefByEmail);
+              return (
+                <span key={m.id} className="mem-chip" title={rm.shef ? rm.sub : 'Профиль Kaiten'}>
+                  <span className={`avatar-sm${rm.shef ? ' shef' : ''}`} style={{ margin: 0 }}>{rm.initials}</span>
+                  {rm.name}
+                  <button disabled={memBusy} onClick={() => removeMember(m)}><Icon name="close" size={12} /></button>
+                </span>
+              );
+            })}
             <div className="mem-add">
-              <button className="btn btn-ghost btn-sm" disabled={memBusy || !available.length} onClick={() => setShowPicker(v => !v)}><Icon name="plus" size={14} />Добавить</button>
+              <button className="btn btn-ghost btn-sm" disabled={memBusy || !hasPickable} onClick={() => setShowPicker(v => !v)}><Icon name="plus" size={14} />Добавить</button>
               {showPicker && (
                 <div className="mem-picker">
-                  {available.map(u => (
-                    <button key={u.id} onClick={() => addMember(u)}>
-                      <span className="avatar-sm" style={{ margin: 0 }}>{initialsOf(u)}</span>{u.full_name || u.username || u.email}
+                  {shefItems.map(({ su, ku }) => (
+                    <button key={`s${su.id}`} disabled={!ku} onClick={() => ku && addMember(ku)}>
+                      <span className="avatar-sm shef" style={{ margin: 0 }}>{initialsOf({ full_name: su.full_name })}</span>
+                      <span className="pick-name">{su.full_name}<span className="pick-sub">{su.role_name || (su.is_founder ? 'Основатель' : 'Сотрудник')}{!ku && ' · нет в Kaiten'}</span></span>
+                    </button>
+                  ))}
+                  {kaitenOnly.length > 0 && <div className="pick-divider">Только в Kaiten</div>}
+                  {kaitenOnly.map(u => (
+                    <button key={`k${u.id}`} onClick={() => addMember(u)}>
+                      <span className="avatar-sm" style={{ margin: 0 }}>{initialsOf(u)}</span>
+                      <span className="pick-name">{u.full_name || u.username || u.email}</span>
                     </button>
                   ))}
                 </div>
@@ -465,7 +502,11 @@ function CardDrawer({ card, users, onClose, onPatchLocal, onError, onDelete }: {
         .mem-add { position: relative; }
         .mem-picker { position: absolute; top: 100%; left: 0; margin-top: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; z-index: 5; min-width: 200px; max-height: 240px; overflow-y: auto; }
         .mem-picker button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: none; background: none; padding: 8px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--text-primary); }
-        .mem-picker button:hover { background: var(--surface-2); }
+        .mem-picker button:hover:not(:disabled) { background: var(--surface-2); }
+        .mem-picker button:disabled { opacity: .5; cursor: not-allowed; }
+        .pick-name { display: flex; flex-direction: column; line-height: 1.2; text-align: left; }
+        .pick-sub { font-size: 11px; color: var(--ink-4); font-weight: 500; }
+        .pick-divider { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-4); padding: 8px 8px 4px; }
         .drawer-actions { display: flex; gap: 10px; margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); }
       `}</style>
     </div>

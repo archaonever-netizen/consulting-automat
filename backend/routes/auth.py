@@ -1,7 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from ..core.database import get_db
+from ..models import User
 from ..schemas.auth import LoginRequest, TokenResponse, UserRead
 from ..services.auth import authenticate_user, create_access_token, get_current_user
 
@@ -31,6 +34,28 @@ async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
 @router.get("/auth/me", response_model=UserRead)
 async def me(current_user=Depends(get_current_user_dep)):
     return current_user
+
+
+@router.get("/users")
+async def list_app_users(
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Сотрудники ШЕФ — для моста с исполнителями Kaiten (сопоставление по email)."""
+    result = await db.execute(
+        select(User).where(User.is_active.is_(True)).options(selectinload(User.role))
+    )
+    users = result.scalars().all()
+    return [
+        {
+            "id": u.id,
+            "email": u.email,
+            "full_name": u.full_name,
+            "is_founder": u.is_founder,
+            "role_name": u.role.name if u.role else None,
+        }
+        for u in users
+    ]
 
 
 @router.post("/auth/logout")
