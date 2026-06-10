@@ -183,7 +183,7 @@ export default function KnowledgePage() {
                     <div key={a.id} className="kb-gloss-row">
                       <dt>{a.title}{!a.is_published && <span className="kb-draft">черновик</span>}</dt>
                       <dd>{a.summary}</dd>
-                      {editMode && <ArtTools a={a} onEdit={() => setArtModal(a)} onDel={() => delArticle(a)} />}
+                      {editMode && <ArtTools onEdit={() => setArtModal(a)} onDel={() => delArticle(a)} />}
                     </div>
                   ))}
                 </dl>
@@ -192,7 +192,7 @@ export default function KnowledgePage() {
                   {c.articles.map(a => (
                     <div key={a.id} className="kb-arch-block">
                       <h3>{a.title}{!a.is_published && <span className="kb-draft">черновик</span>}
-                        {editMode && <ArtTools a={a} onEdit={() => setArtModal(a)} onDel={() => delArticle(a)} inline />}
+                        {editMode && <ArtTools onEdit={() => setArtModal(a)} onDel={() => delArticle(a)} inline />}
                       </h3>
                       {a.summary && <p>{a.summary}</p>}
                       {a.body && <div className="md"><ReactMarkdown>{a.body}</ReactMarkdown></div>}
@@ -212,7 +212,7 @@ export default function KnowledgePage() {
                         {a.route && !editMode && (
                           <Link to={a.route} className="kb-card-open" title="Открыть раздел"><Icon name="arrowRight" size={16} /></Link>
                         )}
-                        {editMode && <ArtTools a={a} onEdit={() => setArtModal(a)} onDel={() => delArticle(a)} />}
+                        {editMode && <ArtTools onEdit={() => setArtModal(a)} onDel={() => delArticle(a)} />}
                       </div>
                       {a.summary && <p className="kb-card-sum">{a.summary}</p>}
                       {a.body && <div className="md kb-card-body"><ReactMarkdown>{a.body}</ReactMarkdown></div>}
@@ -245,7 +245,7 @@ export default function KnowledgePage() {
   );
 }
 
-function ArtTools({ a, onEdit, onDel, inline }: { a: Article; onEdit: () => void; onDel: () => void; inline?: boolean }) {
+function ArtTools({ onEdit, onDel, inline }: { onEdit: () => void; onDel: () => void; inline?: boolean }) {
   return (
     <span className={'kb-art-tools' + (inline ? ' inline' : '')}>
       <button className="kb-icon-btn" title="Изменить" onClick={onEdit}><Icon name="edit" size={13} /></button>
