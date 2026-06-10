@@ -53,6 +53,12 @@ class User(Base):
         cascade='all, delete-orphan',
         uselist=False
     )
+    kaiten_connection: Mapped[Optional['KaitenConnection']] = relationship(
+        'KaitenConnection',
+        back_populates='user',
+        cascade='all, delete-orphan',
+        uselist=False
+    )
 
     __table_args__ = (
         Index('uq_users_single_founder', 'is_founder', unique=True,
@@ -485,6 +491,30 @@ class KnowledgeArticle(Base):
 
     category: Mapped['KnowledgeCategory'] = relationship('KnowledgeCategory', back_populates='articles')
     created_by: Mapped[Optional['User']] = relationship('User', lazy='joined')
+
+
+class KaitenConnection(Base):
+    """Подключение пользователя к его рабочему пространству Kaiten.
+
+    Одна связь на пользователя. Токен хранится зашифрованным (Fernet), в
+    открытом виде в БД не лежит. Приложение работает как сквозной прокси к
+    Kaiten REST API под этим токеном — карточки локально не хранятся.
+    """
+    __tablename__ = 'kaiten_connections'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('users.id'), nullable=False, unique=True
+    )
+    domain: Mapped[str] = mapped_column(String(255), nullable=False)
+    token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    kaiten_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    kaiten_user_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    kaiten_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user: Mapped['User'] = relationship('User', back_populates='kaiten_connection')
 
 
 class FunctionAnalysis(Base):

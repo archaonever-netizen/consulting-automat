@@ -12,6 +12,8 @@ import TasksPage from './pages/TasksPage';
 import ChatPage from './pages/ChatPage';
 import OrchestrationPage from './pages/OrchestrationPage';
 import KnowledgePage from './pages/KnowledgePage';
+import TrackerPage from './pages/TrackerPage';
+import ProfilePage from './pages/ProfilePage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token');
@@ -41,6 +43,8 @@ export default function App() {
           <Route path="chat" element={<ChatPage />} />
           <Route path="orchestration" element={<OrchestrationPage />} />
           <Route path="knowledge" element={<KnowledgePage />} />
+          <Route path="tracker" element={<TrackerPage />} />
+          <Route path="profile" element={<ProfilePage />} />
         </Route>
       </Routes>
     </BrowserRouter>

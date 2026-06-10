@@ -10,7 +10,7 @@ from sqlalchemy import select
 from .core.config import get_settings
 from .core.database import AsyncSessionLocal, Base, engine
 from .models import User
-from .routes import auth, clients, briefs, company, tasks, agent, chat, knowledge
+from .routes import auth, clients, briefs, company, tasks, agent, chat, knowledge, kaiten
 from .services.knowledge import seed_if_empty
 
 settings = get_settings()
@@ -100,6 +100,7 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
+app.include_router(kaiten.router, prefix="/api/kaiten", tags=["kaiten"])
 
 
 # ── Раздача собранного фронтенда (SPA) ──

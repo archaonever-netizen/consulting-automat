@@ -26,6 +26,7 @@ const NAV: NavItem[] = [
   { to: '/clients', label: 'Клиенты', icon: 'users' },
   { to: '/orchestration', label: 'Сеть агентов', icon: 'sparkle' },
   { to: '/tasks', label: 'Задачи', icon: 'check' },
+  { to: '/tracker', label: 'Трекер', icon: 'grid' },
   { to: '/company', label: 'Компания', icon: 'chart', founderOnly: true },
   { to: '/knowledge', label: 'База знаний', icon: 'book' },
 ];
@@ -94,7 +95,8 @@ export default function Layout() {
           <button title="Выход" onClick={handleLogout}><Icon name="logout" size={18} /></button>
         </div>
 
-        <div className="sb-user">
+        <button className="sb-user" onClick={() => navigate('/profile')} title="Профиль"
+          style={{ width: '100%', font: 'inherit', background: 'transparent', textAlign: 'left' }}>
           <span className="sb-av" style={{ background: 'var(--accent)' }}>
             {initials(user?.full_name || '')}
           </span>
@@ -103,7 +105,7 @@ export default function Layout() {
             <span>{user?.is_founder ? 'Основатель' : 'Сотрудник'}</span>
           </span>
           <Icon name="dots" size={16} className="sb-chev" />
-        </div>
+        </button>
       </aside>
 
       <main className="main" id="mainContent">
