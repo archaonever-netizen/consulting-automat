@@ -79,6 +79,8 @@ async def lifespan(app: FastAPI):
         await seed_if_empty(db)
     yield
     # Cleanup on shutdown
+    from .services.kaiten_client import close_shared_client
+    await close_shared_client()
     await engine.dispose()
 
 

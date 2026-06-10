@@ -49,19 +49,29 @@ function dueBadge(iso?: string | null): { text: string; overdue: boolean } | nul
 }
 const COL_DOT: Record<number, string> = { 1: '#94a3b8', 2: '#2563EB', 3: '#16a34a' };
 
-export default function TrackerPage() {
-  const [connected, setConnected] = useState<boolean | null>(null);
+// Лёгкий кэш в localStorage: мгновенная отрисовка из кэша + фоновое обновление
+// (stale-while-revalidate) и память последнего пространства/доски — для бесшовности.
+const LS = {
+  get<T>(k: string): T | null { try { const v = localStorage.getItem(k); return v ? (JSON.parse(v) as T) : null; } catch { return null; } },
+  set(k: string, v: unknown) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } },
+};
 
-  const [spaces, setSpaces] = useState<Space[]>([]);
-  const [spaceId, setSpaceId] = useState<number | null>(null);
+export default function TrackerPage() {
+  // Инициализация из кэша → первый кадр без «пустоты» при повторном заходе.
+  const [connected, setConnected] = useState<boolean | null>(() => {
+    const c = LS.get<boolean>('trk:connected'); return typeof c === 'boolean' ? c : null;
+  });
+
+  const [spaces, setSpaces] = useState<Space[]>(() => LS.get<Space[]>('trk:spaces') || []);
+  const [spaceId, setSpaceId] = useState<number | null>(() => LS.get<number>('trk:lastSpace'));
   const [boards, setBoards] = useState<Board[]>([]);
-  const [boardId, setBoardId] = useState<number | null>(null);
+  const [boardId, setBoardId] = useState<number | null>(() => LS.get<number>('trk:lastBoard'));
 
   const [columns, setColumns] = useState<Column[]>([]);
   const [lanes, setLanes] = useState<Lane[]>([]);
   const [cards, setCards] = useState<Card[]>([]);
-  const [users, setUsers] = useState<KUser[]>([]);
-  const [appUsers, setAppUsers] = useState<AppUser[]>([]);
+  const [users, setUsers] = useState<KUser[]>(() => LS.get<KUser[]>('trk:users') || []);
+  const [appUsers, setAppUsers] = useState<AppUser[]>(() => LS.get<AppUser[]>('trk:appUsers') || []);
   const [loadingBoard, setLoadingBoard] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,32 +81,57 @@ export default function TrackerPage() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
 
-  // 1. Подключение + пространства + пользователи
+  // 1. Подключение + пространства + пользователи (с персистом и авто-выбором)
   useEffect(() => {
     api.get('/api/kaiten/connection')
       .then(r => {
         setConnected(r.data.connected);
+        LS.set('trk:connected', r.data.connected);
         if (r.data.connected) {
-          api.get('/api/kaiten/users').then(u => setUsers(u.data || [])).catch(() => {});
-          api.get('/api/users').then(u => setAppUsers(u.data || [])).catch(() => {});
+          api.get('/api/kaiten/users').then(u => { setUsers(u.data || []); LS.set('trk:users', u.data || []); }).catch(() => {});
+          api.get('/api/users').then(u => { setAppUsers(u.data || []); LS.set('trk:appUsers', u.data || []); }).catch(() => {});
           return api.get('/api/kaiten/spaces');
         }
       })
-      .then(r => { if (r) setSpaces(r.data || []); })
-      .catch(() => setConnected(false));
+      .then(r => {
+        if (!r) return;
+        const sp: Space[] = r.data || [];
+        setSpaces(sp); LS.set('trk:spaces', sp);
+        // сохранённое валидно → оставляем; одно пространство → авто; иначе сброс
+        setSpaceId(prev => (prev && sp.some(s => s.id === prev)) ? prev : (sp.length === 1 ? sp[0].id : null));
+      })
+      .catch(() => { setConnected(false); LS.set('trk:connected', false); });
   }, []);
 
-  // 2. Доски пространства
+  // 2. Доски пространства (с персистом и авто-выбором доски)
   useEffect(() => {
     if (spaceId == null) { setBoards([]); setBoardId(null); return; }
+    LS.set('trk:lastSpace', spaceId);
+    const cachedBoards = LS.get<Board[]>(`trk:boards:${spaceId}`);
+    if (cachedBoards) setBoards(cachedBoards);
     api.get('/api/kaiten/boards', { params: { space_id: spaceId } })
-      .then(r => setBoards(r.data || []))
+      .then(r => {
+        const bd: Board[] = r.data || [];
+        setBoards(bd); LS.set(`trk:boards:${spaceId}`, bd);
+        setBoardId(prev => (prev && bd.some(b => b.id === prev)) ? prev : (bd.length === 1 ? bd[0].id : null));
+      })
       .catch(e => setError(e?.response?.data?.detail || 'Не удалось загрузить доски'));
   }, [spaceId]);
 
   // 3. Колонки + дорожки + карточки доски
   const loadBoard = useCallback(async (id: number) => {
-    setLoadingBoard(true); setError(null);
+    setError(null);
+    // 1) Мгновенная отрисовка из кэша (если есть) — спиннер только при «холодной» доске.
+    const cached = LS.get<{ columns: Column[]; lanes: Lane[]; cards: Card[] }>(`trk:board:${id}`);
+    if (cached) {
+      setColumns(cached.columns || []);
+      setLanes(cached.lanes?.length ? cached.lanes : [{ id: 0, title: '' }]);
+      setCards(cached.cards || []);
+      setLoadingBoard(false);
+    } else {
+      setLoadingBoard(true);
+    }
+    // 2) Фоновое обновление.
     try {
       const [boardRes, cardsRes] = await Promise.all([
         api.get(`/api/kaiten/boards/${id}`),
@@ -106,18 +141,23 @@ export default function TrackerPage() {
         .sort((a: Column, b: Column) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
       const lns: Lane[] = (boardRes.data?.lanes || []).slice()
         .sort((a: Lane, b: Lane) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+      const finalLanes = lns.length ? lns : [{ id: 0, title: '' }];
+      const cardsData: Card[] = cardsRes.data || [];
       setColumns(cols);
-      setLanes(lns.length ? lns : [{ id: 0, title: '' }]);
-      setCards(cardsRes.data || []);
+      setLanes(finalLanes);
+      setCards(cardsData);
+      LS.set(`trk:board:${id}`, { columns: cols, lanes: finalLanes, cards: cardsData });
     } catch (e: any) {
+      if (!cached) { setColumns([]); setLanes([]); setCards([]); }
       setError(e?.response?.data?.detail || 'Не удалось загрузить доску');
-      setColumns([]); setLanes([]); setCards([]);
     } finally {
       setLoadingBoard(false);
     }
   }, []);
 
-  useEffect(() => { if (boardId != null) loadBoard(boardId); }, [boardId, loadBoard]);
+  useEffect(() => {
+    if (boardId != null) { loadBoard(boardId); LS.set('trk:lastBoard', boardId); }
+  }, [boardId, loadBoard]);
 
   const multiLane = lanes.length > 1;
   const laneIds = new Set(lanes.map(l => l.id));

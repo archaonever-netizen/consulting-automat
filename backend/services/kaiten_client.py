@@ -8,6 +8,28 @@ from typing import Any, Optional
 import httpx
 from fastapi import HTTPException
 
+# Один общий пул соединений на весь процесс: keep-alive переиспользует TCP/TLS к
+# kaiten.ru между всеми запросами (раньше клиент создавался на каждый вызов и
+# платил полное TLS-рукопожатие — +100–300 мс к каждому из 5–6 вызовов загрузки).
+_shared_client: Optional[httpx.AsyncClient] = None
+
+
+def get_shared_client() -> httpx.AsyncClient:
+    global _shared_client
+    if _shared_client is None or _shared_client.is_closed:
+        _shared_client = httpx.AsyncClient(
+            timeout=20.0,
+            limits=httpx.Limits(max_keepalive_connections=20, keepalive_expiry=60.0),
+        )
+    return _shared_client
+
+
+async def close_shared_client() -> None:
+    global _shared_client
+    if _shared_client is not None and not _shared_client.is_closed:
+        await _shared_client.aclose()
+    _shared_client = None
+
 
 class KaitenClient:
     def __init__(self, domain: str, token: str, timeout: float = 20.0):
@@ -21,8 +43,10 @@ class KaitenClient:
     async def _request(self, method: str, path: str, **kwargs) -> Any:
         url = f"{self.base_url}{path}"
         try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                resp = await client.request(method, url, headers=self._headers, **kwargs)
+            client = get_shared_client()
+            resp = await client.request(
+                method, url, headers=self._headers, timeout=self._timeout, **kwargs
+            )
         except httpx.RequestError as exc:
             raise HTTPException(
                 status_code=502,
