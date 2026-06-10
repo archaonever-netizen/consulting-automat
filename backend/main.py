@@ -20,26 +20,36 @@ _DIST = os.path.normpath(os.path.join(os.path.dirname(__file__), "..", "frontend
 
 
 async def _seed_founder():
-    """Создать основателя при первом запуске, если БД пустая.
+    """Создать/обновить основателя из FOUNDER_EMAIL / FOUNDER_PASSWORD.
 
-    Берёт креды из env FOUNDER_EMAIL / FOUNDER_PASSWORD (иначе пропускает).
-    Без этого на свежей БД некому войти.
+    env — источник истины для основателя: на старте он не только создаётся на
+    пустой БД, но и обновляется (email нормализуется как при входе, пароль
+    переустанавливается). Без этого смена переменных в проде не применялась —
+    сид срабатывал только на пустой БД, и старая строка оставалась навсегда.
+
+    Следствие: при каждом старте пароль основателя приводится к значению env.
     """
     email = os.getenv("FOUNDER_EMAIL")
     password = os.getenv("FOUNDER_PASSWORD")
     if not email or not password:
         return
+    email = email.lower().strip()  # как в authenticate_user — иначе вход не найдёт
     async with AsyncSessionLocal() as db:
-        existing = await db.execute(select(User).limit(1))
-        if existing.scalar_one_or_none() is not None:
-            return
-        founder = User(
-            email=email,
-            full_name=os.getenv("FOUNDER_NAME", "Основатель"),
-            is_founder=True,
-        )
+        result = await db.execute(select(User).where(User.is_founder.is_(True)))
+        founder = result.scalar_one_or_none()
+        if founder is None:
+            founder = User(
+                email=email,
+                full_name=os.getenv("FOUNDER_NAME", "Основатель"),
+                is_founder=True,
+            )
+            db.add(founder)
+        else:
+            founder.email = email
+            if os.getenv("FOUNDER_NAME"):
+                founder.full_name = os.getenv("FOUNDER_NAME")
+        founder.is_active = True
         founder.set_password(password)
-        db.add(founder)
         await db.commit()
 
 
