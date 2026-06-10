@@ -13,6 +13,7 @@ interface Questions {
   title: string;
   sections?: Section[];
   type?: string;
+  metrics?: unknown[];
 }
 
 const STATUS_CLS: Record<string, string> = {
@@ -78,8 +79,8 @@ export default function BriefFormPage() {
 
   if (loading) return <div className="page"><div className="loading-bar"></div></div>;
 
-  // Sales-бриф: отдельный UI с метриками и живым расчётом Health.
-  if (questions?.type === 'sales') {
+  // Метрик-брифинги (Продажи, Маркетинг, Финансы и т.д.): UI с живым расчётом Health.
+  if (questions?.metrics && questions.metrics.length > 0) {
     return (
       <SalesBrief
         briefId={briefId!}

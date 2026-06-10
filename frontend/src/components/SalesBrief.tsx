@@ -22,7 +22,7 @@ export interface Metric {
 }
 export interface SalesQuestions {
   title: string;
-  type: 'sales';
+  type: string;
   metrics: Metric[];
   responsible_list: string[];
 }
@@ -46,6 +46,9 @@ function calcResult(m: Metric, vals: string[]): number | string | null {
     case 'division_percent_reverse': return nums.length >= 2 ? +((nums[1] / nums[0]) * 100).toFixed(1) : null;
     case 'subtraction': return nums.length >= 2 ? +(nums[0] - nums[1]).toFixed(0) : null;
     case 'growth_percent': return nums.length >= 2 && nums[1] !== 0 ? +(((nums[0] - nums[1]) / nums[1]) * 100).toFixed(1) : null;
+    case 'margin_percent': return nums.length >= 2 && nums[0] !== 0 ? +(((nums[0] - nums[1]) / nums[0]) * 100).toFixed(1) : null;
+    case 'abs_deviation_percent': return nums.length >= 2 && nums[1] !== 0 ? +(Math.abs((nums[0] - nums[1]) / nums[1]) * 100).toFixed(1) : null;
+    case 'value': return nums.length >= 1 && !isNaN(nums[0]) ? nums[0] : null;
     case 'date_diff': {
       if (vals[0] && vals[1]) {
         const d1 = new Date(vals[0]); const d2 = new Date(vals[1]);
@@ -88,7 +91,8 @@ function calcHealth(m: Metric, result: number | string): { healthy: boolean; per
 function fmtResult(m: Metric, result: number | string): string {
   const ct = m.calc_type;
   if (ct === 'division' || ct === 'division_reverse') return (+result).toFixed(2);
-  if (ct === 'division_percent' || ct === 'division_percent_reverse' || ct === 'growth_percent') return result + '%';
+  if (ct === 'division_percent' || ct === 'division_percent_reverse' || ct === 'growth_percent'
+      || ct === 'margin_percent' || ct === 'abs_deviation_percent') return result + '%';
   if (ct === 'yesno') return result === 'yes' ? 'Да' : 'Нет';
   return String(result);
 }
@@ -131,7 +135,7 @@ export default function SalesBrief({ briefId, questions, initialAnswers, initial
         <div>
           <button className="back" onClick={goBack} style={{ marginBottom: 10 }}><Icon name="arrowLeft" size={18} />Назад к клиенту</button>
           <h1>{questions.title}</h1>
-          <p>12 ключевых метрик продаж с расчётом Health-показателя в реальном времени.</p>
+          <p>{questions.metrics.length} ключевых метрик с расчётом Health-показателя в реальном времени.</p>
         </div>
         <span className={`pill ${status === 'Заполнено' ? 'pill-green' : status === 'В работе' ? 'pill-amber' : 'pill-gray'}`}>
           {status === 'Заполнено' && <span className="led" />}{status}
