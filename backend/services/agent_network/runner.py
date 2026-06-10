@@ -36,6 +36,7 @@ def _initial_state(
         "results": {},
         "visited": set(),
         "trace": [],
+        "link_requests": [],
         "consolidated": "",
     }
 
@@ -53,6 +54,7 @@ def _results_payload(client_name: str, description: str, final: dict) -> dict:
         "function_analyses": function_analyses,
         "consolidated_plan": final.get("consolidated", ""),
         "trace": final.get("trace", []),
+        "link_requests": final.get("link_requests", []),
     }
 
 
@@ -151,5 +153,10 @@ async def stream_network(
     run.results = _results_payload(client_name, run.description, final)
     run.completed_at = datetime.utcnow()
     await db.commit()
+
+    # Запросы на создание недостающих связей → модалки на фронте (human-in-the-loop).
+    for req in final.get("link_requests", []):
+        event = {"type": "request", "kind": "create_link", **req}
+        yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
 
     yield f"data: {json.dumps({'done': True, 'consolidated_plan': final.get('consolidated', '')}, ensure_ascii=False)}\n\n"

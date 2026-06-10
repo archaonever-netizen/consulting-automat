@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import api from '../services/api';
 import Icon from '../components/Icon';
 
@@ -20,10 +21,21 @@ interface DepartmentItem {
   color: string;
 }
 
+type Relation = 'executor' | 'consumer' | 'supplier';
+
 interface LinkItem {
-  relation_type: 'executor' | 'consumer' | 'supplier';
+  id: number;
+  function_id: number;
+  department_id: number;
+  relation_type: Relation;
   description: string | null;
 }
+
+const RELATION_LABEL: Record<Relation, string> = {
+  executor: 'Исполнитель',
+  consumer: 'Потребитель',
+  supplier: 'Поставщик',
+};
 
 interface CompanyData {
   functions: FunctionItem[];
@@ -58,13 +70,39 @@ export default function CompanyPage() {
   const [showModal, setShowModal] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptDesc, setNewDeptDesc] = useState('');
+  // ключ ячейки "funcId_deptId", у которой открыт пикер ролей
+  const [activeCell, setActiveCell] = useState<string | null>(null);
+
+  async function reload() {
+    const r = await api.get('/api/company');
+    setData(r.data);
+  }
 
   useEffect(() => {
-    api.get('/api/company')
-      .then(r => setData(r.data))
+    reload()
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  async function addRelation(functionId: number, departmentId: number, relation: Relation) {
+    try {
+      await api.post('/api/company/links', {
+        function_id: functionId,
+        department_id: departmentId,
+        relation_type: relation,
+        description: null,
+      });
+      setActiveCell(null);
+      await reload();
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Ошибка создания связи');
+    }
+  }
+
+  async function removeRelation(linkId: number) {
+    await api.delete(`/api/company/links/${linkId}`);
+    await reload();
+  }
 
   async function addDepartment(e: React.FormEvent) {
     e.preventDefault();
@@ -86,7 +124,7 @@ export default function CompanyPage() {
     <div className="page">
       <div className="page-head">
         <h1 className="page-title">Компания</h1>
-        <p className="page-subtitle">Организационная структура: матрица функций и отделов</p>
+        <p className="page-subtitle">Организационная структура: матрица функций и отделов. Клик по ячейке — назначить роль (исполнитель/потребитель/поставщик); по названию функции или отдела — открыть карточку.</p>
       </div>
 
       {data && (
@@ -115,12 +153,13 @@ export default function CompanyPage() {
                       <th style={{ width: 200 }}></th>
                       {data.departments.map(dept => (
                         <th key={dept.id} style={{ textAlign: 'center' }}>
-                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                          <Link to={`/company/departments/${dept.id}`}
+                            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, textDecoration: 'none', color: 'inherit' }}>
                             <div className="big-av av-md" style={{ background: dept.color, width: 36, height: 36, fontSize: 12, flexShrink: 0 }}>
                               {dept.initials}
                             </div>
                             <span style={{ fontSize: 12, fontWeight: 600, whiteSpace: 'normal' }}>{dept.name}</span>
-                          </div>
+                          </Link>
                         </th>
                       ))}
                     </tr>
@@ -129,7 +168,8 @@ export default function CompanyPage() {
                     {data.functions.map(func => (
                       <tr key={func.id}>
                         <th>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <Link to={`/company/functions/${func.id}`}
+                            style={{ display: 'flex', alignItems: 'center', gap: 8, textDecoration: 'none', color: 'inherit' }}>
                             <div className="big-av av-md" style={{ background: func.color, flexShrink: 0 }}>
                               {func.initials}
                             </div>
@@ -141,24 +181,58 @@ export default function CompanyPage() {
                                 {func.description || <em>нет описания</em>}
                               </div>
                             </div>
-                          </div>
+                          </Link>
                         </th>
                         {data.departments.map(dept => {
                           const key = `${func.id}_${dept.id}`;
                           const links = data.matrix[key] || [];
+                          const isActive = activeCell === key;
+                          const existing = new Set(links.map(l => l.relation_type));
                           return (
-                            <td key={dept.id} className="matrix-cell">
+                            <td key={dept.id} className="matrix-cell" style={{ position: 'relative' }}
+                              onClick={() => setActiveCell(isActive ? null : key)}>
                               {links.length > 0 && (
                                 <div style={{ display: 'flex', gap: 4, justifyContent: 'center', flexWrap: 'wrap' }}>
-                                  {links.map((link, i) => (
+                                  {links.map(link => (
                                     <div
-                                      key={i}
+                                      key={link.id}
                                       className={`matrix-badge ${link.relation_type}`}
-                                      title={link.description || link.relation_type}
+                                      title={`${RELATION_LABEL[link.relation_type]} — клик в меню, чтобы удалить`}
                                     >
                                       <RelationIcon type={link.relation_type} />
                                     </div>
                                   ))}
+                                </div>
+                              )}
+                              {isActive && (
+                                <div
+                                  onClick={e => e.stopPropagation()}
+                                  style={{
+                                    position: 'absolute', zIndex: 20, top: '100%', left: '50%', transform: 'translateX(-50%)',
+                                    marginTop: 4, background: 'var(--surface)', border: '1px solid var(--line)',
+                                    borderRadius: 10, boxShadow: 'var(--sh-md, 0 8px 24px rgba(0,0,0,.12))',
+                                    padding: 8, minWidth: 170, textAlign: 'left',
+                                  }}>
+                                  {(['executor', 'consumer', 'supplier'] as Relation[]).map(rel => {
+                                    const linked = links.find(l => l.relation_type === rel);
+                                    return (
+                                      <div key={rel} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '4px 2px' }}>
+                                        <span style={{ fontSize: 13, fontWeight: 600 }}>{RELATION_LABEL[rel]}</span>
+                                        {linked ? (
+                                          <button className="btn btn-danger btn-sm"
+                                            onClick={() => removeRelation(linked.id)} title="Удалить">
+                                            <Icon name="trash" size={13} />
+                                          </button>
+                                        ) : (
+                                          <button className="btn btn-soft btn-sm"
+                                            onClick={() => addRelation(func.id, dept.id, rel)} title="Назначить"
+                                            disabled={rel === 'executor' && existing.has('executor')}>
+                                            <Icon name="plus" size={13} />
+                                          </button>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </td>

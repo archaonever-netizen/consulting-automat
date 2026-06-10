@@ -8,6 +8,8 @@ import ClientsPage from './pages/ClientsPage';
 import ClientDetailPage from './pages/ClientDetailPage';
 import BriefFormPage from './pages/BriefFormPage';
 import CompanyPage from './pages/CompanyPage';
+import FunctionDetailPage from './pages/FunctionDetailPage';
+import DepartmentDetailPage from './pages/DepartmentDetailPage';
 import TasksPage from './pages/TasksPage';
 import ChatPage from './pages/ChatPage';
 import OrchestrationPage from './pages/OrchestrationPage';
@@ -39,6 +41,8 @@ export default function App() {
           <Route path="clients/:clientId" element={<ClientDetailPage />} />
           <Route path="briefs/:briefId" element={<BriefFormPage />} />
           <Route path="company" element={<CompanyPage />} />
+          <Route path="company/functions/:id" element={<FunctionDetailPage />} />
+          <Route path="company/departments/:id" element={<DepartmentDetailPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="orchestration" element={<OrchestrationPage />} />

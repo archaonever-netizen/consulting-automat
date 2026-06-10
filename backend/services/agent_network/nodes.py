@@ -48,6 +48,19 @@ _ROUTE_PROMPT = """\
     "functions_needed": ["Функция1", "Функция2"]
 }}"""
 
+_SUGGEST_EXECUTOR_PROMPT = """\
+Ты главный координатор. Для функций без назначенного отдела-исполнителя
+предложи наиболее подходящий отдел из списка.
+
+Функции без исполнителя:
+{functions_list}
+
+Доступные отделы:
+{departments_list}
+
+КРИТИЧЕСКИ ВАЖНО: ответь ТОЧНО JSON без маркдауна:
+{{"suggestions": {{"Функция1": "Отдел", "Функция2": "Отдел"}}}}"""
+
 _DEPT_SYSTEM = """\
 Ты ИИ-агент отдела «{dept}» консалтинговой компании.
 Об отделе: {dept_desc}
@@ -120,8 +133,34 @@ def _question_for(function: str, from_dept: str) -> str:
 
 # ───────────────────────── router ─────────────────────────
 
+async def _suggest_executors(state: AgentNetworkState, functions: list[str]) -> dict[str, str]:
+    """LLM-подсказка отдела-исполнителя для функций без executor (best-effort)."""
+    topology = state["topology"]
+    dept_names = list(topology["departments"].keys())
+    if not functions or not dept_names:
+        return {}
+    try:
+        llm = get_llm(model=DeepSeekConfig.ORCHESTRATOR_MODEL, temperature=0.0, max_tokens=300)
+        chain = ChatPromptTemplate.from_template(_SUGGEST_EXECUTOR_PROMPT) | llm | JsonOutputParser()
+        data = await chain.ainvoke({
+            "functions_list": "\n".join(f"- {f}" for f in functions),
+            "departments_list": "\n".join(f"- {d}" for d in dept_names),
+        })
+        if isinstance(data, dict):
+            sugg = data.get("suggestions", {})
+            if isinstance(sugg, dict):
+                return {f: d for f, d in sugg.items() if f in functions and d in topology["departments"]}
+    except Exception:
+        pass
+    return {}
+
+
 async def router_node(state: AgentNetworkState) -> dict:
-    """Определить стартовые функции и поставить первые запросы в очередь."""
+    """Определить стартовые функции и поставить первые запросы в очередь.
+
+    Функции без executor не молча пропускаются: по ним формируется `link_requests`
+    (с предложенным отделом) — фронт покажет модалку и по разрешению создаст связь.
+    """
     topology = state["topology"]
     available = list(topology["functions"].keys())
 
@@ -150,11 +189,27 @@ async def router_node(state: AgentNetworkState) -> dict:
     visited: set = set()
     trace: list[dict] = [_trace(_ROUTER, f"проект разобран, функции: {', '.join(needed) or '—'}")]
 
+    unresolved = [f for f in needed if not topology["functions"][f].get("executor")]
+    suggestions = await _suggest_executors(state, unresolved)
+    candidates = [{"id": info["id"], "name": name} for name, info in topology["departments"].items()]
+    link_requests: list[dict] = []
+
     for function in needed:
         executor = topology["functions"][function].get("executor")
         if not executor:
-            # У функции нет executor-ребра → пометить как unresolved (риск из архитектуры)
-            trace.append(_trace(_ROUTER, f"⚠ функция «{function}» без executor — пропущена"))
+            # У функции нет executor-ребра → запросить у пользователя создание связи.
+            suggested = suggestions.get(function)
+            suggested_id = topology["departments"].get(suggested, {}).get("id") if suggested else None
+            link_requests.append({
+                "function": function,
+                "function_id": topology["functions"][function].get("id"),
+                "relation_type": "executor",
+                "candidates": candidates,
+                "suggested_id": suggested_id,
+                "suggested_name": suggested,
+            })
+            hint = f" (предлагаю «{suggested}»)" if suggested else ""
+            trace.append(_trace(_ROUTER, f"⚠ функция «{function}» без исполнителя — нужен выбор отдела{hint}"))
             continue
         key = (executor, function)
         if key in visited:
@@ -169,7 +224,12 @@ async def router_node(state: AgentNetworkState) -> dict:
         })
         trace.append(_trace(_ROUTER, f"старт: «{function}» → отдел «{executor}»"))
 
-    return {"pending_requests": requests, "visited": visited, "trace": trace}
+    return {
+        "pending_requests": requests,
+        "visited": visited,
+        "trace": trace,
+        "link_requests": link_requests,
+    }
 
 
 # ────────────────────── department_agent ──────────────────────
@@ -225,6 +285,12 @@ async def _run_department_micro(
         "client": state["client_name"],
     }
     frameworks = run_tools(selected, ctx)
+
+    # «Свои» фреймворки/скилы/фичи функции (контент из карточки, фаза 2) —
+    # агент обязан опираться на них, а не только на generic-реестр.
+    own = fn_info.get("frameworks", []) + fn_info.get("skills", []) + fn_info.get("features", [])
+    if own:
+        frameworks = {"Профильные методики функции": "\n".join(f"- {x}" for x in own), **frameworks}
 
     # шаг 3: синтез результата с учётом каркасов и входов поставщиков
     llm = get_llm(

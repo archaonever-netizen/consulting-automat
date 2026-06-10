@@ -54,9 +54,9 @@ def _topology() -> dict:
             },
         },
         "departments": {
-            "Отдел продаж": {"description": ""},
-            "Технический отдел": {"description": ""},
-            "Финотдел": {"description": ""},
+            "Отдел продаж": {"id": 1, "description": ""},
+            "Технический отдел": {"id": 2, "description": ""},
+            "Финотдел": {"id": 3, "description": ""},
         },
         "dept_functions": {
             "Отдел продаж": ["Коммерческая"],
@@ -80,6 +80,7 @@ async def main():
         "results": {},
         "visited": set(),
         "trace": [],
+        "link_requests": [],
         "consolidated": "",
     }
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import api from '../services/api';
+import AgentRequestModal, { LinkRequest } from '../components/AgentRequestModal';
 
 interface ClientOption {
   id: number;
@@ -40,9 +41,13 @@ export default function OrchestrationPage() {
   const [trace, setTrace] = useState<TraceEntry[]>([]);
   const [plan, setPlan] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Очередь запросов сети на создание связей (показываются модалками по одному)
+  const [requests, setRequests] = useState<LinkRequest[]>([]);
   const traceEndRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   const pollCancelRef = useRef<{ v: boolean } | null>(null);
+  // были ли созданы связи в ходе разбора запросов → нужен перезапуск прогона
+  const createdLinkRef = useRef(false);
 
   useEffect(() => {
     api
@@ -73,6 +78,8 @@ export default function OrchestrationPage() {
     setTrace([]);
     setPlan('');
     setError(null);
+    setRequests([]);
+    createdLinkRef.current = false;
 
     let orchestrationId: number;
     try {
@@ -117,7 +124,9 @@ export default function OrchestrationPage() {
             if (!line.startsWith('data: ')) continue;
             try {
               const parsed = JSON.parse(line.slice(6));
-              if (parsed.node && parsed.status) {
+              if (parsed.type === 'request') {
+                setRequests(prev => [...prev, parsed as LinkRequest]);
+              } else if (parsed.node && parsed.status) {
                 setTrace(prev => [...prev, parsed as TraceEntry]);
               }
               if (parsed.error) setError(parsed.error);
@@ -192,6 +201,37 @@ export default function OrchestrationPage() {
   function stop() {
     abortRef.current?.abort();
     if (pollCancelRef.current) pollCancelRef.current.v = true;
+  }
+
+  // Снять первый запрос с очереди; если очередь опустела и были созданы
+  // связи — перезапустить прогон с обновлённой топологией.
+  function popRequest() {
+    setRequests(prev => {
+      const next = prev.slice(1);
+      if (next.length === 0 && createdLinkRef.current) {
+        createdLinkRef.current = false;
+        // перезапуск после закрытия текущего рендера
+        setTimeout(() => startNetwork(), 0);
+      }
+      return next;
+    });
+  }
+
+  async function assignRequest(departmentId: number) {
+    const req = requests[0];
+    if (!req) return;
+    try {
+      await api.post('/api/company/links', {
+        function_id: req.function_id,
+        department_id: departmentId,
+        relation_type: req.relation_type,
+        description: null,
+      });
+      createdLinkRef.current = true;
+    } catch (e: any) {
+      setError(e.response?.data?.detail || 'Не удалось создать связь');
+    }
+    popRequest();
   }
 
   return (
@@ -317,6 +357,16 @@ export default function OrchestrationPage() {
             <ReactMarkdown>{plan}</ReactMarkdown>
           </div>
         </div>
+      )}
+
+      {!running && requests.length > 0 && (
+        <AgentRequestModal
+          request={requests[0]}
+          index={0}
+          total={requests.length}
+          onAssign={assignRequest}
+          onSkip={popRequest}
+        />
       )}
     </div>
   );

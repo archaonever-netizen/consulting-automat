@@ -68,12 +68,35 @@ def _ensure_client_columns(conn):
         ))
 
 
+def _ensure_company_columns(conn):
+    """Идемпотентно добавить JSON/Text-колонки контента в functions и departments.
+
+    Создаются моделью при пустой БД через create_all; для существующих БД
+    добавляем недостающие колонки вручную (как _ensure_client_columns).
+    """
+    from sqlalchemy import inspect, text
+    inspector = inspect(conn)
+
+    func_cols = {c['name'] for c in inspector.get_columns('functions')}
+    for col in ('frameworks', 'skills', 'features', 'databases'):
+        if col not in func_cols:
+            conn.execute(text(f"ALTER TABLE functions ADD COLUMN {col} JSON"))
+    if 'product' not in func_cols:
+        conn.execute(text("ALTER TABLE functions ADD COLUMN product TEXT"))
+
+    dept_cols = {c['name'] for c in inspector.get_columns('departments')}
+    for col in ('ai_employees', 'employees', 'regulations', 'instructions', 'frameworks'):
+        if col not in dept_cols:
+            conn.execute(text(f"ALTER TABLE departments ADD COLUMN {col} JSON"))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables on startup (dev only — prod uses Alembic)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_client_columns)
+        await conn.run_sync(_ensure_company_columns)
     await _seed_founder()
     async with AsyncSessionLocal() as db:
         await seed_if_empty(db)

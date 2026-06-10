@@ -1,7 +1,9 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.orm import selectinload
 from ..models import Function, Department, FunctionDepartmentLink
+
+VALID_RELATIONS = {"executor", "consumer", "supplier"}
 
 
 def compute_function_health(func: Function) -> int:
@@ -105,6 +107,9 @@ async def list_company(db: AsyncSession) -> dict:
         for link in f.links:
             key = f"{f.id}_{link.department_id}"
             matrix.setdefault(key, []).append({
+                "id": link.id,
+                "function_id": f.id,
+                "department_id": link.department_id,
                 "relation_type": link.relation_type,
                 "description": link.description,
             })
@@ -119,3 +124,184 @@ async def list_company(db: AsyncSession) -> dict:
         "total_departments": len(depts_out),
         "total_links": total_links,
     }
+
+
+# ───────────────────────── связи (CRUD) ─────────────────────────
+
+async def create_link(
+    db: AsyncSession,
+    function_id: int,
+    department_id: int,
+    relation_type: str,
+    description: str | None,
+    created_by_id: int | None,
+) -> FunctionDepartmentLink:
+    """Создать связь функция↔отдел. Для executor — заменяет существующего.
+
+    Возвращает созданную связь. Бросает ValueError при невалидных данных и
+    при дубле (на случай гонки до срабатывания UniqueConstraint).
+    """
+    if relation_type not in VALID_RELATIONS:
+        raise ValueError(f"Недопустимая роль связи: {relation_type}")
+
+    func = await db.get(Function, function_id)
+    if func is None:
+        raise ValueError("Функция не найдена")
+    dept = await db.get(Department, department_id)
+    if dept is None:
+        raise ValueError("Отдел не найден")
+
+    # Одна функция = один исполнитель: убираем прежнего executor перед заменой.
+    if relation_type == "executor":
+        await db.execute(
+            delete(FunctionDepartmentLink).where(
+                FunctionDepartmentLink.function_id == function_id,
+                FunctionDepartmentLink.relation_type == "executor",
+            )
+        )
+
+    # Идемпотентность: если такая же связь уже есть — вернуть её.
+    existing = await db.execute(
+        select(FunctionDepartmentLink).where(
+            FunctionDepartmentLink.function_id == function_id,
+            FunctionDepartmentLink.department_id == department_id,
+            FunctionDepartmentLink.relation_type == relation_type,
+        )
+    )
+    found = existing.scalar_one_or_none()
+    if found is not None:
+        if description is not None:
+            found.description = description
+        await db.commit()
+        await db.refresh(found)
+        return found
+
+    link = FunctionDepartmentLink(
+        function_id=function_id,
+        department_id=department_id,
+        relation_type=relation_type,
+        description=description,
+        created_by_id=created_by_id,
+    )
+    db.add(link)
+    await db.commit()
+    await db.refresh(link)
+    return link
+
+
+async def delete_link(db: AsyncSession, link_id: int) -> bool:
+    """Удалить связь по id. Возвращает True, если связь была найдена."""
+    link = await db.get(FunctionDepartmentLink, link_id)
+    if link is None:
+        return False
+    await db.delete(link)
+    await db.commit()
+    return True
+
+
+# ───────────────────────── детали и обновление ─────────────────────────
+
+def _content(value) -> list:
+    """Нормализовать JSON-список содержимого (None → [])."""
+    return value if isinstance(value, list) else []
+
+
+async def get_function_detail(db: AsyncSession, function_id: int) -> dict | None:
+    """Детали функции: описание, контент-поля и сгруппированные связи."""
+    result = await db.execute(
+        select(Function)
+        .where(Function.id == function_id)
+        .options(selectinload(Function.links).selectinload(FunctionDepartmentLink.department))
+    )
+    func = result.scalar_one_or_none()
+    if func is None:
+        return None
+
+    def link_row(link: FunctionDepartmentLink) -> dict:
+        return {
+            "id": link.id,
+            "department_id": link.department_id,
+            "department_name": link.department.name if link.department else "—",
+            "description": link.description,
+        }
+
+    health = compute_function_health(func)
+    label, cls = health_label_and_class(health)
+    executor = next((l for l in func.links if l.relation_type == "executor"), None)
+    return {
+        "id": func.id,
+        "name": func.name,
+        "description": func.description,
+        "frameworks": _content(func.frameworks),
+        "skills": _content(func.skills),
+        "features": _content(func.features),
+        "databases": _content(func.databases),
+        "product": func.product,
+        "health": health,
+        "health_label": label,
+        "health_cls": cls,
+        "executor": link_row(executor) if executor else None,
+        "consumers": [link_row(l) for l in func.links if l.relation_type == "consumer"],
+        "suppliers": [link_row(l) for l in func.links if l.relation_type == "supplier"],
+    }
+
+
+async def get_department_detail(db: AsyncSession, department_id: int) -> dict | None:
+    """Детали отдела: описание, контент-поля и сгруппированные связи (по функциям)."""
+    result = await db.execute(
+        select(Department)
+        .where(Department.id == department_id)
+        .options(selectinload(Department.links).selectinload(FunctionDepartmentLink.function))
+    )
+    dept = result.scalar_one_or_none()
+    if dept is None:
+        return None
+
+    def link_row(link: FunctionDepartmentLink) -> dict:
+        return {
+            "id": link.id,
+            "function_id": link.function_id,
+            "function_name": link.function.name if link.function else "—",
+            "description": link.description,
+        }
+
+    health = compute_department_health(dept)
+    label, cls = health_label_and_class(health)
+    return {
+        "id": dept.id,
+        "name": dept.name,
+        "description": dept.description,
+        "ai_employees": _content(dept.ai_employees),
+        "employees": _content(dept.employees),
+        "regulations": _content(dept.regulations),
+        "instructions": _content(dept.instructions),
+        "frameworks": _content(dept.frameworks),
+        "health": health,
+        "health_label": label,
+        "health_cls": cls,
+        "executes": [link_row(l) for l in dept.links if l.relation_type == "executor"],
+        "consumes": [link_row(l) for l in dept.links if l.relation_type == "consumer"],
+        "supplies": [link_row(l) for l in dept.links if l.relation_type == "supplier"],
+    }
+
+
+async def update_function(db: AsyncSession, function_id: int, fields: dict) -> bool:
+    """Частично обновить функцию переданными полями. True — если найдена."""
+    func = await db.get(Function, function_id)
+    if func is None:
+        return False
+    for key, value in fields.items():
+        setattr(func, key, value)
+    await db.commit()
+    return True
+
+
+async def update_department(db: AsyncSession, department_id: int, fields: dict) -> bool:
+    """Частично обновить отдел переданными полями. True — если найден."""
+    dept = await db.get(Department, department_id)
+    if dept is None:
+        return False
+    for key, value in fields.items():
+        setattr(dept, key, value)
+    await db.commit()
+    return True

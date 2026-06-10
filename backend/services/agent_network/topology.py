@@ -32,6 +32,16 @@ async def load_topology(db: AsyncSession) -> dict:
     dept_result = await db.execute(select(Department))
     departments = dept_result.scalars().all()
 
+    def _titles(items) -> list[str]:
+        """Достать названия пунктов из JSON-списка [{title, note}]."""
+        if not isinstance(items, list):
+            return []
+        out = []
+        for it in items:
+            if isinstance(it, dict) and it.get("title"):
+                out.append(str(it["title"]))
+        return out
+
     func_map: dict[str, dict] = {}
     dept_functions: dict[str, list[str]] = {}
     for f in functions:
@@ -48,13 +58,19 @@ async def load_topology(db: AsyncSession) -> dict:
             elif link.relation_type == "consumer":
                 consumers.append(dname)
         func_map[f.name] = {
+            "id": f.id,
             "description": f.description or "",
             "executor": executor,
             "suppliers": suppliers,
             "consumers": consumers,
+            # Контент функции (фаза 2): агент функции использует «свои» фреймворки.
+            "frameworks": _titles(f.frameworks),
+            "skills": _titles(f.skills),
+            "features": _titles(f.features),
+            "product": f.product or "",
         }
 
-    dept_map = {d.name: {"description": d.description or ""} for d in departments}
+    dept_map = {d.name: {"id": d.id, "description": d.description or ""} for d in departments}
 
     return {
         "functions": func_map,

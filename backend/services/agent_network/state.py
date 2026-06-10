@@ -46,5 +46,10 @@ class AgentNetworkState(TypedDict):
     # лог шагов для стриминга прогресса в SSE: [{node, status, ts}]
     trace: Annotated[list, operator.add]
 
+    # запросы на создание недостающих связей (функция без executor):
+    # [{function, relation_type, candidates:[{id,name}], suggested_id}]
+    # рендерятся фронтом как модалки в стиле Claude (human-in-the-loop).
+    link_requests: Annotated[list, operator.add]
+
     # итоговый консолидированный план (заполняет consolidator)
     consolidated: str

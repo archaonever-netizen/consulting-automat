@@ -84,6 +84,12 @@ class Function(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     icon_key: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    # Содержимое функции (списки объектов {title, note}); product — текст.
+    frameworks: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    skills: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    features: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    databases: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    product: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -116,6 +122,12 @@ class Department(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(150), unique=True, nullable=False)
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Содержимое отдела (списки объектов {title, note}).
+    ai_employees: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    employees: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    regulations: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    instructions: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    frameworks: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
