@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import api from '../services/api';
-import AgentRequestModal, { LinkRequest } from '../components/AgentRequestModal';
+import AgentRequestModal, { type LinkRequest } from '../components/AgentRequestModal';
 
 interface ClientOption {
   id: number;

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api from '../services/api';
 import Icon from '../components/Icon';
-import ContentListEditor, { ContentItem } from '../components/ContentListEditor';
+import ContentListEditor, { type ContentItem } from '../components/ContentListEditor';
 
 interface LinkRow {
   id: number;
