@@ -33,11 +33,23 @@ interface CompanyData {
   total_links: number;
 }
 
-const RELATION_ICON: Record<string, string> = {
-  executor: '✓',
-  consumer: '▼',
-  supplier: '▲',
+// Маленькие line-иконки для бейджей матрицы (executor / consumer / supplier).
+const RELATION_PATH: Record<string, string> = {
+  executor: 'M5 12.5l4 4 10-11',          // галочка — исполняет
+  consumer: 'M12 5v13M6 12l6 6 6-6',      // стрелка вниз — потребляет
+  supplier: 'M12 19V6M6 12l6-6 6 6',      // стрелка вверх — поставляет
 };
+
+function RelationIcon({ type }: { type: string }) {
+  const d = RELATION_PATH[type];
+  if (!d) return <span>·</span>;
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  );
+}
 
 export default function CompanyPage() {
   const [data, setData] = useState<CompanyData | null>(null);
@@ -143,7 +155,7 @@ export default function CompanyPage() {
                                       className={`matrix-badge ${link.relation_type}`}
                                       title={link.description || link.relation_type}
                                     >
-                                      {RELATION_ICON[link.relation_type] || '·'}
+                                      <RelationIcon type={link.relation_type} />
                                     </div>
                                   ))}
                                 </div>

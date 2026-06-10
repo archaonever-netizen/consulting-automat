@@ -162,7 +162,7 @@ export default function BriefFormPage() {
             <button type="submit" className="btn btn-ghost" disabled={saving}>Сохранить черновик</button>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-            {saved && <span style={{ fontSize: 13, color: 'var(--success)', fontWeight: 600 }}>✓ Сохранено</span>}
+            {saved && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--success)', fontWeight: 600 }}><Icon name="check" size={15} />Сохранено</span>}
           </div>
         </div>
       </form>
