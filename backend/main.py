@@ -43,11 +43,27 @@ async def _seed_founder():
         await db.commit()
 
 
+def _ensure_client_columns(conn):
+    """Идемпотентно добавить новые колонки в clients (create_all не делает ALTER).
+
+    Работает и для sqlite, и для postgres: проверяем фактические колонки через
+    inspector и добавляем недостающие. Запуск повторно безопасен.
+    """
+    from sqlalchemy import inspect, text
+    inspector = inspect(conn)
+    existing = {c['name'] for c in inspector.get_columns('clients')}
+    if 'business_size' not in existing:
+        conn.execute(text(
+            "ALTER TABLE clients ADD COLUMN business_size VARCHAR(20) DEFAULT 'medium'"
+        ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables on startup (dev only — prod uses Alembic)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.run_sync(_ensure_client_columns)
     await _seed_founder()
     async with AsyncSessionLocal() as db:
         await seed_if_empty(db)

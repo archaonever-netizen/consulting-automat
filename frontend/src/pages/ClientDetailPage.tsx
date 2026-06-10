@@ -16,6 +16,7 @@ interface BriefItem {
 interface ClientDetail {
   id: number;
   name: string;
+  business_size: string;
   initials: string;
   color: string;
   health: number;
@@ -32,28 +33,15 @@ interface ClientDetail {
 const RING_STROKE: Record<string, string> = {
   up: '#1F9D57', warn: '#C2820F', down: '#E23D32', flat: '#BFC0C7',
 };
-const BRIEF_NAMES: Record<string, string> = {
-  sales: 'Продажи', marketing: 'Маркетинг', service: 'Сервис (операции)',
-  resources: 'Ресурсы и поставщики', finance: 'Финансы', hr: 'Персонал (HR)',
-  it: 'Информационные технологии', quality: 'Качество и CX',
-  briefing: 'Бизнес-портрет', point_a: 'Точка А', docs: 'Документация',
-};
-const BRIEF_DESCS: Record<string, string> = {
-  sales: '12 метрик продаж с расчётом Health-показателя',
-  marketing: '10 метрик маркетинга: бюджет, ROMI, лиды, бренд',
-  service: '9 метрик операций: утилизация, маржа, качество сдачи',
-  resources: '7 метрик закупок и работы с внешними поставщиками',
-  finance: '8 метрик финансов: ликвидность, EBITDA, ДЗ, OCF',
-  hr: '9 метрик HR: текучесть, вовлечённость, обучение',
-  it: '9 метрик ИТ: uptime, MTTR, инциденты, безопасность',
-  quality: '8 метрик качества и клиентского опыта (NPS, CAPA, СМК)',
-  briefing: 'Общая информация о компании, продуктах, финансах и команде',
-  point_a: 'Боли, цели и ресурсы для аудита',
-  docs: 'Организационные схемы, процессы и отчётность',
-};
-// 8 функциональных брифингов с метриками и расчётом Health. Остальные типы
-// (briefing/point_a/docs) остаются для отображения ранее созданных брифов.
-const BRIEF_TYPES = ['sales', 'marketing', 'service', 'resources', 'finance', 'hr', 'it', 'quality'];
+// Имена/описания брифов и состав профилей приходят из /api/briefs/catalog —
+// единый источник истины с бэкенда (без хардкода).
+interface BriefMeta { type: string; name: string; count: number; desc: string }
+interface ProfileMeta { key: string; name: string; desc: string }
+interface BriefCatalog {
+  profiles: ProfileMeta[];
+  briefs_by_size: Record<string, BriefMeta[]>;
+  common: BriefMeta[];
+}
 const TAB_LABELS: Record<Tab, string> = {
   overview: 'Обзор', briefs: 'Брифы', docs: 'Документы', analytics: 'Аналитика', tasks: 'Задачи',
 };
@@ -72,6 +60,8 @@ export default function ClientDetailPage() {
   const [tab, setTab] = useState<Tab>('overview');
   const [briefModal, setBriefModal] = useState(false);
   const [newBriefType, setNewBriefType] = useState('');
+  const [catalog, setCatalog] = useState<BriefCatalog | null>(null);
+  const [savingSize, setSavingSize] = useState(false);
 
   useEffect(() => {
     api.get(`/api/clients/${clientId}`)
@@ -80,10 +70,36 @@ export default function ClientDetailPage() {
       .finally(() => setLoading(false));
   }, [clientId, navigate]);
 
+  useEffect(() => {
+    api.get('/api/briefs/catalog').then(r => setCatalog(r.data)).catch(() => {});
+  }, []);
+
   async function reload() {
     const r = await api.get(`/api/clients/${clientId}`);
     setClient(r.data);
   }
+
+  async function changeSize(size: string) {
+    if (!client || size === client.business_size) return;
+    setSavingSize(true);
+    try {
+      await api.put(`/api/clients/${client.id}`, { business_size: size });
+      await reload();
+    } catch {
+      alert('Не удалось сменить профиль бизнеса');
+    } finally {
+      setSavingSize(false);
+    }
+  }
+
+  // Карта имён/описаний брифов (все профили + общие) — для отображения карточек.
+  const briefMeta: Record<string, BriefMeta> = {};
+  if (catalog) {
+    for (const list of Object.values(catalog.briefs_by_size)) for (const b of list) briefMeta[b.type] = b;
+    for (const b of catalog.common) briefMeta[b.type] = b;
+  }
+  const briefName = (t: string) => briefMeta[t]?.name || t;
+  const briefDesc = (t: string) => briefMeta[t]?.desc || '';
 
   async function createBrief(briefType: string) {
     if (!client || !briefType) return;
@@ -121,10 +137,11 @@ export default function ClientDetailPage() {
   const pillLabel = client.health === 100 ? 'Активен' : client.health > 0 ? 'В работе' : 'Новый';
 
   const existing = new Set(briefs.map(b => b.brief_type));
-  const available = BRIEF_TYPES.filter(t => !existing.has(t));
+  const sizeBriefs = catalog?.briefs_by_size[client.business_size] || [];
+  const available = sizeBriefs.map(b => b.type).filter(t => !existing.has(t));
   const activity = briefs
     .filter(b => b.updated_at)
-    .map(b => ({ time: b.updated_at as string, text: `Бриф «${BRIEF_NAMES[b.brief_type] || b.brief_type}» обновлён` }));
+    .map(b => ({ time: b.updated_at as string, text: `Бриф «${briefName(b.brief_type)}» обновлён` }));
 
   return (
     <div className="page">
@@ -145,6 +162,21 @@ export default function ClientDetailPage() {
             </div>
             <div className="hero-sub">
               Анкеты: {client.done} / {client.total} · Health {client.health}% · Добавлен {client.created_at_fmt}
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 12 }}>
+              <label className="form-label" style={{ margin: 0, fontSize: 12 }}>Профиль бизнеса:</label>
+              <select
+                className="form-input"
+                style={{ width: 'auto', minWidth: 200, padding: '6px 10px', fontSize: 13 }}
+                value={client.business_size}
+                disabled={savingSize || !catalog}
+                onChange={e => changeSize(e.target.value)}
+                title={catalog?.profiles.find(p => p.key === client.business_size)?.desc || ''}
+              >
+                {(catalog?.profiles || []).map(p => (
+                  <option key={p.key} value={p.key}>{p.name}</option>
+                ))}
+              </select>
             </div>
           </div>
           <div className="hero-actions">
@@ -306,8 +338,8 @@ export default function ClientDetailPage() {
               <div className="brief-grid">
                 {briefs.map((brief, i) => (
                   <div key={brief.id} className={`brief-card rise d${Math.min(i + 1, 6)}`}>
-                    <h4>{BRIEF_NAMES[brief.brief_type] || brief.brief_type}</h4>
-                    <p>{BRIEF_DESCS[brief.brief_type] || ''}</p>
+                    <h4>{briefName(brief.brief_type)}</h4>
+                    <p>{briefDesc(brief.brief_type)}</p>
                     <div className="bf-foot">
                       {statusPill(brief.status)}
                       <div style={{ display: 'flex', gap: 8 }}>
@@ -363,7 +395,7 @@ export default function ClientDetailPage() {
                 <div className="form-group" style={{ marginBottom: '1.5rem' }}>
                   <label className="form-label" htmlFor="brief_type">Тип брифа</label>
                   <select id="brief_type" className="form-input" value={newBriefType} onChange={e => setNewBriefType(e.target.value)}>
-                    {available.map(t => <option key={t} value={t}>{BRIEF_NAMES[t] || t}</option>)}
+                    {available.map(t => <option key={t} value={t}>{briefName(t)}</option>)}
                   </select>
                 </div>
               </>

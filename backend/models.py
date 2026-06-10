@@ -168,6 +168,9 @@ class Client(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(200), nullable=False)
+    # Профиль размера бизнеса: startup|micro|small|small_medium|medium.
+    # medium = эталон (текущие 8 брифов), дефолт для существующих клиентов.
+    business_size: Mapped[str] = mapped_column(String(20), default='medium', server_default='medium', nullable=False)
     assigned_employee_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

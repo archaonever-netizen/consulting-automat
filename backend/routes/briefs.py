@@ -8,6 +8,15 @@ from ..schemas.briefs import BriefCreate, BriefRead, BriefUpdate
 router = APIRouter()
 
 
+@router.get("/catalog")
+async def get_catalog(current_user=Depends(get_current_user_dep)):
+    """Каталог профилей размера бизнеса и доступных брифов для каждого.
+
+    Объявлен до /{brief_id}, иначе int-конвертер перехватит путь «catalog».
+    """
+    return brief_service.brief_catalog()
+
+
 @router.post("", status_code=status.HTTP_201_CREATED)
 async def create_brief(
     data: BriefCreate,

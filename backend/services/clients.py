@@ -45,6 +45,7 @@ def _compute_client_list_item(c: Client) -> dict:
     return {
         "id": c.id,
         "name": c.name,
+        "business_size": c.business_size or 'medium',
         "created_at": c.created_at,
         "initials": initials,
         "color": color,
@@ -72,7 +73,7 @@ async def list_clients(db: AsyncSession) -> list[dict]:
 
 
 async def create_client(db: AsyncSession, data: ClientCreate) -> Client:
-    client = Client(name=data.name)
+    client = Client(name=data.name, business_size=data.business_size or 'medium')
     db.add(client)
     await db.commit()
     await db.refresh(client)
@@ -155,7 +156,10 @@ async def update_client(db: AsyncSession, client_id: int, data: ClientUpdate) ->
     client = await get_client(db, client_id)
     if client is None:
         return None
-    client.name = data.name
+    if data.name is not None:
+        client.name = data.name
+    if data.business_size is not None:
+        client.business_size = data.business_size
     await db.commit()
     await db.refresh(client)
     return client

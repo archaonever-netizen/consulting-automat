@@ -57,7 +57,7 @@ async def update_client(
     client = await client_service.update_client(db, client_id, data)
     if client is None:
         raise HTTPException(status_code=404, detail="Client not found")
-    return {"id": client.id, "name": client.name}
+    return {"id": client.id, "name": client.name, "business_size": client.business_size}
 
 
 @router.delete("/{client_id}", status_code=status.HTTP_204_NO_CONTENT)

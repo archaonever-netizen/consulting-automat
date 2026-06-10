@@ -5,10 +5,12 @@ from typing import Optional
 
 class ClientCreate(BaseModel):
     name: str
+    business_size: Optional[str] = 'medium'
 
 
 class ClientUpdate(BaseModel):
-    name: str
+    name: Optional[str] = None
+    business_size: Optional[str] = None
 
 
 class BriefStateSchema(BaseModel):
@@ -23,6 +25,7 @@ class BriefStateSchema(BaseModel):
 class ClientRead(BaseModel):
     id: int
     name: str
+    business_size: str = 'medium'
     created_at: Optional[datetime]
     briefs: list[BriefStateSchema] = []
 
@@ -32,6 +35,7 @@ class ClientRead(BaseModel):
 class ClientListItem(BaseModel):
     id: int
     name: str
+    business_size: str = 'medium'
     created_at: Optional[datetime]
     initials: str
     color: str
