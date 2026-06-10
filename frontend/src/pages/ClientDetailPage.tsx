@@ -288,11 +288,9 @@ export default function ClientDetailPage() {
           <div style={{ marginTop: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
               <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 700 }}>Брифы</h3>
-              {available.length > 0 && (
-                <button className="btn btn-primary btn-sm" onClick={openBriefModal}>
-                  <Icon name="plus" size={15} />Создать бриф
-                </button>
-              )}
+              <button className="btn btn-primary btn-sm" onClick={openBriefModal}>
+                <Icon name="plus" size={15} />Создать бриф
+              </button>
             </div>
 
             {briefs.length === 0 ? (
@@ -300,6 +298,9 @@ export default function ClientDetailPage() {
                 <div className="ei"><Icon name="doc" size={24} /></div>
                 <b>Брифы не добавлены</b>
                 <span>Создайте первый бриф, чтобы собирать информацию о компании.</span>
+                <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={openBriefModal}>
+                  <Icon name="plus" size={15} />Создать бриф
+                </button>
               </div>
             ) : (
               <div className="brief-grid">
@@ -354,16 +355,26 @@ export default function ClientDetailPage() {
         <div className="modal-overlay" style={{ display: 'flex' }} onClick={e => { if (e.target === e.currentTarget) setBriefModal(false); }}>
           <div className="modal-card">
             <h3 className="modal-title">Создать бриф</h3>
-            <p className="modal-text">Выберите тип брифа для этого клиента.</p>
-            <div className="form-group" style={{ marginBottom: '1.5rem' }}>
-              <label className="form-label" htmlFor="brief_type">Тип брифа</label>
-              <select id="brief_type" className="form-input" value={newBriefType} onChange={e => setNewBriefType(e.target.value)}>
-                {available.map(t => <option key={t} value={t}>{BRIEF_NAMES[t] || t}</option>)}
-              </select>
-            </div>
+            {available.length === 0 ? (
+              <p className="modal-text">Все доступные брифы уже созданы для этого клиента.</p>
+            ) : (
+              <>
+                <p className="modal-text">Выберите тип брифа для этого клиента.</p>
+                <div className="form-group" style={{ marginBottom: '1.5rem' }}>
+                  <label className="form-label" htmlFor="brief_type">Тип брифа</label>
+                  <select id="brief_type" className="form-input" value={newBriefType} onChange={e => setNewBriefType(e.target.value)}>
+                    {available.map(t => <option key={t} value={t}>{BRIEF_NAMES[t] || t}</option>)}
+                  </select>
+                </div>
+              </>
+            )}
             <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button type="button" className="btn btn-ghost" onClick={() => setBriefModal(false)}>Отмена</button>
-              <button type="button" className="btn btn-primary" onClick={() => createBrief(newBriefType)} disabled={!newBriefType}>Создать</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setBriefModal(false)}>
+                {available.length === 0 ? 'Закрыть' : 'Отмена'}
+              </button>
+              {available.length > 0 && (
+                <button type="button" className="btn btn-primary" onClick={() => createBrief(newBriefType)} disabled={!newBriefType}>Создать</button>
+              )}
             </div>
           </div>
         </div>
