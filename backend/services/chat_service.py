@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 
 from ..core.config import DeepSeekConfig
 from ..models import User, UserChatMessage, UserChatSession, UserSubChat, UserTask
+from .knowledge import build_ai_digest
 from .llm_client import get_llm
 
 # Поля задачи, которые auto-fill дозаполняет из диалога
@@ -52,7 +53,16 @@ _CHAT_SYSTEM_PROMPT = """\
 3. Если задача связана с клиентом или задачей — используй контекст
 4. Структурируй ответы для удобства чтения
 
-{task_context}"""
+{knowledge_base}{task_context}"""
+
+_KNOWLEDGE_TEMPLATE = """\
+Справочник о возможностях приложения ШЕФ (используй его, когда пользователь \
+спрашивает, что умеет приложение, как им пользоваться, или что означает термин):
+---
+{digest}
+---
+
+"""
 
 _TASK_CONTEXT_TEMPLATE = """\
 Контекст задачи:
@@ -192,7 +202,15 @@ async def _autofill_task(
 
 
 async def _build_system_prompt(db: AsyncSession, subchat: UserSubChat) -> str:
-    """Построить системный промпт с контекстом задачи если есть."""
+    """Построить системный промпт: База знаний + контекст задачи если есть."""
+    knowledge_base = ""
+    try:
+        digest = await build_ai_digest(db)
+        if digest:
+            knowledge_base = _KNOWLEDGE_TEMPLATE.format(digest=digest)
+    except Exception:
+        knowledge_base = ""  # БЗ не должна ломать чат
+
     task_context = ""
     if subchat.task_id and subchat.task:
         task = subchat.task
@@ -212,7 +230,7 @@ async def _build_system_prompt(db: AsyncSession, subchat: UserSubChat) -> str:
                 "естественно и по делу. Поля будут сохранены автоматически, "
                 "тебе НЕ нужно выводить JSON."
             )
-    return _CHAT_SYSTEM_PROMPT.format(task_context=task_context)
+    return _CHAT_SYSTEM_PROMPT.format(knowledge_base=knowledge_base, task_context=task_context)
 
 
 async def stream_response(

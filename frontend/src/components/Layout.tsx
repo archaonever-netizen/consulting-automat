@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/orchestration', label: 'Сеть агентов', icon: 'sparkle' },
   { to: '/tasks', label: 'Задачи', icon: 'check' },
   { to: '/company', label: 'Компания', icon: 'chart', founderOnly: true },
+  { to: '/knowledge', label: 'База знаний', icon: 'book' },
 ];
 
 function initials(name: string): string {

@@ -426,6 +426,64 @@ class OrchestrationRun(Base):
     )
 
 
+class KnowledgeCategory(Base):
+    """Раздел Базы знаний (Разделы интерфейса, Сеть агентов, Сценарии, Глоссарий…).
+
+    Двухуровневая структура: категория → статьи. Контент предназначен и для
+    людей (рендер в UI), и для ИИ-помощников (дайджест в системный промпт).
+    """
+    __tablename__ = 'knowledge_categories'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(150), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    icon_key: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    # Как раздел отображается на фронте: 'cards' | 'list' | 'glossary'
+    layout: Mapped[str] = mapped_column(String(20), default='cards', nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    articles: Mapped[List['KnowledgeArticle']] = relationship(
+        'KnowledgeArticle',
+        back_populates='category',
+        cascade='all, delete-orphan',
+        order_by='KnowledgeArticle.sort_order',
+    )
+
+
+class KnowledgeArticle(Base):
+    """Элемент Базы знаний внутри раздела.
+
+    body хранится как Markdown — единый формат: человек читает рендер,
+    ИИ-помощник читает сырой текст. Флаги управляют видимостью:
+    is_published (показывать в UI) и ai_visible (включать в дайджест для ИИ).
+    """
+    __tablename__ = 'knowledge_articles'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    category_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_categories.id', ondelete='CASCADE'), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    slug: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    body: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    icon_key: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    route: Mapped[Optional[str]] = mapped_column(String(120), nullable=True)
+    tags: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    ai_visible: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    category: Mapped['KnowledgeCategory'] = relationship('KnowledgeCategory', back_populates='articles')
+    created_by: Mapped[Optional['User']] = relationship('User', lazy='joined')
+
+
 class FunctionAnalysis(Base):
     """Результат анализа конкретной функции в рамках оркестрации."""
     __tablename__ = 'function_analyses'

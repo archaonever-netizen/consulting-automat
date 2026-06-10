@@ -10,7 +10,8 @@ from sqlalchemy import select
 from .core.config import get_settings
 from .core.database import AsyncSessionLocal, Base, engine
 from .models import User
-from .routes import auth, clients, briefs, company, tasks, agent, chat
+from .routes import auth, clients, briefs, company, tasks, agent, chat, knowledge
+from .services.knowledge import seed_if_empty
 
 settings = get_settings()
 
@@ -48,6 +49,8 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     await _seed_founder()
+    async with AsyncSessionLocal() as db:
+        await seed_if_empty(db)
     yield
     # Cleanup on shutdown
     await engine.dispose()
@@ -80,6 +83,7 @@ app.include_router(company.router, prefix="/api/company", tags=["company"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
+app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
 
 
 # ── Раздача собранного фронтенда (SPA) ──
