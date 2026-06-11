@@ -8,6 +8,7 @@ from ..services import knowledge as kb
 from ..schemas.knowledge import (
     ArticleCreate, ArticleUpdate, ArticleRead,
     CategoryCreate, CategoryUpdate, CategoryRead, CategoryWithArticles,
+    KnowledgeSectionRead, KnowledgeSourceDetailRead, KnowledgeSourceFragmentRead,
 )
 
 router = APIRouter()
@@ -33,6 +34,39 @@ async def get_knowledge(
     is_founder = bool(getattr(current_user, "is_founder", False))
     # Основатель видит и черновики (для редактирования), остальные — только опубликованное.
     return await kb.list_tree(db, published_only=not is_founder)
+
+
+@router.get("/source-tree", response_model=list[KnowledgeSectionRead])
+async def get_knowledge_source_tree(
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Source-based knowledge taxonomy for RAG-ready materials."""
+    return await kb.list_source_tree(db)
+
+
+@router.get("/sources/{source_id}", response_model=KnowledgeSourceDetailRead)
+async def get_knowledge_source(
+    source_id: int,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    source = await kb.get_source(db, source_id)
+    if source is None:
+        raise HTTPException(status_code=404, detail="Источник не найден")
+    return source
+
+
+@router.get("/source-search", response_model=list[KnowledgeSourceFragmentRead])
+async def search_knowledge_sources(
+    q: str,
+    layer: str | None = None,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    if not q.strip():
+        return []
+    return await kb.search_sources(db, q, layer=layer)
 
 
 # ── Разделы (только основатель) ─────────────────────────────

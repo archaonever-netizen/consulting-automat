@@ -505,6 +505,159 @@ class KnowledgeArticle(Base):
     created_by: Mapped[Optional['User']] = relationship('User', lazy='joined')
 
 
+class KnowledgeSection(Base):
+    """Hierarchical navigation/taxonomy node for source-based knowledge."""
+    __tablename__ = 'knowledge_sections'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    parent_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('knowledge_sections.id', ondelete='CASCADE'), nullable=True
+    )
+    section_type: Mapped[str] = mapped_column(String(40), default='category', nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    parent: Mapped[Optional['KnowledgeSection']] = relationship(
+        'KnowledgeSection', remote_side='KnowledgeSection.id', back_populates='children'
+    )
+    children: Mapped[List['KnowledgeSection']] = relationship(
+        'KnowledgeSection',
+        back_populates='parent',
+        cascade='all, delete-orphan',
+        order_by='KnowledgeSection.sort_order',
+    )
+    source_links: Mapped[List['KnowledgeSourceSectionLink']] = relationship(
+        'KnowledgeSourceSectionLink', back_populates='section', cascade='all, delete-orphan'
+    )
+
+
+class KnowledgeSource(Base):
+    """Ingested primary source for future RAG/indexing."""
+    __tablename__ = 'knowledge_sources'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    version: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    language: Mapped[str] = mapped_column(String(20), default='en', nullable=False)
+    source_file: Mapped[str] = mapped_column(String(500), nullable=False)
+    source_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    processing_status: Mapped[str] = mapped_column(String(40), default='pending', nullable=False)
+    checksum: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    texts: Mapped[List['KnowledgeSourceText']] = relationship(
+        'KnowledgeSourceText', back_populates='source', cascade='all, delete-orphan'
+    )
+    fragments: Mapped[List['KnowledgeSourceFragment']] = relationship(
+        'KnowledgeSourceFragment',
+        back_populates='source',
+        cascade='all, delete-orphan',
+        order_by='KnowledgeSourceFragment.sort_order',
+    )
+    layers: Mapped[List['KnowledgeSourceLayer']] = relationship(
+        'KnowledgeSourceLayer', back_populates='source', cascade='all, delete-orphan'
+    )
+    section_links: Mapped[List['KnowledgeSourceSectionLink']] = relationship(
+        'KnowledgeSourceSectionLink', back_populates='source', cascade='all, delete-orphan'
+    )
+
+
+class KnowledgeSourceText(Base):
+    """Verbatim extracted source text, separated from generated layers."""
+    __tablename__ = 'knowledge_source_texts'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sources.id', ondelete='CASCADE'), nullable=False
+    )
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    text_origin: Mapped[str] = mapped_column(String(40), default='source_original', nullable=False)
+    extraction_method: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource', back_populates='texts')
+
+
+class KnowledgeSourceFragment(Base):
+    """Source-backed chunk for later embeddings/RAG."""
+    __tablename__ = 'knowledge_source_fragments'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sources.id', ondelete='CASCADE'), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    full_text: Mapped[str] = mapped_column(Text, nullable=False)
+    summary: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    summary_origin: Mapped[str] = mapped_column(String(40), default='ai_generated', nullable=False)
+    text_origin: Mapped[str] = mapped_column(String(40), default='source_original', nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False)
+    outline_level: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    page_start: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    source_ref: Mapped[str] = mapped_column(String(500), nullable=False)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource', back_populates='fragments')
+
+    __table_args__ = (
+        Index('ix_knowledge_fragments_source_order', 'source_id', 'sort_order'),
+    )
+
+
+class KnowledgeSourceLayer(Base):
+    """Generated description/context layers for a source."""
+    __tablename__ = 'knowledge_source_layers'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sources.id', ondelete='CASCADE'), nullable=False
+    )
+    layer_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    content_origin: Mapped[str] = mapped_column(String(40), default='ai_generated', nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource', back_populates='layers')
+
+
+class KnowledgeSourceSectionLink(Base):
+    """Many-to-many link between sources and taxonomy sections."""
+    __tablename__ = 'knowledge_source_section_links'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sources.id', ondelete='CASCADE'), nullable=False
+    )
+    section_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sections.id', ondelete='CASCADE'), nullable=False
+    )
+    relation_type: Mapped[str] = mapped_column(String(40), default='listed_under', nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource', back_populates='section_links')
+    section: Mapped['KnowledgeSection'] = relationship('KnowledgeSection', back_populates='source_links')
+
+    __table_args__ = (
+        UniqueConstraint('source_id', 'section_id', 'relation_type', name='uq_knowledge_source_section'),
+        Index('ix_knowledge_source_section_section', 'section_id'),
+    )
+
+
 class KaitenConnection(Base):
     """Подключение пользователя к его рабочему пространству Kaiten.
 

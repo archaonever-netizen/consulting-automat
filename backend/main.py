@@ -20,7 +20,7 @@ from .core.config import get_settings
 from .core.database import AsyncSessionLocal, Base, engine
 from .models import User
 from .routes import auth, clients, briefs, company, tasks, agent, chat, knowledge, kaiten, goals
-from .services.knowledge import seed_if_empty
+from .services.knowledge import seed_bpmm_source, seed_if_empty
 
 settings = get_settings()
 
@@ -109,6 +109,7 @@ async def lifespan(app: FastAPI):
     await _seed_founder()
     async with AsyncSessionLocal() as db:
         await seed_if_empty(db)
+        await seed_bpmm_source(db)
     yield
     # Cleanup on shutdown
     from .services.kaiten_client import close_shared_client

@@ -17,6 +17,7 @@ celery==5.4.0
 redis==5.2.1
 openai>=1.40.0
 fpdf2==2.8.7
+pypdf==5.1.0
 langchain>=0.3.0
 langchain-openai>=0.2.0
 langchain-core>=0.3.0

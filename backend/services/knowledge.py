@@ -4,11 +4,25 @@
 `build_ai_digest` собирает опубликованные статьи с ai_visible=true в компактный
 Markdown, который внедряется в системный промпт чата и доступен сети агентов.
 """
-from sqlalchemy import select, func
+from datetime import datetime
+from hashlib import sha256
+from pathlib import Path
+import re
+
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..models import KnowledgeCategory, KnowledgeArticle
+from ..models import (
+    KnowledgeArticle,
+    KnowledgeCategory,
+    KnowledgeSection,
+    KnowledgeSource,
+    KnowledgeSourceFragment,
+    KnowledgeSourceLayer,
+    KnowledgeSourceSectionLink,
+    KnowledgeSourceText,
+)
 
 # Предел длины дайджеста, чтобы не раздувать промпт ИИ.
 _DIGEST_MAX_CHARS = 7000
@@ -48,6 +62,26 @@ async def build_ai_digest(db: AsyncSession) -> str:
             lines.append(head)
             if a.body:
                 lines.append(a.body.strip())
+        lines.append("")
+
+    source_result = await db.execute(
+        select(KnowledgeSource)
+        .options(selectinload(KnowledgeSource.layers))
+        .where(KnowledgeSource.processing_status == "processed")
+        .order_by(KnowledgeSource.title)
+    )
+    sources = list(source_result.scalars().all())
+    if sources:
+        lines.append("## Источники базы знаний")
+        for source in sources:
+            lines.append(f"### {source.title}")
+            lines.append(
+                f"Тип: {source.source_type}; версия: {source.version or 'не указана'}; "
+                f"язык: {source.language}; файл: {source.source_file}."
+            )
+            for layer in sorted(source.layers, key=lambda x: x.sort_order):
+                if layer.layer_type in {"description", "context"}:
+                    lines.append(f"#### {layer.title}\n{layer.content.strip()}")
         lines.append("")
 
     digest = "\n".join(lines).strip()
@@ -143,6 +177,360 @@ async def seed_if_empty(db: AsyncSession) -> None:
                 sort_order=i,
             ))
     await db.commit()
+
+
+async def list_source_tree(db: AsyncSession) -> list[KnowledgeSection]:
+    section_sources = (
+        selectinload(KnowledgeSection.source_links)
+        .selectinload(KnowledgeSourceSectionLink.source)
+        .selectinload(KnowledgeSource.layers)
+    )
+    child_sources = (
+        selectinload(KnowledgeSection.children)
+        .selectinload(KnowledgeSection.source_links)
+        .selectinload(KnowledgeSourceSectionLink.source)
+        .selectinload(KnowledgeSource.layers)
+    )
+    grandchild_sources = (
+        selectinload(KnowledgeSection.children)
+        .selectinload(KnowledgeSection.children)
+        .selectinload(KnowledgeSection.source_links)
+        .selectinload(KnowledgeSourceSectionLink.source)
+        .selectinload(KnowledgeSource.layers)
+    )
+    grandchild_children = (
+        selectinload(KnowledgeSection.children)
+        .selectinload(KnowledgeSection.children)
+        .selectinload(KnowledgeSection.children)
+    )
+    result = await db.execute(
+        select(KnowledgeSection)
+        .options(
+            selectinload(KnowledgeSection.children),
+            section_sources,
+            child_sources,
+            grandchild_sources,
+            grandchild_children,
+        )
+        .where(KnowledgeSection.parent_id.is_(None))
+        .order_by(KnowledgeSection.sort_order, KnowledgeSection.id)
+    )
+    return list(result.scalars().all())
+
+
+async def get_source(db: AsyncSession, source_id: int) -> KnowledgeSource | None:
+    result = await db.execute(
+        select(KnowledgeSource)
+        .options(
+            selectinload(KnowledgeSource.texts),
+            selectinload(KnowledgeSource.fragments),
+            selectinload(KnowledgeSource.layers),
+            selectinload(KnowledgeSource.section_links).selectinload(KnowledgeSourceSectionLink.section),
+        )
+        .where(KnowledgeSource.id == source_id)
+    )
+    return result.scalar_one_or_none()
+
+
+async def search_sources(
+    db: AsyncSession,
+    query: str,
+    *,
+    layer: str | None = None,
+    limit: int = 20,
+) -> list[KnowledgeSourceFragment]:
+    q = f"%{query.strip()}%"
+    stmt = (
+        select(KnowledgeSourceFragment)
+        .where(or_(KnowledgeSourceFragment.title.ilike(q), KnowledgeSourceFragment.full_text.ilike(q)))
+        .order_by(KnowledgeSourceFragment.source_id, KnowledgeSourceFragment.sort_order)
+        .limit(limit)
+    )
+    if layer == "fragments":
+        pass
+    result = await db.execute(stmt)
+    return list(result.scalars().all())
+
+
+async def seed_bpmm_source(db: AsyncSession) -> None:
+    repo_root = Path(__file__).resolve().parents[2]
+    pdf_path = repo_root / "BPMM" / "BPMM.pdf"
+    if not pdf_path.exists():
+        return
+
+    checksum = sha256(pdf_path.read_bytes()).hexdigest()
+    existing = await db.scalar(select(KnowledgeSource).where(KnowledgeSource.key == "bpmm"))
+    if (
+        existing is not None
+        and existing.checksum == checksum
+        and existing.processing_status == "processed"
+    ):
+        await _ensure_bpmm_sections(db, existing)
+        await db.commit()
+        return
+
+    if existing is not None:
+        await db.delete(existing)
+        await db.flush()
+
+    source = KnowledgeSource(
+        key="bpmm",
+        title="BPMM",
+        source_type="methodology_framework",
+        version="1.0",
+        language="en",
+        source_file=str(pdf_path.relative_to(repo_root)).replace("\\", "/"),
+        source_url="http://www.omg.org/spec/BPMM/1.0/PDF",
+        processing_status="processing",
+        checksum=checksum,
+        metadata_json={
+            "document_title": "Business Process Maturity Model (BPMM)",
+            "omg_document_number": "formal/2008-06-01",
+            "document_date": "June 2008",
+            "original_file": "BPMM/BPMM.pdf",
+        },
+    )
+    db.add(source)
+    await db.flush()
+
+    reader, page_texts, full_text = _extract_bpmm_pdf(pdf_path)
+    db.add(KnowledgeSourceText(
+        source_id=source.id,
+        text=full_text,
+        text_origin="source_original",
+        extraction_method="pypdf PdfReader.extract_text, pages joined without generated summaries",
+    ))
+
+    outline_items = _flatten_pdf_outline(reader)
+    if not outline_items:
+        outline_items = [{"title": "BPMM", "page": 1, "level": 0}]
+
+    for order, item in enumerate(outline_items):
+        start_page = max(1, int(item["page"]))
+        next_page = _next_outline_page(outline_items, order, start_page)
+        end_page = max(start_page, min(next_page - 1, len(page_texts)))
+        fragment_text = "\n\n".join(page_texts[start_page - 1:end_page]).strip()
+        if not fragment_text:
+            continue
+        title = str(item["title"]).strip()
+        db.add(KnowledgeSourceFragment(
+            source_id=source.id,
+            title=title,
+            full_text=fragment_text,
+            summary=_fragment_summary(title, fragment_text),
+            summary_origin="ai_generated",
+            text_origin="source_original",
+            sort_order=order,
+            outline_level=int(item["level"]),
+            page_start=start_page,
+            page_end=end_page,
+            source_ref=f"{source.source_file}#page={start_page}",
+            metadata_json={
+                "fragmenting_basis": "PDF outline/bookmarks",
+                "fragmenting_note": (
+                    "When several outline entries start on the same PDF page, page-level extraction "
+                    "can duplicate same-page text across adjacent fragments instead of guessing "
+                    "a smaller boundary."
+                ),
+            },
+        ))
+
+    for layer in _bpmm_generated_layers():
+        db.add(KnowledgeSourceLayer(source_id=source.id, **layer))
+
+    source.processing_status = "processed"
+    source.processed_at = datetime.utcnow()
+    await _ensure_bpmm_sections(db, source)
+    await db.commit()
+
+
+async def _ensure_bpmm_sections(db: AsyncSession, source: KnowledgeSource) -> None:
+    root = await _upsert_section(
+        db,
+        key="methodologies-frameworks",
+        title="Методологии и фреймворки",
+        description="Каталог методологий, стандартов и фреймворков для ИИ-ассистентов.",
+        parent=None,
+        section_type="category",
+        sort_order=10,
+    )
+    process_methodologies = await _upsert_section(
+        db,
+        key="process-methodologies",
+        title="Методологии процессов",
+        description="Методологии и модели, связанные с управлением и зрелостью процессов.",
+        parent=root,
+        section_type="subcategory",
+        sort_order=10,
+    )
+    sources = await _upsert_section(
+        db,
+        key="process-methodology-sources",
+        title="Источники",
+        description="Загруженные первоисточники для методологий процессов.",
+        parent=process_methodologies,
+        section_type="sources",
+        sort_order=10,
+    )
+    processes = await _upsert_section(
+        db,
+        key="processes",
+        title="Процессы",
+        description="Тематический раздел для источников, связанных с процессами.",
+        parent=None,
+        section_type="theme",
+        sort_order=20,
+    )
+    await db.flush()
+    await _link_source(db, source, sources, "listed_under", 10)
+    await _link_source(db, source, process_methodologies, "category_context", 20)
+    await _link_source(db, source, processes, "theme", 30)
+
+
+async def _upsert_section(
+    db: AsyncSession,
+    *,
+    key: str,
+    title: str,
+    description: str,
+    parent: KnowledgeSection | None,
+    section_type: str,
+    sort_order: int,
+) -> KnowledgeSection:
+    section = await db.scalar(select(KnowledgeSection).where(KnowledgeSection.key == key))
+    if section is None:
+        section = KnowledgeSection(key=key)
+        db.add(section)
+    section.title = title
+    section.description = description
+    section.parent = parent
+    section.section_type = section_type
+    section.sort_order = sort_order
+    return section
+
+
+async def _link_source(
+    db: AsyncSession,
+    source: KnowledgeSource,
+    section: KnowledgeSection,
+    relation_type: str,
+    sort_order: int,
+) -> None:
+    existing = await db.scalar(
+        select(KnowledgeSourceSectionLink).where(
+            KnowledgeSourceSectionLink.source_id == source.id,
+            KnowledgeSourceSectionLink.section_id == section.id,
+            KnowledgeSourceSectionLink.relation_type == relation_type,
+        )
+    )
+    if existing is None:
+        db.add(KnowledgeSourceSectionLink(
+            source_id=source.id,
+            section_id=section.id,
+            relation_type=relation_type,
+            sort_order=sort_order,
+        ))
+
+
+def _extract_bpmm_pdf(pdf_path: Path):
+    from pypdf import PdfReader
+
+    reader = PdfReader(str(pdf_path))
+    page_texts = [(page.extract_text() or "").strip() for page in reader.pages]
+    full_text = "\n\n".join(page_texts).strip()
+    return reader, page_texts, full_text
+
+
+def _flatten_pdf_outline(reader) -> list[dict]:
+    items: list[dict] = []
+
+    def walk(nodes, level: int = 0) -> None:
+        for node in nodes:
+            if isinstance(node, list):
+                walk(node, level + 1)
+                continue
+            title = str(node.get("/Title", "")).strip()
+            if not title:
+                continue
+            try:
+                page = reader.get_destination_page_number(node) + 1
+            except Exception:
+                page = 1
+            items.append({"title": title, "page": page, "level": level})
+
+    try:
+        walk(reader.outline)
+    except Exception:
+        return []
+    return items
+
+
+def _next_outline_page(items: list[dict], index: int, current_page: int) -> int:
+    for next_item in items[index + 1:]:
+        page = int(next_item["page"])
+        if page > current_page:
+            return page
+    return 10**9
+
+
+def _fragment_summary(title: str, fragment_text: str) -> str:
+    excerpt = re.sub(r"\s+", " ", fragment_text).strip()
+    if len(excerpt) > 280:
+        excerpt = excerpt[:277].rstrip() + "..."
+    return (
+        "AI-generated summary based only on the extracted source text. "
+        f"Fragment '{title}'. Opening excerpt: {excerpt}"
+    )
+
+
+def _bpmm_generated_layers() -> list[dict]:
+    return [
+        {
+            "layer_type": "description",
+            "title": "Описание документа",
+            "content_origin": "ai_generated",
+            "sort_order": 10,
+            "content": (
+                "BPMM is the OMG Business Process Maturity Model, Version 1.0 "
+                "(OMG document formal/2008-06-01, June 2008). It should be used "
+                "as a source for questions about business process maturity, maturity "
+                "levels, process areas, institutionalization, conformance, and BPMM "
+                "terminology. AI assistants must treat the extracted source text and "
+                "fragments as the authority; this description is a generated navigation "
+                "layer, not original BPMM text."
+            ),
+        },
+        {
+            "layer_type": "context",
+            "title": "Контекст использования",
+            "content_origin": "ai_generated",
+            "sort_order": 20,
+            "content": (
+                "Use BPMM when a dialogue or analysis concerns process maturity, "
+                "organizational process governance, maturity-level assessment, process "
+                "areas, practices, subpractices, or comparison of immature and mature "
+                "processes. The document contains normative content, informative content, "
+                "annexes, and a glossary. Generated summaries are only routing/context "
+                "aids; answers should cite or rely on original source fragments."
+            ),
+        },
+        {
+            "layer_type": "key_points",
+            "title": "Ключевые ориентиры",
+            "content_origin": "ai_generated",
+            "sort_order": 30,
+            "content": (
+                "- Document identity: Business Process Maturity Model (BPMM), Version 1.0.\n"
+                "- Structure: overview, normative content, informative content, annexes, glossary.\n"
+                "- Main retrieval anchors from the document outline: Scope, Conformance, "
+                "BPMM Normative Content and Structure, BPMM Concepts, Overview of the "
+                "BPMM Process Areas, Structure of the BPMM, Institutionalization, "
+                "Process Areas, and Annexes.\n"
+                "- Original text is stored separately from generated description, context, "
+                "key points, and fragment summaries."
+            ),
+        },
+    ]
 
 
 def _points(items: list[str]) -> str:
