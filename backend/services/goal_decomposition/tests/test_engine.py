@@ -160,3 +160,26 @@ async def test_unaccounted_metric_triggers_retry():
                              responder=fake, max_retries=1)
     assert result.status == "error"
     assert "UnaccountedMetric" in result.verifier_feedback
+
+
+class RaisingResponder:
+    """Респондер, имитирующий сбой вызова LLM (например, модель не настроена)."""
+
+    def __init__(self, exc):
+        self.exc = exc
+        self.calls = 0
+
+    async def __call__(self, system, user):
+        self.calls += 1
+        raise self.exc
+
+
+async def test_llm_error_returns_managed_error():
+    # Ошибка вызова модели НЕ должна пробрасываться (иначе роут отдаст 500).
+    fake = RaisingResponder(RuntimeError("Pricing is not configured for model: claude-opus-4.7"))
+    result = await decompose(level="MONTH", goal=GOAL, dataset=DATASET,
+                             responder=fake, max_retries=1)
+    assert result.status == "error"
+    assert result.attempts == 2          # первая попытка + 1 ретрай
+    assert fake.calls == 2
+    assert "LLM" in (result.error or "")

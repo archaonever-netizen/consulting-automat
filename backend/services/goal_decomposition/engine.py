@@ -101,7 +101,18 @@ async def decompose(
     for attempt in range(retries + 1):
         attempts = attempt + 1
         user = with_verifier_feedback(base_user, feedback)
-        text = await responder(SYSTEM_PROMPT, user)
+
+        try:
+            text = await responder(SYSTEM_PROMPT, user)
+        except Exception as exc:  # noqa: BLE001 — любая ошибка вызова LLM = управляемая
+            feedback = ""  # это сбой вызова модели, а не замечание верификатора
+            last_problem = f"Ошибка вызова LLM-движка: {exc}"
+            # В лог — только тип ошибки (без датасета/промпта/ответа/ключей).
+            logger.warning(
+                "decompose level=%s: ошибка вызова LLM (попытка %d/%d): %s",
+                level, attempts, retries + 1, type(exc).__name__,
+            )
+            continue
 
         try:
             data = _extract_json(text)

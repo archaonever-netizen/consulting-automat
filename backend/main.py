@@ -1,7 +1,16 @@
 import os
+import warnings
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from pydantic.warnings import UnsupportedFieldAttributeWarning
+
+# FastAPI 0.115.0 ложно эмитит UnsupportedFieldAttributeWarning для моделей тела
+# запроса с алиасами (alias_generator/Field(alias=...)) — сами алиасы при этом
+# работают корректно (запросы проходят). В новых версиях FastAPI это исправлено;
+# здесь точечно глушим шум в логах, не трогая рабочую версию фреймворка.
+warnings.filterwarnings("ignore", category=UnsupportedFieldAttributeWarning)
+
+from fastapi import FastAPI, HTTPException  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
