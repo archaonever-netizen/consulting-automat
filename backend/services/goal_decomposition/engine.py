@@ -84,7 +84,11 @@ async def decompose(
     parent_node = parent_node or goal
     constraints = constraints or []
     existing_assumptions = existing_assumptions or []
-    dataset = dataset or {}
+    # Прокидываем числовые targetMetrics цели в dataset как известные факты —
+    # чтобы derived.inputs ссылались на реальную опору. Явный dataset
+    # пользователя имеет приоритет. Доли по периодам всё равно остаются derived
+    # (железное правило в верификаторе), даже что значение цели теперь в dataset.
+    dataset = {**_goal_facts(goal), **(dataset or {})}
 
     if responder is None:
         responder = _build_default_responder()
@@ -237,6 +241,17 @@ async def decompose(
 
 
 # ─────────────────────────── вспомогательное ───────────────────────────
+
+def _goal_facts(goal: dict[str, Any]) -> dict[str, Any]:
+    """Числовые targetMetrics цели как известные факты {id: targetValue} для dataset."""
+    facts: dict[str, Any] = {}
+    for m in goal.get("targetMetrics", []) or []:
+        mid = m.get("id")
+        val = m.get("targetValue")
+        if mid and isinstance(val, (int, float)):
+            facts[mid] = val
+    return facts
+
 
 def _notes(out: ProposalOutput) -> str:
     return (out.verification.notes if out.verification else "") or ""

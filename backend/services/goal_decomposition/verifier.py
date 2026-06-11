@@ -208,13 +208,18 @@ def verify(
     """
     errors: list[VerificationError] = []
     known_ids, confirmable_ids = _collect_assumptions(parent, children, assumptions)
+    # id метрик родителя: их доли по периодам обязаны быть derived/assumption,
+    # никогда user_input (железное правило, не зависит от содержимого dataset).
+    parent_ids = {m.id for m in parent.metrics if m.id}
 
     errors.extend(_check_conservation(parent, children))
     errors.extend(_check_accounting(parent, children))
 
     for child in children:
         for metric in child.metrics:
-            errors.extend(_check_origin(child, metric, dataset, known_ids, confirmable_ids))
+            errors.extend(
+                _check_origin(child, metric, dataset, known_ids, confirmable_ids, parent_ids)
+            )
             errors.extend(_check_measurement(child, metric))
 
     errors.extend(_check_dependencies(children))
@@ -284,6 +289,7 @@ def _check_origin(
     dataset: Optional[Mapping[str, Any]],
     known_ids: set[str],
     confirmable_ids: set[str],
+    parent_ids: set[str],
 ) -> list[VerificationError]:
     node_id = child.id or "?"
     mid = metric.id or "?"
@@ -291,6 +297,15 @@ def _check_origin(
 
     if src not in VALID_SOURCES:
         return [FabricatedInput(node_id, mid, reason=f"недопустимый source: {src!r}")]
+
+    # Железное правило: доля метрики родителя по периоду — это расчёт, а не «данные».
+    # Запрещаем user_input ДАЖЕ если значение есть в dataset (после прокидывания
+    # targetMetrics цели в dataset это единственная гарантия).
+    if src == "user_input" and metric.id in parent_ids:
+        return [FabricatedInput(
+            node_id, mid,
+            reason="доля метрики родителя — derived/assumption, не user_input",
+        )]
 
     if src == "derived":
         d = metric.derivation

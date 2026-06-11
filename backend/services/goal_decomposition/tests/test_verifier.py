@@ -274,6 +274,26 @@ def test_all_goal_metrics_accounted_passes():
     assert verify(parent, children, dataset={"headcount": 10, "office_opened": 1}).ok
 
 
+# ─────────────────── железное правило: доля родителя ≠ user_input ───────────────────
+
+def test_parent_share_user_input_forbidden_even_in_dataset():
+    # ребёнок несёт долю метрики родителя как user_input со значением, которое
+    # ЕСТЬ в dataset — всё равно запрещено (доля = derived/assumption).
+    parent = _parent_headcount(10)
+    children = [RawNode(id="m1", index=1, metrics=[
+        RawMetric(id="headcount", name="Найм", unit="чел.", target_value=10, source="user_input")])]
+    report = verify(parent, children, dataset={"headcount": 10})
+    errs = [e for e in report.errors if isinstance(e, FabricatedInput)]
+    assert errs and "user_input" in errs[0].reason
+
+
+def test_derived_share_passes_with_goal_fact_in_dataset():
+    # та же доля, но корректно как derived — проходит (даже если факт цели в dataset)
+    parent = _parent_headcount(10)
+    children = [RawNode(id="m1", index=1, metrics=[_derived("headcount", 10)])]
+    assert verify(parent, children, dataset={"headcount": 10}).ok
+
+
 # ─────────────────── endpoint-метрики (уровень «к финишу») ───────────────────
 
 def _endpoint_parent(mid="revenue", target=500000.0):

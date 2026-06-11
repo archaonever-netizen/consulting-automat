@@ -198,3 +198,20 @@ async def test_rate_limit_gives_friendly_message():
     assert result.status == "error"
     assert "лимит" in (result.error or "").lower()
     assert fake.calls == 2
+
+
+async def test_user_input_share_rejected_even_with_goal_facts():
+    # модель помечает долю как user_input со значением цели (после прокидывания
+    # targetMetrics оно есть в dataset) — железное правило всё равно бракует.
+    child = {"index": 1, "dateRange": {"from": "2026-07-01", "to": "2026-07-31"},
+             "allocatedMetrics": [{"id": "headcount", "name": "Найм", "unit": "чел.",
+                                   "targetValue": 10, "source": "user_input"}],
+             "milestones": []}
+    bad = json.dumps({"status": "proposed", "level": "MONTH", "children": [child],
+                      "assumptions": [], "dataGaps": [], "alternatives": [],
+                      "verification": {"conservationOk": True, "notes": ""}}, ensure_ascii=False)
+    fake = FakeResponder(bad)
+    result = await decompose(level="MONTH", goal=GOAL, dataset={},  # пустой пользовательский dataset
+                             responder=fake, max_retries=0, retry_backoff=0, ratelimit_backoff=0)
+    assert result.status == "error"
+    assert "FabricatedInput" in result.verifier_feedback
