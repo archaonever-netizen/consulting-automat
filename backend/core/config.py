@@ -48,6 +48,8 @@ class Settings(BaseSettings):
     decomposition_model: str = "anthropic/claude-opus-4.8"  # сильная модель Claude через Promptra
     decomposition_max_retries: int = 2             # ретраев сверх первой попытки
     decomposition_max_tokens: int = 8192
+    decomposition_retry_backoff: float = 1.5       # пауза между ретраями, сек
+    decomposition_ratelimit_backoff: float = 8.0   # увеличенная пауза при rate limit
     anthropic_api_key: str = ""                    # только при provider=anthropic
 
     # Yandex Calendar (kept for future)

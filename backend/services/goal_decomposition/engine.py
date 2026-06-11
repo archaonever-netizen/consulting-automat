@@ -15,6 +15,7 @@
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import re
@@ -70,10 +71,16 @@ async def decompose(
     alternatives_count: int = 0,
     responder: Optional[Responder] = None,
     max_retries: Optional[int] = None,
+    retry_backoff: Optional[float] = None,
+    ratelimit_backoff: Optional[float] = None,
 ) -> Proposal:
     """Предложить разбиение узла на уровень `level` (или альтернативы)."""
     settings = get_settings()
     retries = settings.decomposition_max_retries if max_retries is None else max_retries
+    backoff = settings.decomposition_retry_backoff if retry_backoff is None else retry_backoff
+    rl_backoff = (
+        settings.decomposition_ratelimit_backoff if ratelimit_backoff is None else ratelimit_backoff
+    )
     parent_node = parent_node or goal
     constraints = constraints or []
     existing_assumptions = existing_assumptions or []
@@ -98,7 +105,11 @@ async def decompose(
     feedback = ""
     last_problem = ""
     attempts = 0
+    next_delay = 0.0
+    rate_limited = False
     for attempt in range(retries + 1):
+        if next_delay > 0:
+            await asyncio.sleep(next_delay)  # бэкофф перед повтором (особенно при rate limit)
         attempts = attempt + 1
         user = with_verifier_feedback(base_user, feedback)
 
@@ -107,10 +118,12 @@ async def decompose(
         except Exception as exc:  # noqa: BLE001 — любая ошибка вызова LLM = управляемая
             feedback = ""  # это сбой вызова модели, а не замечание верификатора
             last_problem = f"Ошибка вызова LLM-движка: {exc}"
+            rate_limited = _is_rate_limit(exc)
+            next_delay = rl_backoff if rate_limited else backoff
             # В лог — только тип ошибки (без датасета/промпта/ответа/ключей).
             logger.warning(
-                "decompose level=%s: ошибка вызова LLM (попытка %d/%d): %s",
-                level, attempts, retries + 1, type(exc).__name__,
+                "decompose level=%s: ошибка вызова LLM (попытка %d/%d): %s, пауза %.1fс",
+                level, attempts, retries + 1, type(exc).__name__, next_delay,
             )
             continue
 
@@ -122,6 +135,8 @@ async def decompose(
                 "(без markdown, без текста вокруг)."
             )
             last_problem = f"JSON-парсинг не удался: {exc}"
+            next_delay = backoff
+            rate_limited = False
             logger.warning(
                 "decompose level=%s: невалидный JSON (попытка %d/%d)",
                 level, attempts, retries + 1,
@@ -168,6 +183,8 @@ async def decompose(
                 "учёт всех целевых метрик и происхождение каждого числа."
             )
             last_problem = feedback
+            next_delay = backoff
+            rate_limited = False
             logger.warning(
                 "alternatives level=%s: ни одна не прошла верификатор (попытка %d/%d)",
                 level, attempts, retries + 1,
@@ -191,6 +208,8 @@ async def decompose(
             )
         feedback = report.to_feedback()
         last_problem = feedback
+        next_delay = backoff
+        rate_limited = False
         # Только типы ошибок — без значений/датасета/ответа модели.
         logger.warning(
             "decompose level=%s: верификатор отклонил (попытка %d/%d): %s",
@@ -201,12 +220,19 @@ async def decompose(
         "decompose level=%s: не удалось получить валидное предложение за %d попыток",
         level, attempts,
     )
+    if rate_limited:
+        error_msg = (
+            "Превышен лимит запросов к ИИ (rate limit). Подождите минуту и повторите "
+            "декомпозицию."
+        )
+    else:
+        error_msg = last_problem or "Не удалось получить валидное предложение"
     return Proposal(
         status="error",
         level=level,
         attempts=attempts,
         verifier_feedback=feedback,
-        error=last_problem or "Не удалось получить валидное предложение",
+        error=error_msg,
     )
 
 
@@ -266,6 +292,14 @@ def _child_to_raw(child: ProposalChild) -> RawNode:
     )
 
 
+def _is_rate_limit(exc: Exception) -> bool:
+    """Распознать ошибку лимита запросов (для увеличенной паузы и сообщения)."""
+    if "ratelimit" in type(exc).__name__.lower():
+        return True
+    text = str(exc).lower()
+    return "rate limit" in text or "429" in text or "too many requests" in text
+
+
 def _extract_json(text: str) -> dict[str, Any]:
     """Снять markdown-огорождения и распарсить ровно один JSON-объект.
 
@@ -273,7 +307,8 @@ def _extract_json(text: str) -> dict[str, Any]:
     При неуспехе бросает ValueError (движок уйдёт в ретрай).
     """
     s = text.strip()
-    fence = re.match(r"^```(?:json)?\s*(.*?)\s*```$", s, re.DOTALL)
+    # fenced-блок (```json ... ```) — даже если перед ним есть преамбула.
+    fence = re.search(r"```(?:json)?\s*(\{.*\})\s*```", s, re.DOTALL)
     if fence:
         s = fence.group(1).strip()
     try:

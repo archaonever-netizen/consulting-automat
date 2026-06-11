@@ -113,7 +113,8 @@ async def test_blocked_on_blocking_datagap():
 
 async def test_retry_on_verifier_failure_then_ok():
     fake = FakeResponder(_BAD_SUM, _GOOD)
-    result = await decompose(level="MONTH", goal=GOAL, dataset=DATASET, responder=fake)
+    result = await decompose(level="MONTH", goal=GOAL, dataset=DATASET, responder=fake,
+                             retry_backoff=0, ratelimit_backoff=0)
     assert result.status == "proposed"
     assert result.attempts == 2
     # во второй вызов модели приложен список ошибок верификатора
@@ -122,7 +123,8 @@ async def test_retry_on_verifier_failure_then_ok():
 
 async def test_recover_from_bad_json():
     fake = FakeResponder("это не JSON, а свободный текст", _GOOD)
-    result = await decompose(level="MONTH", goal=GOAL, dataset=DATASET, responder=fake)
+    result = await decompose(level="MONTH", goal=GOAL, dataset=DATASET, responder=fake,
+                             retry_backoff=0, ratelimit_backoff=0)
     assert result.status == "proposed"
     assert result.attempts == 2
     assert "валидный JSON" in fake.calls[1]
@@ -131,7 +133,7 @@ async def test_recover_from_bad_json():
 async def test_exhausts_retries_returns_error():
     fake = FakeResponder(_BAD_SUM)  # всегда несходящаяся сумма
     result = await decompose(level="MONTH", goal=GOAL, dataset=DATASET,
-                             responder=fake, max_retries=1)
+                             responder=fake, max_retries=1, retry_backoff=0, ratelimit_backoff=0)
     assert result.status == "error"
     assert result.attempts == 2
     assert "ConservationError" in result.verifier_feedback
@@ -157,7 +159,7 @@ async def test_unaccounted_metric_triggers_retry():
     }
     fake = FakeResponder(_GOOD)  # несёт только headcount
     result = await decompose(level="MONTH", goal=goal, dataset={"headcount": 10, "office_opened": 1},
-                             responder=fake, max_retries=1)
+                             responder=fake, max_retries=1, retry_backoff=0, ratelimit_backoff=0)
     assert result.status == "error"
     assert "UnaccountedMetric" in result.verifier_feedback
 
@@ -176,10 +178,23 @@ class RaisingResponder:
 
 async def test_llm_error_returns_managed_error():
     # Ошибка вызова модели НЕ должна пробрасываться (иначе роут отдаст 500).
-    fake = RaisingResponder(RuntimeError("Pricing is not configured for model: claude-opus-4.7"))
+    fake = RaisingResponder(RuntimeError("Pricing is not configured for model: claude-opus-4.8"))
     result = await decompose(level="MONTH", goal=GOAL, dataset=DATASET,
-                             responder=fake, max_retries=1)
+                             responder=fake, max_retries=1, retry_backoff=0, ratelimit_backoff=0)
     assert result.status == "error"
     assert result.attempts == 2          # первая попытка + 1 ретрай
     assert fake.calls == 2
     assert "LLM" in (result.error or "")
+
+
+class RateLimitError(Exception):
+    """Имя совпадает с реальной ошибкой провайдера — движок должен её распознать."""
+
+
+async def test_rate_limit_gives_friendly_message():
+    fake = RaisingResponder(RateLimitError("429 Too Many Requests"))
+    result = await decompose(level="MONTH", goal=GOAL, dataset=DATASET,
+                             responder=fake, max_retries=1, retry_backoff=0, ratelimit_backoff=0)
+    assert result.status == "error"
+    assert "лимит" in (result.error or "").lower()
+    assert fake.calls == 2
