@@ -9,6 +9,7 @@ RUN pip install --no-cache-dir -r backend/requirements.txt
 # Код бэкенда и собранный фронтенд (frontend/dist закоммичен в репо)
 COPY backend backend
 COPY frontend/dist frontend/dist
+COPY BPMM BPMM
 
 # Персистентная БД на томе Amvera (/data). 4 слэша = абсолютный путь.
 RUN mkdir -p /data

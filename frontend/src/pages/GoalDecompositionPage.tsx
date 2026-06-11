@@ -59,6 +59,7 @@ function MetricChip({ metric }: { metric: Metric }) {
       <button className="mc-head" onClick={() => expandable && setOpen(o => !o)} disabled={!expandable}>
         <span className="mc-dot" />
         <span className="mc-name">{metric.name}</span>
+        {metric.aggregation === 'endpoint' && <span className="mc-agg" title="Уровень к финишу: значение достигается к концу">к финишу</span>}
         <span className="mc-val">{metric.targetValue ?? '—'} {metric.unit}</span>
         <span className="mc-origin">{meta.label}</span>
       </button>

@@ -46,6 +46,7 @@ class RawMetric(_Raw):
     assumption_ref: Optional[str] = None
     confidence: Optional[str] = None
     evidence: Optional[str] = None
+    aggregation: Optional[str] = None
 
 
 class RawConstraint(_Raw):
@@ -94,6 +95,7 @@ class RawNode(_Raw):
     промпте). Пусто = строгое равенство (с точностью до эпсилон float).
     """
     id: Optional[str] = None
+    index: Optional[int] = None  # порядковый номер периода (для endpoint: финальный = max index)
     metrics: list[RawMetric] = Field(default_factory=list)
     constraints: list[RawConstraint] = Field(default_factory=list)
     milestones: list[RawMilestone] = Field(default_factory=list)

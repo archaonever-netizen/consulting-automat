@@ -9,6 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from backend.services.goal_decomposition.domain import (
+    Aggregation,
     ApprovalRecord,
     ApprovalStatus,
     Confidence,
@@ -102,6 +103,18 @@ def test_document_roundtrip_storage():
     # обратная загрузка эквивалентна
     restored = GoalDecompositionDocument.from_storage(dumped)
     assert restored == doc
+
+
+def test_metric_aggregation_default_flow():
+    assert _metric_user_input().aggregation is Aggregation.FLOW
+
+
+def test_metric_aggregation_endpoint_roundtrip():
+    m = _metric_user_input(aggregation=Aggregation.ENDPOINT)
+    assert m.aggregation is Aggregation.ENDPOINT
+    dumped = m.model_dump(by_alias=True)
+    assert dumped["aggregation"] == "endpoint"
+    assert Metric.model_validate(dumped).aggregation is Aggregation.ENDPOINT
 
 
 def test_camelcase_validation():

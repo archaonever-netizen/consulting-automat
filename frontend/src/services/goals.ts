@@ -19,6 +19,7 @@ export interface MetricInput {
   unit: string;
   targetValue: number | null;
   source: 'user_input';
+  aggregation: 'flow' | 'endpoint';
 }
 
 export interface CreateGoalPayload {

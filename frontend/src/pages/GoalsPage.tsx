@@ -10,6 +10,7 @@ interface MetricRow {
   name: string;
   unit: string;
   targetValue: string;
+  aggregation: 'flow' | 'endpoint';
 }
 
 function slug(name: string, i: number): string {
@@ -27,7 +28,7 @@ export default function GoalsPage() {
   const [title, setTitle] = useState('');
   const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
-  const [metrics, setMetrics] = useState<MetricRow[]>([{ name: '', unit: '', targetValue: '' }]);
+  const [metrics, setMetrics] = useState<MetricRow[]>([{ name: '', unit: '', targetValue: '', aggregation: 'flow' }]);
 
   useEffect(() => {
     let alive = true;
@@ -40,7 +41,7 @@ export default function GoalsPage() {
 
   function openModal() {
     setTitle(''); setStartDate(''); setDeadline('');
-    setMetrics([{ name: '', unit: '', targetValue: '' }]);
+    setMetrics([{ name: '', unit: '', targetValue: '', aggregation: 'flow' }]);
     setModal(true);
   }
 
@@ -58,6 +59,7 @@ export default function GoalsPage() {
       unit: m.unit.trim() || 'ед.',
       targetValue: m.targetValue === '' ? null : Number(m.targetValue),
       source: 'user_input',
+      aggregation: m.aggregation,
     }));
     setBusy(true);
     try {
@@ -141,6 +143,12 @@ export default function GoalsPage() {
                         onChange={e => setMetric(i, { unit: e.target.value })} />
                       <input className="form-input mr-val" type="number" placeholder="10" value={m.targetValue}
                         onChange={e => setMetric(i, { targetValue: e.target.value })} />
+                      <select className="form-input mr-agg" value={m.aggregation}
+                        title="Как метрика агрегируется по периодам"
+                        onChange={e => setMetric(i, { aggregation: e.target.value as 'flow' | 'endpoint' })}>
+                        <option value="flow">накопительная (Σ)</option>
+                        <option value="endpoint">к финишу (=цель в конце)</option>
+                      </select>
                       {metrics.length > 1 && (
                         <button type="button" className="mr-del" title="Удалить"
                           onClick={() => setMetrics(ms => ms.filter((_, j) => j !== i))}>
@@ -151,7 +159,7 @@ export default function GoalsPage() {
                   ))}
                 </div>
                 <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }}
-                  onClick={() => setMetrics(ms => [...ms, { name: '', unit: '', targetValue: '' }])}>
+                  onClick={() => setMetrics(ms => [...ms, { name: '', unit: '', targetValue: '', aggregation: 'flow' }])}>
                   <Icon name="plus" size={15} />Добавить метрику
                 </button>
               </div>

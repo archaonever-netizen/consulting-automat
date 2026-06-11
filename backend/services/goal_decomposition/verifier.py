@@ -41,14 +41,25 @@ VALID_SOURCES = frozenset({"user_input", "derived", "assumption"})
 
 @dataclass(frozen=True)
 class ConservationError:
-    """Σ(дети.targetValue) ≠ родитель.targetValue (вне допустимого буфера)."""
+    """Закон сохранения нарушен.
+
+    kind=flow     — Σ(дети.targetValue) ≠ родитель (вне буфера).
+    kind=endpoint — значение в финальном периоде ≠ цель (вне буфера); по детям
+                    такая метрика НЕ суммируется.
+    """
     metric_id: str
     expected: float
     got: float
+    kind: str = "flow"
     code: ClassVar[str] = "ConservationError"
 
     @property
     def message(self) -> str:
+        if self.kind == "endpoint":
+            return (
+                f"Метрика '{self.metric_id}' (endpoint): значение в финальном периоде = "
+                f"{self.got}, а цель = {self.expected}"
+            )
         return (
             f"Закон сохранения нарушен для метрики '{self.metric_id}': "
             f"сумма по детям = {self.got}, ожидалось {self.expected}"
@@ -215,17 +226,41 @@ def verify(
 # ─────────────────────────── проверки ───────────────────────────
 
 def _check_conservation(parent: RawNode, children: list[RawNode]) -> list[VerificationError]:
+    """Закон сохранения с учётом типа агрегации метрики родителя.
+
+    flow      — Σ значений по детям == родитель (± буфер).
+    endpoint  — значение в ФИНАЛЬНОМ периоде (max index среди носителей) == цель
+                (± буфер); по детям не суммируется. Промежуточная траектория НЕ
+                проверяется жёстко (мягко, без ложных ошибок) — это допускает и
+                рост, и убывание к цели.
+
+    Тип агрегации берётся у метрики РОДИТЕЛЯ (задан человеком на цели и
+    наследуется вниз движком), а не у детей — модель его не выдумывает.
+    """
     errors: list[VerificationError] = []
     for pm in parent.metrics:
         if pm.id is None or pm.target_value is None:
             continue
-        matched = [m for child in children for m in child.metrics if m.id == pm.id]
+        matched = [(child, m) for child in children for m in child.metrics if m.id == pm.id]
         if not matched:
             continue
-        total = sum((m.target_value or 0.0) for m in matched)
         tolerance = parent.buffers.get(pm.id, 0.0) + EPS
-        if abs(total - pm.target_value) > tolerance:
-            errors.append(ConservationError(metric_id=pm.id, expected=pm.target_value, got=total))
+
+        if (pm.aggregation or "flow").lower() == "endpoint":
+            final_child, final_metric = max(
+                matched, key=lambda cm: cm[0].index if cm[0].index is not None else -1
+            )
+            got = final_metric.target_value or 0.0
+            if abs(got - pm.target_value) > tolerance:
+                errors.append(ConservationError(
+                    metric_id=pm.id, expected=pm.target_value, got=got, kind="endpoint",
+                ))
+        else:
+            total = sum((m.target_value or 0.0) for _, m in matched)
+            if abs(total - pm.target_value) > tolerance:
+                errors.append(ConservationError(
+                    metric_id=pm.id, expected=pm.target_value, got=total, kind="flow",
+                ))
     return errors
 
 

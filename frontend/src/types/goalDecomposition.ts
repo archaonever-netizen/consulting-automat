@@ -2,6 +2,7 @@
 
 export type Source = 'user_input' | 'derived' | 'assumption';
 export type Confidence = 'measured' | 'high' | 'medium' | 'low';
+export type Aggregation = 'flow' | 'endpoint';
 export type PeriodLevel = 'MONTH' | 'WEEK' | 'DAY';
 export type ApprovalStatus =
   | 'draft' | 'proposed_by_ai' | 'under_review'
@@ -26,6 +27,7 @@ export interface Metric {
   assumptionRef?: string | null;
   confidence?: Confidence | null;
   evidence?: string | null;
+  aggregation?: Aggregation;
 }
 
 export interface Assumption {

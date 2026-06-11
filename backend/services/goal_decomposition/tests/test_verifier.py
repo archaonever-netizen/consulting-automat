@@ -274,6 +274,60 @@ def test_all_goal_metrics_accounted_passes():
     assert verify(parent, children, dataset={"headcount": 10, "office_opened": 1}).ok
 
 
+# ─────────────────── endpoint-метрики (уровень «к финишу») ───────────────────
+
+def _endpoint_parent(mid="revenue", target=500000.0):
+    return RawNode(id="goal", metrics=[RawMetric(
+        id=mid, name="Выручка", unit="₽/мес", target_value=target,
+        source="user_input", aggregation="endpoint")])
+
+
+def _rev_child(value, index, mid="revenue"):
+    return RawNode(id=f"m{index}", index=index, metrics=[RawMetric(
+        id=mid, name="Выручка", unit="₽/мес", target_value=value, source="derived",
+        derivation=RawDerivation(formula="траектория", inputs=[mid]), confidence="medium")])
+
+
+def test_endpoint_passes_growing_trajectory():
+    parent = _endpoint_parent("revenue", 500000)
+    children = [_rev_child(100000, 1), _rev_child(300000, 2), _rev_child(500000, 3)]
+    # сумма 900000 ≠ 500000, но финал (index 3) == 500000 → endpoint проходит
+    assert verify(parent, children).ok
+
+
+def test_endpoint_passes_decreasing_trajectory():
+    parent = _endpoint_parent("defects", 5)
+    children = [_rev_child(50, 1, "defects"), _rev_child(20, 2, "defects"), _rev_child(5, 3, "defects")]
+    assert verify(parent, children).ok
+
+
+def test_endpoint_no_false_conservation_error():
+    parent = _endpoint_parent("revenue", 500000)
+    children = [_rev_child(200000, 1), _rev_child(500000, 2)]  # сумма ≠ цель, финал == цель
+    report = verify(parent, children)
+    assert report.ok
+    assert not any(isinstance(e, ConservationError) for e in report.errors)
+
+
+def test_endpoint_fails_when_final_off_target():
+    parent = _endpoint_parent("revenue", 500000)
+    children = [_rev_child(100000, 1), _rev_child(400000, 2)]  # финал 400k ≠ 500k
+    report = verify(parent, children)
+    errs = [e for e in report.errors if isinstance(e, ConservationError) and e.kind == "endpoint"]
+    assert errs and errs[0].got == 400000 and errs[0].expected == 500000
+
+
+def test_flow_still_sums_with_aggregation_field():
+    # метрика с aggregation=flow по-прежнему проверяется суммой
+    parent = RawNode(id="goal", metrics=[RawMetric(
+        id="headcount", name="Найм", unit="чел.", target_value=10,
+        source="user_input", aggregation="flow")])
+    bad = [RawNode(id="m1", index=1, metrics=[_derived("headcount", 6)]),
+           RawNode(id="m2", index=2, metrics=[_derived("headcount", 3)])]  # сумма 9 ≠ 10
+    assert any(isinstance(e, ConservationError) and e.kind == "flow"
+               for e in verify(parent, bad).errors)
+
+
 # ─────────────────────────── фидбэк ───────────────────────────
 
 def test_report_feedback_lists_errors():

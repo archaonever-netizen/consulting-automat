@@ -4,6 +4,7 @@ import pytest
 from backend.services.goal_decomposition.domain import (
     Actor,
     ActorKind,
+    Aggregation,
     ApprovalStatus,
     AssumptionStatus,
     ChangeAction,
@@ -81,6 +82,28 @@ def test_attach_decomposition_creates_proposed_periods():
     create_logs = [e for e in doc.change_log if e.action is ChangeAction.CREATE
                    and e.entity_ref.startswith("period:")]
     assert len(create_logs) == 2 and create_logs[0].actor.kind is ActorKind.AI
+
+
+def test_aggregation_inherited_not_invented():
+    goal = Goal.model_validate({
+        "id": "g1", "title": "t", "startDate": "2026-07-01", "deadline": "2026-12-31",
+        "targetMetrics": [{"id": "revenue", "name": "Выручка", "unit": "₽/мес",
+                           "targetValue": 500000, "source": "user_input",
+                           "aggregation": "endpoint"}],
+        "status": "draft",
+    })
+    doc = create_goal_document(goal, HUMAN)
+    # модель пытается «выдумать» aggregation=flow — должно быть проигнорировано
+    child = {"index": 1, "dateRange": {"from": "2026-07-01", "to": "2026-07-31"},
+             "allocatedMetrics": [{"id": "revenue", "name": "Выручка", "unit": "₽/мес",
+                                   "targetValue": 500000, "source": "derived",
+                                   "derivation": {"formula": "финал", "inputs": ["revenue"]},
+                                   "confidence": "low", "aggregation": "flow"}],
+             "milestones": []}
+    attach_decomposition(doc, Proposal(status="proposed", level="MONTH", children=[child]),
+                         PeriodLevel.MONTH, None, AI)
+    m = doc.periods[0].allocated_metrics[0]
+    assert m.aggregation is Aggregation.ENDPOINT  # унаследовано от цели, не flow от модели
 
 
 # ─────────────────────────── спуск только из approved ───────────────────────────

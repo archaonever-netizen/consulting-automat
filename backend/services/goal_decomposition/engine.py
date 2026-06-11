@@ -287,6 +287,7 @@ def _parent_to_raw(
 def _child_to_raw(child: ProposalChild) -> RawNode:
     return RawNode(
         id=str(child.index) if child.index is not None else None,
+        index=child.index,
         metrics=child.allocated_metrics,
         milestones=child.milestones,
     )

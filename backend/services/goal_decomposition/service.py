@@ -89,7 +89,9 @@ def attach_decomposition(
 ) -> GoalDecompositionDocument:
     """Вшить proposed-предложение ИИ в дерево как узлы proposed_by_ai."""
     ensure_can_decompose(doc, parent_id)
-    periods = proposal_to_periods(proposal, level, parent_id, doc.goal.id)
+    periods = proposal_to_periods(
+        proposal, level, parent_id, doc.goal.id, _parent_aggregation(doc, parent_id)
+    )
     merge_proposal_context(doc, proposal, parent_id)
     doc.periods.extend(periods)
     for p in periods:
@@ -102,11 +104,24 @@ def proposal_to_periods(
     level: PeriodLevel,
     parent_id: Optional[str],
     goal_id: str,
+    parent_aggregation: dict[str, str],
 ) -> list[Period]:
-    """Преобразовать children предложения в канонические Period (с валидацией)."""
+    """Преобразовать children предложения в канонические Period (с валидацией).
+
+    Тип агрегации метрик НАСЛЕДУЕТСЯ от родителя по id; значение из ответа модели
+    игнорируется (модель его не выдумывает). Для метрик, которых нет у родителя,
+    поле сбрасывается к дефолту (flow) — задать иной тип может только человек.
+    """
     periods: list[Period] = []
     for child in proposal.children:
         index = int(child["index"])
+        metrics = [dict(m) for m in child.get("allocatedMetrics", [])]
+        for m in metrics:
+            mid = m.get("id")
+            if mid in parent_aggregation:
+                m["aggregation"] = parent_aggregation[mid]
+            else:
+                m.pop("aggregation", None)
         period = Period.model_validate({
             "id": _period_id(level, parent_id, index),
             "level": level.value,
@@ -114,12 +129,23 @@ def proposal_to_periods(
             "parentId": parent_id,
             "goalId": goal_id,
             "dateRange": child.get("dateRange"),
-            "allocatedMetrics": child.get("allocatedMetrics", []),
+            "allocatedMetrics": metrics,
             "milestones": child.get("milestones", []),
             "approval": {"status": "proposed_by_ai", "proposedBy": "ai"},
         })
         periods.append(period)
     return periods
+
+
+def _parent_aggregation(
+    doc: GoalDecompositionDocument, parent_id: Optional[str]
+) -> dict[str, str]:
+    """Карта {metric.id: aggregation} у родителя (цели или периода) для наследования."""
+    if parent_id is None:
+        metrics = doc.goal.target_metrics
+    else:
+        metrics = _find_period(doc, parent_id).allocated_metrics
+    return {m.id: m.aggregation.value for m in metrics}
 
 
 # ─────────────────────────── согласование ───────────────────────────
@@ -225,7 +251,9 @@ def recalculate(
 ) -> tuple[GoalDecompositionDocument, list[MetricDiff]]:
     """Пересчитать дочерний уровень узла, сохранив ручные правки; вернуть дифф."""
     level = child_level(_parent_level(doc, parent_id))
-    proposed = proposal_to_periods(proposal, level, parent_id, doc.goal.id)
+    proposed = proposal_to_periods(
+        proposal, level, parent_id, doc.goal.id, _parent_aggregation(doc, parent_id)
+    )
     existing = [p for p in doc.periods if p.parent_id == parent_id and p.level is level]
 
     merged, diffs = merge_children(existing, proposed)

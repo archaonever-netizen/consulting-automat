@@ -144,6 +144,9 @@
 .metric-row { display: flex; gap: 8px; align-items: center; }
 .mr-unit { max-width: 90px; }
 .mr-val { max-width: 110px; }
+.mr-agg { max-width: 210px; cursor: pointer; }
+.mc-agg { font-size: 10px; font-weight: 700; color: var(--accent); border: 1px solid var(--accent);
+  border-radius: 99px; padding: 0 6px; white-space: nowrap; }
 .mr-del { background: transparent; border: none; color: var(--ink-3); cursor: pointer; padding: 6px; display: inline-flex; }
 .mr-del:hover { color: var(--danger, #E23D32); }
 

@@ -45,6 +45,21 @@ class Confidence(str, Enum):
     LOW = "low"
 
 
+class Aggregation(str, Enum):
+    """Как метрика агрегируется между уровнями.
+
+    flow      — накопительная: Σ значений по детям == значение родителя
+                (найм, суммарные затраты).
+    endpoint  — уровень «к финишу»: значение в финальном периоде == цель;
+                по детям НЕ суммируется (выручка к концу, run-rate).
+
+    Расширяемое перечисление: при появлении новых типов (например average,
+    max) достаточно добавить член — verifier ветвится по значению.
+    """
+    FLOW = "flow"
+    ENDPOINT = "endpoint"
+
+
 class GoalStatus(str, Enum):
     DRAFT = "draft"
     DECOMPOSING = "decomposing"
@@ -152,6 +167,7 @@ class Metric(_Base):
     assumption_ref: Optional[str] = None
     confidence: Optional[Confidence] = None
     evidence: Optional[str] = None
+    aggregation: Aggregation = Aggregation.FLOW
 
     @model_validator(mode="after")
     def _check_origin(self) -> "Metric":
