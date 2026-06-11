@@ -16,6 +16,8 @@ import OrchestrationPage from './pages/OrchestrationPage';
 import KnowledgePage from './pages/KnowledgePage';
 import TrackerPage from './pages/TrackerPage';
 import ProfilePage from './pages/ProfilePage';
+import GoalsPage from './pages/GoalsPage';
+import GoalDecompositionPage from './pages/GoalDecompositionPage';
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token');
@@ -43,6 +45,8 @@ export default function App() {
           <Route path="company" element={<CompanyPage />} />
           <Route path="company/functions/:id" element={<FunctionDetailPage />} />
           <Route path="company/departments/:id" element={<DepartmentDetailPage />} />
+          <Route path="goals" element={<GoalsPage />} />
+          <Route path="goals/:goalId" element={<GoalDecompositionPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="orchestration" element={<OrchestrationPage />} />

@@ -43,6 +43,13 @@ class Settings(BaseSettings):
     # LLM
     promptra_api_key: str = ""
 
+    # Декомпозиция целей (движок)
+    decomposition_llm_provider: str = "promptra"   # promptra | anthropic
+    decomposition_model: str = "claude-opus-4.7"   # сильная модель Claude через Promptra
+    decomposition_max_retries: int = 2             # ретраев сверх первой попытки
+    decomposition_max_tokens: int = 8192
+    anthropic_api_key: str = ""                    # только при provider=anthropic
+
     # Yandex Calendar (kept for future)
     yandex_client_id: str = ""
     yandex_client_secret: str = ""

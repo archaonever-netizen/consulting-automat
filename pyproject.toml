@@ -1,0 +1,27 @@
+# Линтер/типчекер для пакета декомпозиции целей.
+# Прицельно: запускать как `ruff check backend/services/goal_decomposition`
+# и `mypy backend/services/goal_decomposition`. Остальной репозиторий не трогаем.
+# (Конфигурация pytest — в pytest.ini.)
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B"]
+
+[tool.ruff.lint.per-file-ignores]
+"**/tests/*" = ["E501"]
+# Depends(...) в дефолтах аргументов — идиома FastAPI, не баг.
+"**/routes/*" = ["B008"]
+
+[tool.mypy]
+python_version = "3.12"
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+warn_unused_ignores = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+files = ["backend/services/goal_decomposition"]
+# Тесты не типизируем строго (функции без аннотаций возврата — это норма).
+exclude = "(^|/)tests/"

@@ -1,0 +1,157 @@
+/* Раздел «Цели» — декомпозиция. Использует палитру из styles.css. */
+
+/* ── список целей ── */
+.goals-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 16px;
+}
+.goal-card {
+  text-align: left;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 14px);
+  padding: 18px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color .15s, transform .15s, box-shadow .15s;
+}
+.goal-card:hover { border-color: var(--accent); transform: translateY(-2px); box-shadow: var(--shadow-md); }
+.gc-top { display: flex; align-items: center; justify-content: space-between; }
+.gc-ic { color: var(--accent); display: inline-flex; }
+.gc-status { font-size: 12px; font-weight: 700; color: var(--ink-3); text-transform: capitalize; }
+.gc-title { font-weight: 700; font-size: 16px; color: var(--ink); line-height: 1.3; }
+.gc-meta { display: flex; align-items: center; justify-content: space-between; font-size: 12.5px; color: var(--ink-3); }
+
+/* ── раскладка страницы согласования ── */
+.back-link {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: none; color: var(--ink-3);
+  font: inherit; font-weight: 600; cursor: pointer; margin-bottom: 8px;
+}
+.back-link:hover { color: var(--accent); }
+.goals-layout { display: grid; grid-template-columns: 1fr 340px; gap: 20px; align-items: start; }
+.goals-side { display: flex; flex-direction: column; gap: 16px; position: sticky; top: 12px; }
+@media (max-width: 1100px) { .goals-layout { grid-template-columns: 1fr; } }
+
+.progress-strip {
+  display: flex; align-items: center; gap: 12px;
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-md, 10px); padding: 10px 14px; margin: 12px 0;
+  font-size: 13px; color: var(--ink-2); font-weight: 600;
+}
+.pbar { flex: 1; height: 8px; background: var(--border-2); border-radius: 99px; overflow: hidden; }
+.pbar-fill { height: 100%; background: var(--green, #1F9D57); border-radius: 99px; }
+
+.notice {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  background: var(--amber-weak, #fff7e6); border: 1px solid var(--amber, #C2820F);
+  color: var(--ink); border-radius: var(--radius-md, 10px); padding: 10px 14px; margin: 12px 0;
+  font-size: 13.5px; font-weight: 600;
+}
+.notice button { background: transparent; border: none; cursor: pointer; color: var(--ink-3); display: inline-flex; }
+
+/* ── вкладки уровней ── */
+.level-tabs { display: flex; gap: 8px; margin-bottom: 16px; }
+.lvl-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 9px 16px; border-radius: 99px; cursor: pointer;
+  background: var(--surface, #f4f5f7); border: 1px solid var(--border);
+  font: inherit; font-weight: 700; font-size: 13.5px; color: var(--ink-2);
+}
+.lvl-tab.on { background: var(--accent); color: var(--accent-ink, #fff); border-color: var(--accent); }
+.lvl-tab.locked { opacity: .55; cursor: not-allowed; }
+.lvl-count { background: rgba(0,0,0,.12); border-radius: 99px; padding: 0 7px; font-size: 11.5px; }
+
+/* ── карточки периодов ── */
+.periods-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.period-card {
+  background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius-lg, 14px); padding: 16px; display: flex; flex-direction: column; gap: 12px;
+}
+.pc-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.pc-id b { display: block; font-size: 15px; color: var(--ink); }
+.pc-dates { font-size: 12px; color: var(--ink-3); font-weight: 600; }
+.pc-metrics { display: flex; flex-direction: column; gap: 6px; }
+.pc-metric-line { display: flex; align-items: center; gap: 6px; }
+.mc-edit { background: transparent; border: none; color: var(--ink-3); cursor: pointer; padding: 4px; display: inline-flex; }
+.mc-edit:hover { color: var(--accent); }
+
+.pc-milestones { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.pc-milestones li { font-size: 12.5px; color: var(--ink-2); display: flex; align-items: center; gap: 5px; }
+.ms-date { color: var(--ink-3); }
+.ms-dep { color: var(--amber, #C2820F); }
+
+.pc-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pc-hint { font-size: 12px; color: var(--ink-3); font-weight: 600; }
+
+/* ── чип метрики с цветовой кодировкой происхождения ── */
+.metric-chip { flex: 1; border-radius: 8px; border: 1px solid var(--border); overflow: hidden; }
+.mc-head {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 10px;
+  background: var(--surface, #f7f8fa); border: none; font: inherit; cursor: pointer; text-align: left;
+}
+.mc-head:disabled { cursor: default; }
+.mc-dot { width: 8px; height: 8px; border-radius: 99px; flex: 0 0 auto; }
+.mc-name { flex: 1; font-weight: 600; font-size: 13px; color: var(--ink); }
+.mc-val { font-weight: 700; font-size: 13px; color: var(--ink); }
+.mc-origin { font-size: 11px; font-weight: 700; color: var(--ink-3); text-transform: uppercase; letter-spacing: .02em; }
+.mc-detail { padding: 8px 10px; font-size: 12.5px; color: var(--ink-2); background: var(--card-bg); border-top: 1px dashed var(--border-2); }
+
+/* факт — сплошной зелёный; расчёт — синий; допущение — пунктир + янтарный */
+.org-measured .mc-dot { background: var(--green, #1F9D57); }
+.org-measured { border-color: var(--green, #1F9D57); }
+.org-input .mc-dot { background: var(--ink-3); }
+.org-derived .mc-dot { background: var(--accent); }
+.org-assumption { border-style: dashed; border-color: var(--amber, #C2820F); }
+.org-assumption .mc-dot { background: var(--amber, #C2820F); }
+
+/* ── боковые панели ── */
+.side-box { background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius-lg, 14px); padding: 14px 16px; }
+.side-box h3 { display: flex; align-items: center; gap: 7px; font-size: 14px; margin: 0 0 10px; color: var(--ink); }
+.side-empty { font-size: 13px; color: var(--ink-3); margin: 0; }
+
+.gap-list, .assum-list, .audit-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+.gap { border-left: 3px solid var(--border-2); padding-left: 10px; }
+.gap.blocking { border-left-color: var(--red, #E23D32); }
+.gap-name { font-weight: 700; font-size: 13px; color: var(--ink); display: flex; align-items: center; gap: 8px; }
+.gap-flag { font-size: 10.5px; font-weight: 700; color: var(--red, #E23D32); border: 1px solid currentColor; border-radius: 99px; padding: 0 6px; }
+.gap-why { font-size: 12px; color: var(--ink-3); margin: 2px 0 6px; }
+.gap-fill { display: flex; gap: 6px; }
+.gap-fill .form-input { padding: 6px 9px; font-size: 13px; }
+
+.assum { border-left: 3px solid var(--amber, #C2820F); padding-left: 10px; }
+.assum.confirmed { border-left-color: var(--green, #1F9D57); }
+.assum.rejected { border-left-color: var(--red, #E23D32); opacity: .7; }
+.assum-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; }
+.assum-statement { font-weight: 600; font-size: 13px; color: var(--ink); }
+.assum-meta { font-size: 11.5px; color: var(--ink-3); margin: 3px 0 6px; }
+.assum-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.audit { display: flex; gap: 9px; align-items: flex-start; }
+.audit-actor { display: inline-flex; padding: 4px; border-radius: 7px; flex: 0 0 auto; }
+.audit-actor.ai { background: var(--accent-weak, #eef); color: var(--accent); }
+.audit-actor.human { background: var(--surface, #eee); color: var(--ink-2); }
+.audit-act { font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.audit-meta { font-size: 11.5px; color: var(--ink-3); }
+
+/* ── модалки/таблицы ── */
+.modal-wide { max-width: 720px; width: 92vw; }
+.form-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.metric-rows { display: flex; flex-direction: column; gap: 8px; }
+.metric-row { display: flex; gap: 8px; align-items: center; }
+.mr-unit { max-width: 90px; }
+.mr-val { max-width: 110px; }
+.mr-del { background: transparent; border: none; color: var(--ink-3); cursor: pointer; padding: 6px; display: inline-flex; }
+.mr-del:hover { color: var(--danger, #E23D32); }
+
+.diff-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.diff-table th, .diff-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); }
+.diff-table th { color: var(--ink-3); font-size: 12px; }
+
+.alt-list { display: flex; flex-direction: column; gap: 10px; }
+.alt-item { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.alt-tradeoff { font-size: 12.5px; color: var(--ink-3); }
+.alt-count { margin-left: auto; font-size: 12px; color: var(--ink-3); font-weight: 700; }

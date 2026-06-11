@@ -24,6 +24,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Главная', icon: 'home', end: true },
   { to: '/chat', label: 'ИИ-Чат', icon: 'chat' },
   { to: '/clients', label: 'Клиенты', icon: 'users' },
+  { to: '/goals', label: 'Цели', icon: 'trendUp' },
   { to: '/orchestration', label: 'Сеть агентов', icon: 'sparkle' },
   { to: '/tasks', label: 'Задачи', icon: 'check' },
   { to: '/tracker', label: 'Трекер', icon: 'grid' },

@@ -544,3 +544,27 @@ class FunctionAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     run: Mapped['OrchestrationRun'] = relationship('OrchestrationRun', back_populates='analyses')
+
+
+class GoalDocument(Base):
+    """Документ декомпозиции цели целиком (JSON) + поля для выборки/доступа.
+
+    Дерево (цель → периоды → метрики → допущения → changeLog) хранится единым
+    JSON в `document` по схеме GoalDecompositionDocument (schemaVersion 1.0.0).
+    Типизация/валидация — в services/goal_decomposition (Pydantic). `dataset` —
+    известные факты (единственный источник user_input для движка).
+    """
+    __tablename__ = 'goal_documents'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    goal_id: Mapped[str] = mapped_column(String(36), unique=True, nullable=False, index=True)
+    owner_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), default='draft', nullable=False)
+    schema_version: Mapped[str] = mapped_column(String(20), default='1.0.0', nullable=False)
+    document: Mapped[dict] = mapped_column(JSON, nullable=False)
+    dataset: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    owner: Mapped[Optional['User']] = relationship('User', lazy='joined')

@@ -21,3 +21,6 @@ langchain>=0.3.0
 langchain-openai>=0.2.0
 langchain-core>=0.3.0
 langgraph>=0.2.0
+
+# Dev/test-зависимости и опциональный Anthropic-провайдер вынесены в
+# requirements-dev.txt — в прод-образ (Dockerfile) они НЕ ставятся.
