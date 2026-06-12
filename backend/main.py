@@ -131,6 +131,23 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def cache_headers(request, call_next):
+    """Кэш-заголовки статики: ускоряет повторные загрузки приложения.
+
+    Файлы в /assets/ имеют хэш содержимого в имени (index-XXXX.js) — браузеру
+    можно кэшировать их год и никогда не перепроверять (immutable). index.html
+    и прочее — no-cache: браузер перепроверяет, но получает 304, если не менялось.
+    """
+    response = await call_next(request)
+    path = request.url.path
+    if path.startswith("/assets/"):
+        response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+    elif not path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 @app.get("/api/health")
 async def health():
     return {"status": "ok"}
