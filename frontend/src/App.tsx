@@ -5,20 +5,21 @@ import Splash from './components/Splash';
 import LoginPage from './pages/LoginPage';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
-import ClientsPage from './pages/ClientsPage';
-import ClientDetailPage from './pages/ClientDetailPage';
-import BriefFormPage from './pages/BriefFormPage';
-import CompanyPage from './pages/CompanyPage';
-import FunctionDetailPage from './pages/FunctionDetailPage';
-import DepartmentDetailPage from './pages/DepartmentDetailPage';
-import TasksPage from './pages/TasksPage';
-import TrackerPage from './pages/TrackerPage';
-import ProfilePage from './pages/ProfilePage';
-import GoalsPage from './pages/GoalsPage';
-import GoalDecompositionPage from './pages/GoalDecompositionPage';
 
-// Ленивая загрузка страниц с markdown-рендером (тянут тяжёлый react-markdown):
-// их код скачивается только при первом заходе на экран.
+// Ленивая загрузка страниц: код каждого экрана скачивается при первом заходе
+// на него (и дальше берётся из кэша). Эйджер остаются только LoginPage и
+// HomePage — это первые экраны после открытия приложения.
+const ClientsPage = lazy(() => import('./pages/ClientsPage'));
+const ClientDetailPage = lazy(() => import('./pages/ClientDetailPage'));
+const BriefFormPage = lazy(() => import('./pages/BriefFormPage'));
+const CompanyPage = lazy(() => import('./pages/CompanyPage'));
+const FunctionDetailPage = lazy(() => import('./pages/FunctionDetailPage'));
+const DepartmentDetailPage = lazy(() => import('./pages/DepartmentDetailPage'));
+const TasksPage = lazy(() => import('./pages/TasksPage'));
+const TrackerPage = lazy(() => import('./pages/TrackerPage'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage'));
+const GoalsPage = lazy(() => import('./pages/GoalsPage'));
+const GoalDecompositionPage = lazy(() => import('./pages/GoalDecompositionPage'));
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const OrchestrationPage = lazy(() => import('./pages/OrchestrationPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
