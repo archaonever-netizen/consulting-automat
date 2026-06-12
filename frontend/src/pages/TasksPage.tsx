@@ -1,4 +1,5 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
 
@@ -29,16 +30,14 @@ const STATUS_LABELS: Record<string, string> = {
 };
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selected, setSelected] = useState<Task | null>(null);
-
-  useEffect(() => {
-    api.get('/api/tasks')
-      .then(r => { setTasks(r.data); if (r.data.length) setSelected(r.data[0]); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
+  const { data: tasks = [], isLoading: loading } = useQuery({
+    queryKey: ['tasks'],
+    queryFn: async () => (await api.get<Task[]>('/api/tasks')).data,
+  });
+  const [selectedId, setSelectedId] = useState<number | null>(null);
+  // По умолчанию выбрана первая задача (как раньше), выбор хранится по id,
+  // чтобы переживать фоновое обновление списка из кэша.
+  const selected = tasks.find(t => t.id === selectedId) ?? tasks[0] ?? null;
 
   const pill = (s: string) => STATUS_PILL[s] || 'pill-gray';
   const label = (s: string) => STATUS_LABELS[s] || s;
@@ -71,7 +70,7 @@ export default function TasksPage() {
                 <button
                   key={t.id}
                   className={`tasks-item${selected?.id === t.id ? ' active' : ''}`}
-                  onClick={() => setSelected(t)}
+                  onClick={() => setSelectedId(t.id)}
                 >
                   <div className="tasks-item-row">
                     <span className="tasks-item-title">{t.title}</span>
