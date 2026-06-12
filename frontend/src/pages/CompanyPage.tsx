@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
 
@@ -65,24 +66,21 @@ function RelationIcon({ type }: { type: string }) {
 }
 
 export default function CompanyPage() {
-  const [data, setData] = useState<CompanyData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data, isLoading: loading } = useQuery<CompanyData>({
+    queryKey: ['company'],
+    queryFn: async () => (await api.get('/api/company')).data,
+  });
   const [showModal, setShowModal] = useState(false);
   const [newDeptName, setNewDeptName] = useState('');
   const [newDeptDesc, setNewDeptDesc] = useState('');
   // ключ ячейки "funcId_deptId", у которой открыт пикер ролей
   const [activeCell, setActiveCell] = useState<string | null>(null);
 
+  // После мутаций (отделы, связи) сбрасываем кэш компании
   async function reload() {
-    const r = await api.get('/api/company');
-    setData(r.data);
+    await queryClient.invalidateQueries({ queryKey: ['company'] });
   }
-
-  useEffect(() => {
-    reload()
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
 
   async function addRelation(functionId: number, departmentId: number, relation: Relation) {
     try {
@@ -108,8 +106,7 @@ export default function CompanyPage() {
     e.preventDefault();
     try {
       await api.post('/api/company/departments', { name: newDeptName, description: newDeptDesc || null });
-      const r = await api.get('/api/company');
-      setData(r.data);
+      await reload();
       setShowModal(false);
       setNewDeptName('');
       setNewDeptDesc('');

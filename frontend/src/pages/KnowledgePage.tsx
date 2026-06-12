@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import ReactMarkdown from 'react-markdown';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
 
@@ -113,12 +114,24 @@ function matches(q: string, ...fields: (string | null)[]): boolean {
 }
 
 export default function KnowledgePage() {
-  const [cats, setCats] = useState<Category[]>([]);
-  const [sourceTree, setSourceTree] = useState<KnowledgeSection[]>([]);
+  const queryClient = useQueryClient();
+  const { data: me } = useQuery<{ is_founder?: boolean }>({
+    queryKey: ['me'],
+    queryFn: async () => (await api.get('/api/auth/me')).data,
+    staleTime: 5 * 60_000,
+  });
+  const isFounder = !!me?.is_founder;
+  const { data: cats = [], isLoading: catsLoading } = useQuery<Category[]>({
+    queryKey: ['knowledge'],
+    queryFn: async () => (await api.get<Category[]>('/api/knowledge')).data,
+  });
+  const { data: sourceTree = [], isLoading: treeLoading } = useQuery<KnowledgeSection[]>({
+    queryKey: ['knowledge-sources'],
+    queryFn: async () => (await api.get<KnowledgeSection[]>('/api/knowledge/source-tree')).data,
+  });
+  const loading = catsLoading || treeLoading;
   const [sourceDetail, setSourceDetail] = useState<SourceDetail | null>(null);
   const [sourceLoading, setSourceLoading] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [isFounder, setIsFounder] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState('');
@@ -126,14 +139,9 @@ export default function KnowledgePage() {
   const [catModal, setCatModal] = useState<Partial<Category> | null>(null);
   const sectionsRef = useRef<Record<string, HTMLElement | null>>({});
 
+  // Вызывается после правок статей/разделов — сбрасывает кэш базы знаний
   async function load() {
-    const r = await api.get<Category[]>('/api/knowledge');
-    setCats(r.data);
-  }
-
-  async function loadSourceTree() {
-    const r = await api.get<KnowledgeSection[]>('/api/knowledge/source-tree');
-    setSourceTree(r.data);
+    await queryClient.invalidateQueries({ queryKey: ['knowledge'] });
   }
 
   async function openSource(sourceId: number) {
@@ -145,14 +153,6 @@ export default function KnowledgePage() {
       setSourceLoading(false);
     }
   }
-
-  useEffect(() => {
-    Promise.all([
-      api.get('/api/auth/me').then(r => setIsFounder(!!r.data.is_founder)).catch(() => {}),
-      load().catch(() => {}),
-      loadSourceTree().catch(() => {}),
-    ]).finally(() => setLoading(false));
-  }, []);
 
   const filtered = useMemo(() => {
     return cats
