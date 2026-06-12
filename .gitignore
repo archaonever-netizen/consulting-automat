@@ -51,6 +51,10 @@ frontend/node_modules/
 .DS_Store
 Thumbs.db
 
+# Личные документы и временные файлы — не для репозитория
+*.docx
+uvicorn_test*.log
+
 # Claude Code
 .claude/
 .agents/
