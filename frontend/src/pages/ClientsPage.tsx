@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
 
@@ -54,8 +55,11 @@ function BriefDots({ c }: { c: ClientListItem }) {
 
 export default function ClientsPage() {
   const navigate = useNavigate();
-  const [clients, setClients] = useState<ClientListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: clients = [], isLoading: loading } = useQuery<ClientListItem[]>({
+    queryKey: ['clients'],
+    queryFn: async () => (await api.get('/api/clients')).data,
+  });
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'active' | 'new'>('all');
   const [view, setView] = useState<'grid' | 'list'>('grid');
@@ -65,12 +69,10 @@ export default function ClientsPage() {
   const [nameInput, setNameInput] = useState('');
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => { reload(); }, []);
-
+  // После мутаций сбрасываем кэш списка клиентов (включая карточки) и сводку главной
   async function reload() {
-    const r = await api.get('/api/clients');
-    setClients(r.data);
-    setLoading(false);
+    await queryClient.invalidateQueries({ queryKey: ['clients'] });
+    queryClient.invalidateQueries({ queryKey: ['home'] });
   }
 
   function openAdd() { setNameInput(''); setModal({ mode: 'add' }); }

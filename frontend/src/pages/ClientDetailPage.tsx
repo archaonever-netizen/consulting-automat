@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
 import { ShefMonoGlyph } from '../components/Logo';
@@ -55,28 +56,31 @@ function statusPill(status: string) {
 export default function ClientDetailPage() {
   const { clientId } = useParams<{ clientId: string }>();
   const navigate = useNavigate();
-  const [client, setClient] = useState<ClientDetail | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: client, isLoading: loading, isError } = useQuery<ClientDetail>({
+    queryKey: ['clients', clientId],
+    queryFn: async () => (await api.get(`/api/clients/${clientId}`)).data,
+    enabled: !!clientId,
+  });
+  // Клиент не найден/ошибка — возвращаемся к списку (прежнее поведение catch)
+  useEffect(() => { if (isError) navigate('/clients'); }, [isError, navigate]);
+
   const [tab, setTab] = useState<Tab>('overview');
   const [briefModal, setBriefModal] = useState(false);
   const [newBriefType, setNewBriefType] = useState('');
-  const [catalog, setCatalog] = useState<BriefCatalog | null>(null);
   const [savingSize, setSavingSize] = useState(false);
 
-  useEffect(() => {
-    api.get(`/api/clients/${clientId}`)
-      .then(r => setClient(r.data))
-      .catch(() => navigate('/clients'))
-      .finally(() => setLoading(false));
-  }, [clientId, navigate]);
+  // Каталог брифов статичен в рамках сессии — кэшируем надолго
+  const { data: catalog } = useQuery<BriefCatalog>({
+    queryKey: ['briefs-catalog'],
+    queryFn: async () => (await api.get('/api/briefs/catalog')).data,
+    staleTime: 10 * 60_000,
+  });
 
-  useEffect(() => {
-    api.get('/api/briefs/catalog').then(r => setCatalog(r.data)).catch(() => {});
-  }, []);
-
+  // После мутаций обновляем карточку клиента, список и сводку главной разом
   async function reload() {
-    const r = await api.get(`/api/clients/${clientId}`);
-    setClient(r.data);
+    await queryClient.invalidateQueries({ queryKey: ['clients'] });
+    queryClient.invalidateQueries({ queryKey: ['home'] });
   }
 
   async function changeSize(size: string) {
