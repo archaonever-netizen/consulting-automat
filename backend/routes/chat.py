@@ -7,6 +7,7 @@ from sqlalchemy import select
 from ..core.database import get_db
 from ..models import UserChatSession, UserSubChat, UserChatMessage
 from ..routes.auth import get_current_user_dep
+from ..routes._ratelimit import rate_limit
 from ..schemas.chat import (
     ChatSessionRead,
     SubChatCreate,
@@ -100,7 +101,7 @@ async def get_messages(
     return messages
 
 
-@router.post("/subchats/{subchat_id}/send")
+@router.post("/subchats/{subchat_id}/send", dependencies=[Depends(rate_limit("chat", 20))])
 async def send_message(
     subchat_id: int,
     req: SendMessageRequest,

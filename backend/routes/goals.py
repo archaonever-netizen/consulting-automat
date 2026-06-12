@@ -16,6 +16,7 @@ from ..core.config import get_settings
 from ..core.database import get_db
 from ..models import GoalDocument as GoalDocumentRow
 from ..routes.auth import get_current_user_dep
+from ..routes._ratelimit import rate_limit
 from ..schemas.goals import (
     AlternativesRequest,
     ApproveRequest,
@@ -216,7 +217,7 @@ async def update_dataset(
 
 # ─────────────────────────── декомпозиция / альтернативы ───────────────────────────
 
-@router.post("/{goal_id}/decompose")
+@router.post("/{goal_id}/decompose", dependencies=[Depends(rate_limit("goals-llm", 10))])
 async def decompose_level(
     goal_id: str,
     req: DecomposeRequest,
@@ -247,7 +248,7 @@ async def decompose_level(
     return _proposal_response(proposal)
 
 
-@router.post("/{goal_id}/alternatives")
+@router.post("/{goal_id}/alternatives", dependencies=[Depends(rate_limit("goals-llm", 10))])
 async def alternatives(
     goal_id: str,
     req: AlternativesRequest,
@@ -260,7 +261,7 @@ async def alternatives(
     return _proposal_response(proposal)
 
 
-@router.post("/{goal_id}/recalculate")
+@router.post("/{goal_id}/recalculate", dependencies=[Depends(rate_limit("goals-llm", 10))])
 async def recalculate(
     goal_id: str,
     req: RecalculateRequest,
