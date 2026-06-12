@@ -1,8 +1,8 @@
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
 from sqlalchemy.orm import selectinload
-from ..models import UserTask
-from ..schemas.tasks import TaskCreate
+from ..models import TaskCompletion, UserTask
+from ..schemas.tasks import TaskComplete, TaskCreate, TaskUpdate
 
 
 async def list_tasks(db: AsyncSession, user_id: int) -> list[UserTask]:
@@ -35,17 +35,51 @@ async def create_task(db: AsyncSession, data: TaskCreate, user_id: int) -> UserT
     return task
 
 
-async def get_task(db: AsyncSession, task_id: int) -> UserTask | None:
+async def get_task(db: AsyncSession, task_id: int, user_id: int) -> UserTask | None:
+    """Задача доступна только своему создателю — чужие id выглядят как 404."""
     result = await db.execute(
         select(UserTask)
-        .where(UserTask.id == task_id)
+        .where(UserTask.id == task_id, UserTask.created_by_id == user_id)
         .options(selectinload(UserTask.client), selectinload(UserTask.assigned_to))
     )
     return result.scalar_one_or_none()
 
 
-async def delete_task(db: AsyncSession, task_id: int) -> bool:
-    task = await get_task(db, task_id)
+async def update_task(db: AsyncSession, task_id: int, data: TaskUpdate, user_id: int) -> UserTask | None:
+    task = await get_task(db, task_id, user_id)
+    if task is None:
+        return None
+    for field, value in data.model_dump(exclude_unset=True).items():
+        setattr(task, field, value)
+    await db.commit()
+    await db.refresh(task)
+    return task
+
+
+async def complete_task(db: AsyncSession, task_id: int, data: TaskComplete, user_id: int) -> UserTask | None:
+    """Завершить задачу: статус completed/failed + запись результатов (TaskCompletion)."""
+    task = await get_task(db, task_id, user_id)
+    if task is None:
+        return None
+    task.status = 'failed' if data.is_failure else 'completed'
+    result = await db.execute(select(TaskCompletion).where(TaskCompletion.task_id == task_id))
+    completion = result.scalar_one_or_none()
+    if completion is None:
+        completion = TaskCompletion(task_id=task_id)
+        db.add(completion)
+    completion.actual_result = data.actual_result
+    completion.is_failure = data.is_failure
+    completion.difficulties = data.difficulties
+    completion.how_overcome = data.how_overcome
+    completion.next_step = data.next_step
+    await db.commit()
+    # completion — relationship: подгружаем явно, иначе ленивый доступ упадёт в async
+    await db.refresh(task, ["completion"])
+    return task
+
+
+async def delete_task(db: AsyncSession, task_id: int, user_id: int) -> bool:
+    task = await get_task(db, task_id, user_id)
     if task is None:
         return False
     await db.delete(task)

@@ -16,8 +16,16 @@ class TaskCreate(BaseModel):
 
 
 class TaskUpdate(BaseModel):
-    field: str
-    value: str | int | None
+    """Частичное обновление: переданы — меняем, не переданы — не трогаем."""
+    title: Optional[str] = None
+    client_id: Optional[int] = None
+    assigned_to_id: Optional[int] = None
+    start_time: Optional[datetime] = None
+    duration_minutes: Optional[int] = None
+    input_data: Optional[str] = None
+    goal: Optional[str] = None
+    action_description: Optional[str] = None
+    expected_result: Optional[str] = None
 
 
 class TaskComplete(BaseModel):
@@ -32,9 +40,14 @@ class TaskRead(BaseModel):
     id: int
     title: str
     client_id: int
+    assigned_to_id: Optional[int] = None
     status: str
     start_time: Optional[datetime]
     duration_minutes: Optional[int]
+    input_data: Optional[str] = None
+    goal: Optional[str] = None
+    action_description: Optional[str] = None
+    expected_result: Optional[str] = None
     created_at: datetime
 
     model_config = {"from_attributes": True}

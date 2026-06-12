@@ -3,7 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..core.database import get_db
 from ..routes.auth import get_current_user_dep
 from ..services import tasks as task_service
-from ..schemas.tasks import TaskCreate, TaskRead
+from ..schemas.tasks import TaskComplete, TaskCreate, TaskRead, TaskUpdate
 
 router = APIRouter()
 
@@ -31,7 +31,33 @@ async def get_task(
     current_user=Depends(get_current_user_dep),
     db: AsyncSession = Depends(get_db)
 ):
-    task = await task_service.get_task(db, task_id)
+    task = await task_service.get_task(db, task_id, current_user.id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@router.put("/{task_id}", response_model=TaskRead)
+async def update_task(
+    task_id: int,
+    data: TaskUpdate,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db)
+):
+    task = await task_service.update_task(db, task_id, data, current_user.id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return task
+
+
+@router.post("/{task_id}/complete", response_model=TaskRead)
+async def complete_task(
+    task_id: int,
+    data: TaskComplete,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db)
+):
+    task = await task_service.complete_task(db, task_id, data, current_user.id)
     if task is None:
         raise HTTPException(status_code=404, detail="Task not found")
     return task
@@ -43,6 +69,6 @@ async def delete_task(
     current_user=Depends(get_current_user_dep),
     db: AsyncSession = Depends(get_db)
 ):
-    success = await task_service.delete_task(db, task_id)
+    success = await task_service.delete_task(db, task_id, current_user.id)
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")
