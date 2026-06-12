@@ -1,4 +1,12 @@
-"""Интеграция с Яндекс.Календарём через CalDAV и OAuth."""
+"""Интеграция с Яндекс.Календарём через CalDAV и OAuth.
+
+TODO: интеграция запланирована, требует переноса с Flask на текущий стек.
+Модуль написан для старого Flask-приложения и сейчас НЕ подключён к бэкенду.
+Что уже готово к переносу: поля токенов в backend/models.py (User), настройки
+в backend/core/config.py (yandex_*), инструкции в docs/archive/YANDEX_CALENDAR_SETUP.md.
+При переносе: переписать на async (httpx вместо requests), подключить к
+backend/services/tasks.py, шифровать токены как у Kaiten (backend/core/crypto.py).
+"""
 
 import os
 import requests
