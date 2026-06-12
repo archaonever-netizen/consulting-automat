@@ -15,7 +15,7 @@ export default defineConfig({
           groups: [
             {
               name: 'vendor',
-              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|axios)[\\/]/,
+              test: /[\\/]node_modules[\\/](?:(?:react|react-dom|scheduler|react-router|react-router-dom|axios)[\\/]|@tanstack[\\/])/,
             },
           ],
         },
