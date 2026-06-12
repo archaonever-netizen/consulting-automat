@@ -1,5 +1,5 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import api from '../services/api';
 import Icon from './Icon';
 import { ShefWordmark } from './Logo';
@@ -110,7 +110,10 @@ export default function Layout() {
       </aside>
 
       <main className="main" id="mainContent">
-        <Outlet />
+        {/* Suspense внутри main: при докачке ленивой страницы сайдбар остаётся на месте */}
+        <Suspense fallback={<div className="page"><div className="loading-bar active" /></div>}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import './styles/styles.css';
 import Splash from './components/Splash';
@@ -11,13 +12,16 @@ import CompanyPage from './pages/CompanyPage';
 import FunctionDetailPage from './pages/FunctionDetailPage';
 import DepartmentDetailPage from './pages/DepartmentDetailPage';
 import TasksPage from './pages/TasksPage';
-import ChatPage from './pages/ChatPage';
-import OrchestrationPage from './pages/OrchestrationPage';
-import KnowledgePage from './pages/KnowledgePage';
 import TrackerPage from './pages/TrackerPage';
 import ProfilePage from './pages/ProfilePage';
 import GoalsPage from './pages/GoalsPage';
 import GoalDecompositionPage from './pages/GoalDecompositionPage';
+
+// Ленивая загрузка страниц с markdown-рендером (тянут тяжёлый react-markdown):
+// их код скачивается только при первом заходе на экран.
+const ChatPage = lazy(() => import('./pages/ChatPage'));
+const OrchestrationPage = lazy(() => import('./pages/OrchestrationPage'));
+const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token');
