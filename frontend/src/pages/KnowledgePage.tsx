@@ -94,6 +94,11 @@ interface KnowledgeSection {
   source_links: SectionLink[];
 }
 
+interface SourceCardItem {
+  source: KnowledgeSource;
+  path: string[];
+}
+
 const ICON_HINTS = ['home', 'chat', 'users', 'chart', 'check', 'sparkle', 'doc', 'book', 'grid', 'bolt', 'gear', 'clock'];
 const LAYOUTS = [
   { v: 'cards', label: 'Карточки' },
@@ -154,6 +159,18 @@ export default function KnowledgePage() {
       .map(c => ({ ...c, articles: c.articles.filter(a => matches(query, a.title, a.summary, a.body)) }))
       .filter(c => editMode || c.articles.length > 0);
   }, [cats, query, editMode]);
+
+  const sourceCards = useMemo(() => {
+    const cards = collectSourceCards(sourceTree);
+    return cards.filter(card => matches(
+      query,
+      card.source.title,
+      card.source.source_type,
+      card.source.source_file,
+      card.path.join(' '),
+      card.source.layers.map(layer => layer.content).join(' ')
+    ));
+  }, [sourceTree, query]);
 
   useEffect(() => {
     const obs = new IntersectionObserver(
@@ -251,16 +268,35 @@ export default function KnowledgePage() {
               <div className="kb-sec-head">
                 <div className="eyebrow">Методологии и фреймворки</div>
               </div>
-              <div className="kb-source-panel">
-                {sourceTree.map(section => (
-                  <SourceSectionNode
-                    key={section.id}
-                    section={section}
-                    query={query}
-                    depth={0}
-                    onOpenSource={openSource}
-                  />
-                ))}
+              <div className="kb-cards">
+                {sourceCards.map(({ source, path }) => {
+                  const description = source.layers.find(l => l.layer_type === 'description');
+                  return (
+                    <button
+                      key={source.id}
+                      className="kb-card kb-source-card"
+                      type="button"
+                      onClick={() => openSource(source.id)}
+                    >
+                      <div className="kb-card-head">
+                        <span className="kb-card-icon"><Icon name="doc" size={19} stroke={1.9} /></span>
+                        <div className="kb-card-title">
+                          <b>{source.title}</b>
+                        </div>
+                        <span className="kb-card-open" title="Открыть источник"><Icon name="arrowRight" size={16} /></span>
+                      </div>
+                      <p className="kb-card-sum">
+                        {path.slice(1).join(' / ') || source.source_type}
+                      </p>
+                      {description && <p className="kb-card-sum">{description.content}</p>}
+                      <div className="kb-source-card-meta">
+                        <span>v{source.version || 'n/a'}</span>
+                        <span>{source.language}</span>
+                        <span>{source.processing_status}</span>
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             </section>
           )}
@@ -360,72 +396,21 @@ export default function KnowledgePage() {
   );
 }
 
-function SourceSectionNode({ section, query, depth, onOpenSource }: {
-  section: KnowledgeSection;
-  query: string;
-  depth: number;
-  onOpenSource: (sourceId: number) => void;
-}) {
-  const visibleSources = section.source_links
-    .map(link => link.source)
-    .filter(source => matches(
-      query,
-      source.title,
-      source.source_type,
-      source.source_file,
-      source.layers.map(layer => layer.content).join(' ')
-    ));
-  const visibleChildren = section.children.filter(child => {
-    const childSources = child.source_links.map(link => link.source);
-    const selfMatch = matches(query, child.title, child.description);
-    const sourceMatch = childSources.some(source => matches(query, source.title, source.source_file));
-    return !query || selfMatch || sourceMatch || child.children.length > 0;
-  });
-
-  if (query && visibleSources.length === 0 && visibleChildren.length === 0 && !matches(query, section.title, section.description)) {
-    return null;
+function collectSourceCards(sections: KnowledgeSection[], path: string[] = []): SourceCardItem[] {
+  const cards: SourceCardItem[] = [];
+  for (const section of sections) {
+    const nextPath = [...path, section.title];
+    for (const link of section.source_links) {
+      cards.push({ source: link.source, path: nextPath });
+    }
+    cards.push(...collectSourceCards(section.children, nextPath));
   }
-
-  return (
-    <div className="kb-source-node" style={{ ['--depth' as any]: depth }}>
-      <div className="kb-source-node-head">
-        <span className="kb-source-depth">{depth + 1}</span>
-        <div>
-          <h3>{section.title}</h3>
-          {section.description && <p>{section.description}</p>}
-        </div>
-      </div>
-      {visibleSources.length > 0 && (
-        <div className="kb-source-list">
-          {visibleSources.map(source => {
-            const description = source.layers.find(l => l.layer_type === 'description');
-            return (
-              <button key={source.id} className="kb-source-card" onClick={() => onOpenSource(source.id)}>
-                <span className="kb-card-icon"><Icon name="doc" size={18} stroke={1.9} /></span>
-                <span className="kb-source-card-text">
-                  <b>{source.title}</b>
-                  <small>
-                    {source.source_type} · v{source.version || 'n/a'} · {source.language} · {source.processing_status}
-                  </small>
-                  {description && <em>{description.content}</em>}
-                </span>
-                <Icon name="arrowRight" size={16} />
-              </button>
-            );
-          })}
-        </div>
-      )}
-      {visibleChildren.map(child => (
-        <SourceSectionNode
-          key={child.id}
-          section={child}
-          query={query}
-          depth={depth + 1}
-          onOpenSource={onOpenSource}
-        />
-      ))}
-    </div>
-  );
+  const seen = new Set<number>();
+  return cards.filter(card => {
+    if (seen.has(card.source.id)) return false;
+    seen.add(card.source.id);
+    return true;
+  });
 }
 
 function SourceDetailModal({ source, loading, onClose }: {

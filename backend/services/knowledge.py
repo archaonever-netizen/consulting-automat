@@ -6,6 +6,7 @@ Markdown, который внедряется в системный промпт
 """
 from datetime import datetime
 from hashlib import sha256
+import json
 from pathlib import Path
 import re
 
@@ -254,11 +255,13 @@ async def search_sources(
 
 async def seed_bpmm_source(db: AsyncSession) -> None:
     repo_root = Path(__file__).resolve().parents[2]
-    pdf_path = repo_root / "BPMM" / "BPMM.pdf"
-    if not pdf_path.exists():
+    fulltext_path = repo_root / "BPMM" / "BPMM.fulltext.txt"
+    fragments_path = repo_root / "BPMM" / "BPMM.fragments.jsonl"
+    original_pdf_path = repo_root / "BPMM" / "BPMM.pdf"
+    if not fulltext_path.exists() or not fragments_path.exists():
         return
 
-    checksum = sha256(pdf_path.read_bytes()).hexdigest()
+    checksum = sha256(fulltext_path.read_bytes() + fragments_path.read_bytes()).hexdigest()
     existing = await db.scalar(select(KnowledgeSource).where(KnowledgeSource.key == "bpmm"))
     if (
         existing is not None
@@ -279,7 +282,7 @@ async def seed_bpmm_source(db: AsyncSession) -> None:
         source_type="methodology_framework",
         version="1.0",
         language="en",
-        source_file=str(pdf_path.relative_to(repo_root)).replace("\\", "/"),
+        source_file=str(fulltext_path.relative_to(repo_root)).replace("\\", "/"),
         source_url="http://www.omg.org/spec/BPMM/1.0/PDF",
         processing_status="processing",
         checksum=checksum,
@@ -287,29 +290,31 @@ async def seed_bpmm_source(db: AsyncSession) -> None:
             "document_title": "Business Process Maturity Model (BPMM)",
             "omg_document_number": "formal/2008-06-01",
             "document_date": "June 2008",
-            "original_file": "BPMM/BPMM.pdf",
+            "original_file": str(original_pdf_path.relative_to(repo_root)).replace("\\", "/"),
+            "fulltext_file": str(fulltext_path.relative_to(repo_root)).replace("\\", "/"),
+            "fragments_file": str(fragments_path.relative_to(repo_root)).replace("\\", "/"),
+            "import_note": (
+                "Runtime imports source_original text from committed text artifacts, "
+                "not from PDF parsing."
+            ),
         },
     )
     db.add(source)
     await db.flush()
 
-    reader, page_texts, full_text = _extract_bpmm_pdf(pdf_path)
+    full_text = fulltext_path.read_text(encoding="utf-8")
     db.add(KnowledgeSourceText(
         source_id=source.id,
         text=full_text,
         text_origin="source_original",
-        extraction_method="pypdf PdfReader.extract_text, pages joined without generated summaries",
+        extraction_method="committed BPMM.fulltext.txt generated from original BPMM.pdf",
     ))
 
-    outline_items = _flatten_pdf_outline(reader)
-    if not outline_items:
-        outline_items = [{"title": "BPMM", "page": 1, "level": 0}]
+    with fragments_path.open("r", encoding="utf-8") as fragments_file:
+        fragments = [json.loads(line) for line in fragments_file if line.strip()]
 
-    for order, item in enumerate(outline_items):
-        start_page = max(1, int(item["page"]))
-        next_page = _next_outline_page(outline_items, order, start_page)
-        end_page = max(start_page, min(next_page - 1, len(page_texts)))
-        fragment_text = "\n\n".join(page_texts[start_page - 1:end_page]).strip()
+    for item in fragments:
+        fragment_text = str(item["text"]).strip()
         if not fragment_text:
             continue
         title = str(item["title"]).strip()
@@ -320,17 +325,18 @@ async def seed_bpmm_source(db: AsyncSession) -> None:
             summary=_fragment_summary(title, fragment_text),
             summary_origin="ai_generated",
             text_origin="source_original",
-            sort_order=order,
-            outline_level=int(item["level"]),
-            page_start=start_page,
-            page_end=end_page,
-            source_ref=f"{source.source_file}#page={start_page}",
+            sort_order=int(item["sort_order"]),
+            outline_level=int(item["outline_level"]),
+            page_start=int(item["page_start"]),
+            page_end=int(item["page_end"]),
+            source_ref=f"{source.source_file}#fragment={int(item['sort_order'])}",
             metadata_json={
-                "fragmenting_basis": "PDF outline/bookmarks",
+                "fragmenting_basis": "committed JSONL generated from PDF outline/bookmarks",
+                "original_source_ref": f"BPMM/BPMM.pdf#page={int(item['page_start'])}",
                 "fragmenting_note": (
-                    "When several outline entries start on the same PDF page, page-level extraction "
-                    "can duplicate same-page text across adjacent fragments instead of guessing "
-                    "a smaller boundary."
+                    "When several outline entries start on the same PDF page, the generated "
+                    "page-level text artifact can duplicate same-page text across adjacent "
+                    "fragments instead of guessing a smaller boundary."
                 ),
             },
         ))
@@ -430,47 +436,6 @@ async def _link_source(
             relation_type=relation_type,
             sort_order=sort_order,
         ))
-
-
-def _extract_bpmm_pdf(pdf_path: Path):
-    from pypdf import PdfReader
-
-    reader = PdfReader(str(pdf_path))
-    page_texts = [(page.extract_text() or "").strip() for page in reader.pages]
-    full_text = "\n\n".join(page_texts).strip()
-    return reader, page_texts, full_text
-
-
-def _flatten_pdf_outline(reader) -> list[dict]:
-    items: list[dict] = []
-
-    def walk(nodes, level: int = 0) -> None:
-        for node in nodes:
-            if isinstance(node, list):
-                walk(node, level + 1)
-                continue
-            title = str(node.get("/Title", "")).strip()
-            if not title:
-                continue
-            try:
-                page = reader.get_destination_page_number(node) + 1
-            except Exception:
-                page = 1
-            items.append({"title": title, "page": page, "level": level})
-
-    try:
-        walk(reader.outline)
-    except Exception:
-        return []
-    return items
-
-
-def _next_outline_page(items: list[dict], index: int, current_page: int) -> int:
-    for next_item in items[index + 1:]:
-        page = int(next_item["page"])
-        if page > current_page:
-            return page
-    return 10**9
 
 
 def _fragment_summary(title: str, fragment_text: str) -> str:
