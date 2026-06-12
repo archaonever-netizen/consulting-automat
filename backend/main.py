@@ -159,8 +159,10 @@ if os.path.isdir(_DIST):
         # /api/* сюда попадать не должен, но на всякий случай отдаём 404
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not found")
-        candidate = os.path.join(_DIST, full_path)
-        if full_path and os.path.isfile(candidate):
+        # Защита от path traversal: нормализуем путь и отдаём файл только если
+        # он реально лежит внутри dist; всё остальное (вкл. /../...) — SPA fallback.
+        candidate = os.path.normpath(os.path.join(_DIST, full_path))
+        if full_path and candidate.startswith(_DIST + os.sep) and os.path.isfile(candidate):
             return FileResponse(candidate)
         # SPA fallback: любой неизвестный путь → index.html (клиентский роутинг)
         return FileResponse(os.path.join(_DIST, "index.html"))
