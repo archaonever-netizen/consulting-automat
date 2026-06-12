@@ -1,5 +1,6 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from './Icon';
 import { ShefWordmark } from './Logo';
@@ -41,18 +42,19 @@ function initials(name: string): string {
 
 export default function Layout() {
   const navigate = useNavigate();
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    api.get('/api/auth/me')
-      .then(r => setUser(r.data))
-      .catch(() => navigate('/login'))
-      .finally(() => setLoading(false));
-  }, [navigate]);
+  const queryClient = useQueryClient();
+  // Общий ключ ['me'] с HomePage/KnowledgePage: профиль грузится один раз
+  // и держится 5 минут — каркас при переходах рисуется мгновенно.
+  const { data: user, isLoading: loading, isError } = useQuery<User>({
+    queryKey: ['me'],
+    queryFn: async () => (await api.get('/api/auth/me')).data,
+    staleTime: 5 * 60_000,
+  });
+  useEffect(() => { if (isError) navigate('/login'); }, [isError, navigate]);
 
   function handleLogout() {
     localStorage.removeItem('access_token');
+    queryClient.clear(); // кэш не должен пережить смену пользователя
     navigate('/login');
   }
 
