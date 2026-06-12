@@ -41,7 +41,7 @@ export default function HomePage() {
     staleTime: 5 * 60_000,
   });
   const userName = me?.full_name?.split(' ')[0] || '';
-  const { data } = useQuery<HomeData>({
+  const { data, isError: homeError } = useQuery<HomeData>({
     queryKey: ['home'],
     queryFn: async () => (await api.get('/api/clients/home')).data,
   });
@@ -84,7 +84,8 @@ export default function HomePage() {
           <div className="hero-brief rise d2">
             <span className="shef-mono lg"><ShefMonoGlyph /></span>
             <p>
-              {!data ? 'Загрузка…' :
+              {homeError ? 'Не удалось загрузить сводку. Проверьте соединение и обновите страницу.' :
+               !data ? 'Загрузка…' :
                data.client_count === 0 ? 'Картотека пуста. Добавьте первого клиента, чтобы ШЕФ начал работу.' :
                data.focus_items.length > 0
                  ? <>Просмотрел <b>{data.client_count} {data.client_count === 1 ? 'клиента' : data.client_count < 5 ? 'клиента' : 'клиентов'}</b>. {data.focus_items.length} {data.focus_items.length === 1 ? 'клиент' : 'клиента'} с незаполненными брифами.</>
