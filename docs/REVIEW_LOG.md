@@ -100,9 +100,34 @@
 
 ---
 
+### Этап 1 — Уборка мёртвого кода (12.06.2026) ✅
+
+Перед удалением каждый пункт проверен: grep по живому коду (`backend/`, `frontend/src`,
+`frontend/dist`), Dockerfile (копирует только backend, frontend/dist, BPMM), amvera.yaml, доки.
+
+**Удалено (уверенность 100%, всё восстановимо из git-истории):**
+| Что | Почему мёртвое |
+|---|---|
+| `templates/` (18 Jinja-шаблонов) | UI старого Flask; FastAPI раздаёт React из frontend/dist, ссылок нет |
+| `static/` (css, js, img) | стили уже портированы в `frontend/src/styles/styles.css`; на `/static` не ссылается ни бэкенд, ни собранный фронт |
+| `agents.py`, `prompts.py` | импортируют `function_agent`, `orchestrator`, `models` — этих модулей в корне больше нет; новая сеть агентов живёт в `backend/services/agent_network/` |
+| `debug_home.py`, `debug_login.py`, `debug_route.py`, `test_app.py` | импортируют несуществующий модуль `app` (старый Flask) — даже не запускаются |
+| `create_example.py`, `check_users.py`, `seed_founder.py` | тоже `from app import …` — сломаны; сид основателя теперь автоматический при старте бэкенда (коммит b228834) |
+| `test_screenshot.py` | одноразовый скриншот-скрипт Flask-эпохи |
+| `Procfile` | команда `gunicorn app:app` для несуществующего Flask-приложения |
+
+**Сознательно оставлено:**
+- `create_test_user.py` — рабочий инструмент, упоминается в QUICKSTART/START_HERE/start.ps1.
+- `start.ps1` — хелпер локального запуска (актуален для FastAPI).
+- `requirements.txt` (корень) — актуальный прокси на `backend/requirements.txt`.
+
 ## Кандидаты на удаление, требующие подтверждения владельца
 
-(заполняется в Этапе 1)
+1. **`yandex_calendar.py`** (корень) — интеграция с Яндекс.Календарём (CalDAV + OAuth).
+   Сейчас НЕ используется кодом, но: в БД сохранены поля токенов (`backend/models.py:36-39`),
+   в конфиге — настройки «kept for future» (`backend/core/config.py:55-58`), и на него
+   ссылаются доки TASKS_SETUP / YANDEX_CALENDAR_SETUP. Если интеграция календаря в планах —
+   оставить; если нет — можно удалить вместе с полями и доками. **Пока оставлен.**
 
 ## Что осталось / на что обратить внимание
 
