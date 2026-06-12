@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
 import { ShefMonoGlyph } from '../components/Logo';
@@ -33,19 +34,23 @@ function greetByHour(): string {
 }
 
 export default function HomePage() {
-  const [data, setData] = useState<HomeData | null>(null);
-  const [userName, setUserName] = useState('');
+  // Ключ ['me'] общий с Layout: профиль грузится один раз и кэшируется 5 минут
+  const { data: me } = useQuery<{ full_name?: string }>({
+    queryKey: ['me'],
+    queryFn: async () => (await api.get('/api/auth/me')).data,
+    staleTime: 5 * 60_000,
+  });
+  const userName = me?.full_name?.split(' ')[0] || '';
+  const { data } = useQuery<HomeData>({
+    queryKey: ['home'],
+    queryFn: async () => (await api.get('/api/clients/home')).data,
+  });
   const [askInput, setAskInput] = useState('');
   const navigate = useNavigate();
 
   const today = new Date().toLocaleDateString('ru-RU', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
   });
-
-  useEffect(() => {
-    api.get('/api/auth/me').then(r => setUserName(r.data.full_name?.split(' ')[0] || '')).catch(() => {});
-    api.get('/api/clients/home').then(r => setData(r.data)).catch(() => {});
-  }, []);
 
   function handleAsk(text?: string) {
     const val = text || askInput.trim();

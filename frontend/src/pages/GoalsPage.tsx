@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../components/Icon';
 import { createGoal, listGoals } from '../services/goals';
 import type { GoalListItem, MetricInput } from '../services/goals';
@@ -20,8 +21,11 @@ function slug(name: string, i: number): string {
 
 export default function GoalsPage() {
   const navigate = useNavigate();
-  const [goals, setGoals] = useState<GoalListItem[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data: goals = [], isLoading: loading } = useQuery<GoalListItem[]>({
+    queryKey: ['goals'],
+    queryFn: listGoals,
+  });
   const [modal, setModal] = useState(false);
   const [busy, setBusy] = useState(false);
 
@@ -29,15 +33,6 @@ export default function GoalsPage() {
   const [startDate, setStartDate] = useState('');
   const [deadline, setDeadline] = useState('');
   const [metrics, setMetrics] = useState<MetricRow[]>([{ name: '', unit: '', targetValue: '', aggregation: 'flow' }]);
-
-  useEffect(() => {
-    let alive = true;
-    listGoals()
-      .then(data => { if (alive) setGoals(data); })
-      .catch(() => undefined)
-      .finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
-  }, []);
 
   function openModal() {
     setTitle(''); setStartDate(''); setDeadline('');
@@ -64,6 +59,8 @@ export default function GoalsPage() {
     setBusy(true);
     try {
       const res = await createGoal({ title: title.trim(), startDate, deadline, targetMetrics });
+      // Кэш списка целей устарел — при возврате на /goals список перезапросится
+      queryClient.invalidateQueries({ queryKey: ['goals'] });
       navigate(`/goals/${res.goalId}`);
     } catch (err) {
       const e2 = err as { response?: { data?: { detail?: unknown } } };
