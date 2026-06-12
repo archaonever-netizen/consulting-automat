@@ -1,4 +1,4 @@
-# Архитектура: Сеть ИИ-агентов (executor / supplier)
+111# Архитектура: Сеть ИИ-агентов (executor / supplier)
 
 > Статус: **реализовано** (этапы 1–4 плана внедрения). Сеть живёт в
 > `backend/services/agent_network/` (`state.py`, `topology.py`, `nodes.py`,

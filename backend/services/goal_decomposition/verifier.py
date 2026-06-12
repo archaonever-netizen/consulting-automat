@@ -110,10 +110,16 @@ class FabricatedInput:
 
 @dataclass(frozen=True)
 class ConstraintViolation:
-    """Нарушено жёсткое ограничение (kind=bound) или зависимость вех (kind=dependency)."""
+    """Нарушено жёсткое ограничение (kind=bound) или зависимость вех (kind=dependency).
+
+    Для kind=bound заполнены observed (фактическая сумма) и limit (жёсткий лимит) —
+    помощник по данным (Фаза 7) считает по ним рычаги без обращения к модели.
+    """
     constraint_id: str
     kind: str
     detail: str
+    observed: Optional[float] = None
+    limit: Optional[float] = None
     code: ClassVar[str] = "ConstraintViolation"
 
     @property
@@ -188,6 +194,19 @@ class Report:
     def code_summary(self) -> str:
         """Сводка только из имён типов ошибок и их числа — без секретов/значений."""
         return ", ".join(f"{code}×{n}" for code, n in sorted(self.code_counts().items()))
+
+    def to_dicts(self) -> list[dict[str, Any]]:
+        """Типизированные ошибки как словари (code + значимые поля) — для классификатора Фазы 7."""
+        fields = ("metric_id", "node_id", "constraint_id", "kind",
+                  "expected", "got", "observed", "limit", "reason")
+        out: list[dict[str, Any]] = []
+        for e in self.errors:
+            item: dict[str, Any] = {"code": e.code}
+            for attr in fields:
+                if hasattr(e, attr):
+                    item[attr] = getattr(e, attr)
+            out.append(item)
+        return out
 
 
 # ─────────────────────────── публичная функция ───────────────────────────
@@ -418,6 +437,7 @@ def _check_hard_bounds(parent: RawNode, children: list[RawNode]) -> list[Verific
             errors.append(ConstraintViolation(
                 cons.id or cons.type or "constraint", "bound",
                 f"сумма метрик в '{cons.unit}' = {total} превышает жёсткий лимит {cons.value}",
+                observed=total, limit=float(cons.value),
             ))
     return errors
 

@@ -56,6 +56,7 @@ class Proposal:
     notes: str = ""
     attempts: int = 0
     verifier_feedback: str = ""
+    verifier_errors: list[dict[str, Any]] = field(default_factory=list)
     error: Optional[str] = None
 
 
@@ -111,6 +112,7 @@ async def decompose(
     attempts = 0
     next_delay = 0.0
     rate_limited = False
+    last_errors: list[dict[str, Any]] = []  # типизированные ошибки верификатора (для Фазы 7)
     for attempt in range(retries + 1):
         if next_delay > 0:
             await asyncio.sleep(next_delay)  # бэкофф перед повтором (особенно при rate limit)
@@ -212,6 +214,7 @@ async def decompose(
             )
         feedback = report.to_feedback()
         last_problem = feedback
+        last_errors = report.to_dicts()
         next_delay = backoff
         rate_limited = False
         # Только типы ошибок — без значений/датасета/ответа модели.
@@ -236,6 +239,7 @@ async def decompose(
         level=level,
         attempts=attempts,
         verifier_feedback=feedback,
+        verifier_errors=last_errors,
         error=error_msg,
     )
 
