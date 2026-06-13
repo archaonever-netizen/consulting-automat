@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings
 
 
 class DeepSeekConfig:
@@ -39,9 +40,18 @@ class Settings(BaseSettings):
     secret_key: str = "shef-dev-secret-key-change-in-prod"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    founder_email: str = ""
+    founder_password: str = ""
+    founder_name: str = "Основатель"
 
     # LLM
     promptra_api_key: str = ""
+
+    # Personal Telegram secretary
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+    secretary_owner_telegram_id: str = ""
+    secretary_local_user_email: str = ""
 
     # Декомпозиция целей (движок)
     decomposition_llm_provider: str = "promptra"   # promptra | anthropic

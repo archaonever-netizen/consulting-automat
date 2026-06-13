@@ -24,6 +24,7 @@ interface NavItem {
 const NAV: NavItem[] = [
   { to: '/', label: 'Главная', icon: 'home', end: true },
   { to: '/chat', label: 'ИИ-Чат', icon: 'chat' },
+  { to: '/secretary', label: 'Секретарь', icon: 'send' },
   { to: '/clients', label: 'Клиенты', icon: 'users' },
   { to: '/goals', label: 'Цели', icon: 'trendUp' },
   { to: '/orchestration', label: 'Сеть агентов', icon: 'sparkle' },

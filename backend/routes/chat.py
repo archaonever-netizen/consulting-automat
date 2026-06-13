@@ -1,19 +1,20 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from sqlalchemy import select
 
 from ..core.database import get_db
-from ..models import UserChatSession, UserSubChat, UserChatMessage
-from ..routes.auth import get_current_user_dep
+from ..models import UserChatSession, UserSubChat
 from ..routes._ratelimit import rate_limit
+from ..routes.auth import get_current_user_dep
 from ..schemas.chat import (
+    ChatMessageRead,
     ChatSessionRead,
+    SendMessageRequest,
     SubChatCreate,
     SubChatRead,
-    ChatMessageRead,
-    SendMessageRequest,
+    TelegramChatCreate,
 )
 from ..services import chat_service
 
@@ -50,6 +51,30 @@ async def create_subchat(
     subchat = await chat_service.create_subchat(db, session.id, data.task_id)
     # перезагрузить с messages — иначе сериализация SubChatRead.messages
     # триггерит ленивую загрузку вне greenlet (MissingGreenlet → 500).
+    result = await db.execute(
+        select(UserSubChat)
+        .where(UserSubChat.id == subchat.id)
+        .options(selectinload(UserSubChat.messages))
+    )
+    return result.scalar_one()
+
+
+@router.post("/session/telegram-chats", response_model=SubChatRead)
+async def create_telegram_chat(
+    data: TelegramChatCreate,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create or update a Telegram-origin chat in the user's AI chat session."""
+    session = await chat_service.get_or_create_session(db, current_user)
+    subchat = await chat_service.create_or_update_telegram_subchat(
+        db,
+        session.id,
+        telegram_chat_id=data.telegram_chat_id,
+        telegram_user_id=data.telegram_user_id,
+        telegram_username=data.telegram_username,
+        telegram_full_name=data.telegram_full_name,
+    )
     result = await db.execute(
         select(UserSubChat)
         .where(UserSubChat.id == subchat.id)

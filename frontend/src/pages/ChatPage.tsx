@@ -12,6 +12,12 @@ interface Message {
 interface SubChat {
   id: number;
   task_id: number | null;
+  title?: string | null;
+  source?: string;
+  telegram_chat_id?: number | null;
+  telegram_user_id?: number | null;
+  telegram_username?: string | null;
+  telegram_full_name?: string | null;
   version: number;
   tokens_used: number;
   messages: Message[];
@@ -54,7 +60,7 @@ export default function ChatPage() {
       ]);
       setSession(s.data);
       setTasks(t.data);
-      const main = s.data.subchats.find(sc => sc.task_id === null) ?? s.data.subchats[0];
+      const main = s.data.subchats.find(sc => sc.task_id === null && sc.source !== 'telegram') ?? s.data.subchats[0];
       if (main) await selectSubchat(main.id, s.data);
     } catch {
       setError('Ошибка загрузки чата');
@@ -82,10 +88,21 @@ export default function ChatPage() {
     } catch { /* оставляем локальные */ }
   }
 
-  const mainSub = session?.subchats.find(sc => sc.task_id === null) ?? null;
+  const mainSub = session?.subchats.find(sc => sc.task_id === null && sc.source !== 'telegram') ?? null;
+  const telegramSubs = (session?.subchats ?? []).filter(sc => sc.source === 'telegram');
   const taskSubs = (session?.subchats ?? []).filter(sc => sc.task_id !== null);
   const taskTitle = (taskId: number | null) =>
     (taskId != null && tasks.find(t => t.id === taskId)?.title) || (taskId != null ? `Задача #${taskId}` : 'ИИ-Ассистент');
+  const chatTitle = (sc: SubChat | null | undefined) => {
+    if (!sc) return 'ИИ-Ассистент';
+    if (sc.source === 'telegram') {
+      if (sc.title) return sc.title;
+      if (sc.telegram_username) return `@${sc.telegram_username}`;
+      if (sc.telegram_full_name) return sc.telegram_full_name;
+      return `Telegram ID ${sc.telegram_user_id ?? sc.telegram_chat_id ?? sc.id}`;
+    }
+    return taskTitle(sc.task_id);
+  };
   const availableTasks = tasks.filter(t => !taskSubs.some(s => s.task_id === t.id));
 
   async function addTaskSubchat(taskId: number) {
@@ -105,7 +122,7 @@ export default function ChatPage() {
       await api.delete(`/api/chat/subchats/${id}`);
       const sess = await reloadSession();
       if (activeId === id) {
-        const main = sess?.subchats.find(sc => sc.task_id === null);
+        const main = sess?.subchats.find(sc => sc.task_id === null && sc.source !== 'telegram');
         if (main) await selectSubchat(main.id, sess ?? undefined);
       }
     } catch (e: any) {
@@ -116,7 +133,13 @@ export default function ChatPage() {
   async function sendMessage() {
     if (!input.trim() || streaming || activeId == null) return;
     const sent = input;
-    setMessages(prev => [...prev, { role: 'user', content: sent }, { role: 'assistant', content: '' }]);
+    const activeSub = session?.subchats.find(sc => sc.id === activeId);
+    const isTelegramChat = activeSub?.source === 'telegram';
+    setMessages(prev => [
+      ...prev,
+      { role: 'user', content: sent },
+      ...(isTelegramChat ? [] : [{ role: 'assistant' as const, content: '' }]),
+    ]);
     setInput('');
     setStreaming(true);
     setError(null);
@@ -154,6 +177,9 @@ export default function ChatPage() {
                   return u;
                 });
               }
+              if (p.sent && isTelegramChat) {
+                await selectSubchat(activeId);
+              }
               if (p.filled) setFilledNote('Заполнены поля задачи: ' + Object.keys(p.filled).join(', '));
               if (p.error) setError(p.error);
             } catch { /* частичное событие */ }
@@ -162,8 +188,8 @@ export default function ChatPage() {
       }
     } catch (e: any) {
       if (e.name !== 'AbortError') {
-        setError('Ошибка соединения с ИИ');
-        setMessages(prev => prev.slice(0, -1));
+        setError(isTelegramChat ? 'Ошибка отправки в Telegram' : 'Ошибка соединения с ИИ');
+        setMessages(prev => prev.slice(0, isTelegramChat ? -1 : -2));
       }
     } finally {
       setStreaming(false);
@@ -192,6 +218,19 @@ export default function ChatPage() {
               <span>ИИ-Ассистент</span>
             </button>
           )}
+          {telegramSubs.map(sc => (
+            <button
+              key={sc.id}
+              className={'chatx-chat-item' + (activeId === sc.id ? ' active' : '')}
+              onClick={() => selectSubchat(sc.id)}
+            >
+              <Icon name="send" size={16} />
+              <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {chatTitle(sc)}
+              </span>
+              <span className="badge" style={{ fontSize: 10, padding: '2px 6px' }}>TG</span>
+            </button>
+          ))}
         </div>
       </aside>
 
@@ -202,7 +241,7 @@ export default function ChatPage() {
             {messages.length === 0 && (
               <div className="chatx-greet">
                 <span className="shef-mono lg"><ShefMonoGlyph /></span>
-                <b>{activeId === mainSub?.id ? 'ИИ-Ассистент ШЕФ' : taskTitle(taskSubs.find(s => s.id === activeId)?.task_id ?? null)}</b>
+                <b>{activeId === mainSub?.id ? 'ИИ-Ассистент ШЕФ' : chatTitle(session?.subchats.find(s => s.id === activeId))}</b>
                 <span>Задайте вопрос или опишите задачу — помогу разобраться.</span>
               </div>
             )}

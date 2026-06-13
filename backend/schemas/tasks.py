@@ -1,6 +1,7 @@
-from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+
+from pydantic import BaseModel
 
 
 class TaskCreate(BaseModel):
@@ -10,6 +11,7 @@ class TaskCreate(BaseModel):
     start_time: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     input_data: Optional[str] = None
+    preparation_notes: Optional[str] = None
     goal: Optional[str] = None
     action_description: Optional[str] = None
     expected_result: Optional[str] = None
@@ -23,6 +25,7 @@ class TaskUpdate(BaseModel):
     start_time: Optional[datetime] = None
     duration_minutes: Optional[int] = None
     input_data: Optional[str] = None
+    preparation_notes: Optional[str] = None
     goal: Optional[str] = None
     action_description: Optional[str] = None
     expected_result: Optional[str] = None
@@ -45,6 +48,7 @@ class TaskRead(BaseModel):
     start_time: Optional[datetime]
     duration_minutes: Optional[int]
     input_data: Optional[str] = None
+    preparation_notes: Optional[str] = None
     goal: Optional[str] = None
     action_description: Optional[str] = None
     expected_result: Optional[str] = None

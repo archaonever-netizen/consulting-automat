@@ -29,13 +29,13 @@ async def main():
             user = User(
                 email="test@example.com",
                 full_name="Test User",
-                is_founder=True,
+                is_founder=False,
                 is_active=True,
             )
             user.set_password("password123")
             session.add(user)
             await session.commit()
-            print("✓ Created user: test@example.com / password123")
+            print("Created user: test@example.com / password123")
 
     await engine.dispose()
 

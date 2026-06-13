@@ -25,6 +25,7 @@ const GoalDecompositionPage = lazy(() => import('./pages/GoalDecompositionPage')
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const OrchestrationPage = lazy(() => import('./pages/OrchestrationPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
+const SecretaryPage = lazy(() => import('./pages/SecretaryPage'));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token');
@@ -57,6 +58,7 @@ export default function App() {
           <Route path="goals/:goalId" element={<GoalDecompositionPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="chat" element={<ChatPage />} />
+          <Route path="secretary" element={<SecretaryPage />} />
           <Route path="orchestration" element={<OrchestrationPage />} />
           <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="tracker" element={<TrackerPage />} />

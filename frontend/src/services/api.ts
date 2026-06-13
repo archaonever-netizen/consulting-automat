@@ -27,6 +27,7 @@ const INVALIDATION_RULES: Array<[RegExp, string[]]> = [
   [/^\/api\/knowledge/, ['knowledge', 'knowledge-sources']],
   [/^\/api\/goals/, ['goals']],
   [/^\/api\/tasks/, ['tasks']],
+  [/^\/api\/secretary/, ['tasks']],
 ];
 
 api.interceptors.response.use(
