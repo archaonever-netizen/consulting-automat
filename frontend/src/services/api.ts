@@ -22,6 +22,7 @@ api.interceptors.request.use((config) => {
 // страницам не нужно помнить об этом самим.
 const INVALIDATION_RULES: Array<[RegExp, string[]]> = [
   [/^\/api\/clients/, ['clients', 'home']],
+  [/^\/api\/projects/, ['projects', 'clients', 'home']],
   [/^\/api\/briefs/, ['clients', 'home']],
   [/^\/api\/company/, ['company']],
   [/^\/api\/knowledge/, ['knowledge', 'knowledge-sources']],

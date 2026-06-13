@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
+import { AxiosError } from 'axios';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
+import ProjectFormModal from '../components/ProjectFormModal';
 import { ShefMonoGlyph } from '../components/Logo';
+import type { Project } from '../types/projects';
 
-type Tab = 'overview' | 'briefs' | 'docs' | 'analytics' | 'tasks';
+type Tab = 'overview' | 'projects' | 'briefs' | 'docs' | 'analytics' | 'tasks';
 
 interface BriefItem {
   id: number;
@@ -44,7 +47,7 @@ interface BriefCatalog {
   common: BriefMeta[];
 }
 const TAB_LABELS: Record<Tab, string> = {
-  overview: 'Обзор', briefs: 'Брифы', docs: 'Документы', analytics: 'Аналитика', tasks: 'Задачи',
+  overview: 'Обзор', projects: 'Проекты', briefs: 'Брифы', docs: 'Документы', analytics: 'Аналитика', tasks: 'Задачи',
 };
 
 function statusPill(status: string) {
@@ -67,6 +70,7 @@ export default function ClientDetailPage() {
 
   const [tab, setTab] = useState<Tab>('overview');
   const [briefModal, setBriefModal] = useState(false);
+  const [projectModal, setProjectModal] = useState(false);
   const [newBriefType, setNewBriefType] = useState('');
   const [savingSize, setSavingSize] = useState(false);
 
@@ -76,10 +80,16 @@ export default function ClientDetailPage() {
     queryFn: async () => (await api.get('/api/briefs/catalog')).data,
     staleTime: 10 * 60_000,
   });
+  const { data: projects = [], isLoading: projectsLoading } = useQuery<Project[]>({
+    queryKey: ['projects', 'client', clientId],
+    queryFn: async () => (await api.get('/api/projects', { params: { client_id: clientId } })).data,
+    enabled: !!clientId,
+  });
 
   // После мутаций обновляем карточку клиента, список и сводку главной разом
   async function reload() {
     await queryClient.invalidateQueries({ queryKey: ['clients'] });
+    queryClient.invalidateQueries({ queryKey: ['projects'] });
     queryClient.invalidateQueries({ queryKey: ['home'] });
   }
 
@@ -111,9 +121,17 @@ export default function ClientDetailPage() {
       await api.post('/api/briefs', { brief_type: briefType, client_id: client.id });
       setBriefModal(false);
       await reload();
-    } catch (e: any) {
-      alert(e.response?.data?.detail || 'Ошибка создания брифа');
+    } catch (e) {
+      const detail = e instanceof AxiosError ? (e.response?.data as { detail?: string } | undefined)?.detail : null;
+      alert(detail || 'Ошибка создания брифа');
     }
+  }
+
+  async function createProject(payload: { name: string; client_id: number; description: string | null }) {
+    const response = await api.post('/api/projects', payload);
+    setProjectModal(false);
+    await reload();
+    navigate(`/projects/${response.data.id}`);
   }
 
   function openBriefModal() {
@@ -192,7 +210,7 @@ export default function ClientDetailPage() {
 
         <div className="detail-tabs">
           <div className="tabs">
-            {(['overview', 'briefs', 'docs', 'analytics', 'tasks'] as Tab[]).map(t => (
+            {(['overview', 'projects', 'briefs', 'docs', 'analytics', 'tasks'] as Tab[]).map(t => (
               <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
                 {TAB_LABELS[t]}
               </button>
@@ -320,6 +338,51 @@ export default function ClientDetailPage() {
           </div>
         )}
 
+        {tab === 'projects' && (
+          <div style={{ marginTop: 22 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20, gap: 12 }}>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 700 }}>Проекты</h3>
+              <button className="btn btn-primary btn-sm" onClick={() => setProjectModal(true)}>
+                <Icon name="plus" size={15} />Создать проект
+              </button>
+            </div>
+
+            {projectsLoading ? (
+              <div className="loading-bar"></div>
+            ) : projects.length === 0 ? (
+              <div className="empty-tab">
+                <div className="ei"><Icon name="template" size={24} /></div>
+                <b>Проекты не добавлены</b>
+                <span>Создайте проект прямо из карточки клиента, и связь с клиентом будет задана автоматически.</span>
+                <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} onClick={() => setProjectModal(true)}>
+                  <Icon name="plus" size={15} />Создать проект
+                </button>
+              </div>
+            ) : (
+              <div className="projects-grid compact">
+                {projects.map((project, i) => (
+                  <article key={project.id} className={`project-card rise d${Math.min(i + 1, 6)}`}>
+                    <div className="project-card-head">
+                      <span className="project-icon"><Icon name="template" size={19} /></span>
+                      <div className="project-card-title">
+                        <h3>{project.name}</h3>
+                        <span>{project.client_name}</span>
+                      </div>
+                    </div>
+                    <p>{project.description || 'Описание проекта пока не добавлено.'}</p>
+                    <div className="project-card-foot">
+                      <span>Обновлено: {project.updated_at_fmt}</span>
+                      <button className="btn btn-soft btn-sm" onClick={() => navigate(`/projects/${project.id}`)}>
+                        Открыть <Icon name="arrowRight" size={15} />
+                      </button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === 'briefs' && (
           <div style={{ marginTop: 22 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
@@ -414,6 +477,15 @@ export default function ClientDetailPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {projectModal && (
+        <ProjectFormModal
+          clients={[{ id: client.id, name: client.name }]}
+          fixedClientId={client.id}
+          onClose={() => setProjectModal(false)}
+          onSubmit={createProject}
+        />
       )}
     </div>
   );

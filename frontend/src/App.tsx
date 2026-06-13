@@ -13,6 +13,8 @@ import HomePage from './pages/HomePage';
 // HomePage — это первые экраны после открытия приложения.
 const ClientsPage = lazy(() => import('./pages/ClientsPage'));
 const ClientDetailPage = lazy(() => import('./pages/ClientDetailPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
 const BriefFormPage = lazy(() => import('./pages/BriefFormPage'));
 const CompanyPage = lazy(() => import('./pages/CompanyPage'));
 const FunctionDetailPage = lazy(() => import('./pages/FunctionDetailPage'));
@@ -50,6 +52,8 @@ export default function App() {
           <Route index element={<HomePage />} />
           <Route path="clients" element={<ClientsPage />} />
           <Route path="clients/:clientId" element={<ClientDetailPage />} />
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="briefs/:briefId" element={<BriefFormPage />} />
           <Route path="company" element={<CompanyPage />} />
           <Route path="company/functions/:id" element={<FunctionDetailPage />} />

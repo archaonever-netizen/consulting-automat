@@ -1,4 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, type FormEvent } from 'react';
+import { AxiosError } from 'axios';
+import { useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
 
@@ -17,6 +20,8 @@ interface KaitenConnection {
 }
 
 export default function ProfilePage() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [conn, setConn] = useState<KaitenConnection | null>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +41,7 @@ export default function ProfilePage() {
       .finally(() => setLoading(false));
   }, []);
 
-  async function handleConnect(e: React.FormEvent) {
+  async function handleConnect(e: FormEvent) {
     e.preventDefault();
     setSaving(true);
     setError(null);
@@ -45,8 +50,9 @@ export default function ProfilePage() {
       setConn(r.data);
       setDomain('');
       setToken('');
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Не удалось подключить Kaiten');
+    } catch (err) {
+      const detail = err instanceof AxiosError ? (err.response?.data as { detail?: string } | undefined)?.detail : null;
+      setError(detail || 'Не удалось подключить Kaiten');
     } finally {
       setSaving(false);
     }
@@ -58,11 +64,18 @@ export default function ProfilePage() {
     try {
       await api.delete('/api/kaiten/connection');
       setConn({ connected: false });
-    } catch (err: any) {
-      setError(err?.response?.data?.detail || 'Не удалось отключить Kaiten');
+    } catch (err) {
+      const detail = err instanceof AxiosError ? (err.response?.data as { detail?: string } | undefined)?.detail : null;
+      setError(detail || 'Не удалось отключить Kaiten');
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleLogout() {
+    localStorage.removeItem('access_token');
+    queryClient.clear();
+    navigate('/login');
   }
 
   if (loading) return <div className="page"><div className="loading-bar"></div></div>;
@@ -77,7 +90,12 @@ export default function ProfilePage() {
       </div>
 
       <div className="card" style={{ padding: 22, marginBottom: 16 }}>
-        <div className="eyebrow">Пользователь</div>
+        <div className="profile-card-head">
+          <div className="eyebrow">Пользователь</div>
+          <button className="btn btn-ghost btn-sm profile-logout" type="button" onClick={handleLogout}>
+            <Icon name="logout" size={15} />Выйти из аккаунта
+          </button>
+        </div>
         <div className="prof-grid">
           <div className="metric"><div className="k">Имя</div><div className="v" style={{ fontSize: 15 }}>{user?.full_name}</div></div>
           <div className="metric"><div className="k">Email</div><div className="v" style={{ fontSize: 15 }}>{user?.email}</div></div>
@@ -147,6 +165,9 @@ export default function ProfilePage() {
       </div>
 
       <style>{`
+        .profile-card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+        .profile-logout { color: var(--danger); border-color: var(--danger-weak); }
+        .profile-logout:hover { color: var(--danger); background: var(--danger-weak); border-color: var(--danger); }
         .prof-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 12px; }
         .kaiten-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
         .kaiten-form { display: flex; flex-direction: column; gap: 14px; max-width: 460px; margin-top: 16px; }

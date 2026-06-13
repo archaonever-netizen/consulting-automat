@@ -29,6 +29,7 @@ from .routes import (  # noqa: E402
     goals,
     kaiten,
     knowledge,
+    projects,
     secretary,
     tasks,
 )
@@ -207,6 +208,7 @@ app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
 app.include_router(kaiten.router, prefix="/api/kaiten", tags=["kaiten"])
 app.include_router(goals.router, prefix="/api/goals", tags=["goals"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(secretary.router, prefix="/api/secretary", tags=["secretary"])
 
 

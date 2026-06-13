@@ -198,6 +198,27 @@ class Client(Base):
     profile: Mapped[Optional['CompanyProfile']] = relationship('CompanyProfile', back_populates='client', cascade='all, delete-orphan', uselist=False)
     chat_sessions: Mapped[List['ChatSession']] = relationship('ChatSession', back_populates='client', cascade='all, delete-orphan')
     tasks: Mapped[List['UserTask']] = relationship('UserTask', back_populates='client', cascade='all, delete-orphan')
+    projects: Mapped[List['Project']] = relationship(
+        'Project', back_populates='client', cascade='all, delete-orphan'
+    )
+
+
+class Project(Base):
+    """Consulting project bound to exactly one client."""
+    __tablename__ = 'projects'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    client: Mapped['Client'] = relationship('Client', back_populates='projects')
 
 
 class Brief(Base):

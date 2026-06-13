@@ -475,3 +475,120 @@ npm.cmd run test -- src/pages/tasks/logic.test.ts
 - Добавить настройки Telegram в UI администратора.
 - Подключить MAX как второй транспорт поверх того же secretary core.
 - Добавить планировщик повторяющихся задач и напоминания.
+
+---
+
+## Проектирование / Проекты
+
+### Что разрабатывалось
+
+Добавлен новый раздел приложения "Проекты" для управления проектами, каждый из которых строго привязан к одному клиенту.
+
+### Что фактически реализовано
+
+- Добавлена backend-модель `Project` с обязательным `client_id`.
+- Добавлены REST endpoints `/api/projects`:
+  - список всех проектов;
+  - фильтрация по `client_id`;
+  - создание проекта;
+  - получение проекта;
+  - обновление;
+  - удаление.
+- Добавлен раздел "Проекты" в навигацию frontend.
+- Добавлена страница списка проектов с карточками, поиском, empty/loading/error states и созданием проекта.
+- Добавлена форма создания проекта с обязательным названием и выбором клиента.
+- В карточку клиента добавлена вкладка "Проекты".
+- Из карточки клиента проект создаётся с фиксированным клиентом.
+- Добавлен workspace проекта с VS Code-подобной компоновкой:
+  - `ProjectWorkspace`;
+  - `ProjectToolbar`;
+  - `ProjectLeftPanel`;
+  - `ProjectCanvas`;
+  - `ProjectRightPanel`.
+
+### Изменённые файлы
+
+#### Backend
+
+- `backend/models.py`
+- `backend/main.py`
+- `backend/routes/projects.py`
+- `backend/schemas/projects.py`
+- `backend/services/projects.py`
+- `backend/tests/test_projects_service.py`
+
+#### Frontend
+
+- `frontend/src/App.tsx`
+- `frontend/src/components/Layout.tsx`
+- `frontend/src/components/ProjectFormModal.tsx`
+- `frontend/src/components/projects/ProjectWorkspace.tsx`
+- `frontend/src/components/projects/ProjectToolbar.tsx`
+- `frontend/src/components/projects/ProjectLeftPanel.tsx`
+- `frontend/src/components/projects/ProjectCanvas.tsx`
+- `frontend/src/components/projects/ProjectRightPanel.tsx`
+- `frontend/src/pages/ProjectsPage.tsx`
+- `frontend/src/pages/ProjectDetailPage.tsx`
+- `frontend/src/pages/ClientDetailPage.tsx`
+- `frontend/src/pages/projects/logic.ts`
+- `frontend/src/pages/projects/logic.test.ts`
+- `frontend/src/services/api.ts`
+- `frontend/src/styles/styles.css`
+- `frontend/src/types/projects.ts`
+
+### Тесты и проверки
+
+- Добавлены backend-тесты на создание проекта и связь с клиентом.
+- Добавлены frontend-тесты чистой логики формы проекта.
+- Запущено:
+  - `.\.venv\Scripts\python.exe -m pytest backend\tests\test_projects_service.py` - успешно.
+  - `npm.cmd run test -- --run src/pages/projects/logic.test.ts` - успешно.
+  - `npm.cmd exec eslint -- ...` по новым проектным frontend-файлам и `ClientDetailPage.tsx` - успешно.
+  - `npm.cmd run build` - успешно, обновлены `frontend/dist` hash-файлы.
+- Полный `npm.cmd run lint` и полный `ruff check backend` сейчас падают на существующих несвязанных предупреждениях/ошибках в старых файлах.
+
+### Риски и следующие шаги
+
+- Для основного репозитория нужна полноценная миграция Alembic для таблицы `projects`; в lab-среде таблицу создаёт `Base.metadata.create_all`.
+- Перед переносом проверить, нужно ли переносить `frontend/dist` и пересобранные hash-файлы.
+- Следующий логичный шаг: добавить редактирование проекта и реальные артефакты внутри workspace.
+
+---
+
+## Навигация / Sidebar и профиль
+
+### Что разрабатывалось
+
+Небольшая UX-правка левого sidebar: вернуть функциональность сворачивания панели и убрать кнопку выхода из опасной близости к кнопке сворачивания.
+
+### Что фактически реализовано
+
+- В левый sidebar возвращена кнопка "Свернуть / Развернуть".
+- Состояние sidebar сохраняется в `localStorage` через ключ `sidebar_collapsed`.
+- При сворачивании используется существующий класс `.sidebar.sb-collapsed`.
+- Кнопка "Выход" удалена из нижней панели sidebar.
+- Выход перенесён в карточку пользователя на странице "Профиль".
+- При выходе очищаются `access_token` и React Query cache, затем пользователь переводится на `/login`.
+- В `ProfilePage` убраны старые `catch (err: any)` в изменённой зоне.
+
+### Изменённые файлы
+
+#### Frontend
+
+- `frontend/src/components/Layout.tsx`
+- `frontend/src/pages/ProfilePage.tsx`
+- `frontend/src/styles/styles.css`
+- `frontend/dist/index.html` и `frontend/dist/assets/*`
+
+### Тесты и проверки
+
+- Запущено:
+  - `npm.cmd exec eslint -- src/components/Layout.tsx` - успешно.
+  - `npm.cmd exec eslint -- src/components/Layout.tsx src/pages/ProfilePage.tsx` - успешно.
+  - `npm.cmd run build` - успешно, обновлены `frontend/dist` hash-файлы.
+  - `git diff --check` - успешно.
+
+### Риски и следующие шаги
+
+- Изменение относится к общему UI и должно переноситься вместе с обновлением frontend.
+- Перед переносом проверить, требуется ли переносить `frontend/dist` в основном репозитории.
