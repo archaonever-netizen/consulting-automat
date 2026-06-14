@@ -141,6 +141,41 @@ def _ensure_subchat_columns(conn):
             conn.execute(text(ddl))
 
 
+def _ensure_knowledge_rag_columns(conn):
+    """Idempotently add RAG metadata columns to existing knowledge tables.
+
+    On Supabase/Postgres these were already added by the RAG phase-1 migration,
+    so the inspector check skips them. On a local SQLite lab DB that was created
+    earlier, this adds the plain columns (the Postgres-only tsvector/vector
+    columns are not added here — RAG search runs on Postgres).
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(conn)
+    is_sqlite = conn.dialect.name == 'sqlite'
+    bool_default = '0' if is_sqlite else 'false'
+
+    src_cols = {c['name'] for c in inspector.get_columns('knowledge_sources')}
+    if 'confidential' not in src_cols:
+        conn.execute(text(
+            f"ALTER TABLE knowledge_sources ADD COLUMN confidential BOOLEAN NOT NULL DEFAULT {bool_default}"
+        ))
+    if 'methodology' not in src_cols:
+        conn.execute(text("ALTER TABLE knowledge_sources ADD COLUMN methodology VARCHAR(80)"))
+
+    frag_cols = {c['name'] for c in inspector.get_columns('knowledge_source_fragments')}
+    for col in ('methodology', 'maturity_level', 'content_type', 'lang', 'source_version'):
+        if col not in frag_cols:
+            size = 20 if col == 'lang' else (40 if col in ('maturity_level', 'content_type') else 80)
+            conn.execute(text(
+                f"ALTER TABLE knowledge_source_fragments ADD COLUMN {col} VARCHAR({size})"
+            ))
+    if 'confidential' not in frag_cols:
+        conn.execute(text(
+            f"ALTER TABLE knowledge_source_fragments ADD COLUMN confidential BOOLEAN NOT NULL DEFAULT {bool_default}"
+        ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables on startup (dev only — prod uses Alembic)
@@ -150,6 +185,7 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(_ensure_company_columns)
         await conn.run_sync(_ensure_task_columns)
         await conn.run_sync(_ensure_subchat_columns)
+        await conn.run_sync(_ensure_knowledge_rag_columns)
     await _seed_founder()
     async with AsyncSessionLocal() as db:
         await seed_if_empty(db)

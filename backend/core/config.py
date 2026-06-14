@@ -44,8 +44,17 @@ class Settings(BaseSettings):
     founder_password: str = ""
     founder_name: str = "Основатель"
 
-    # LLM
+    # LLM (Promptra — chat only)
     promptra_api_key: str = ""
+    promptra_base_url: str = "https://api.promptra.ru/v1"
+
+    # Embeddings (AITunnel, OpenAI-compatible) — separate client from Promptra chat.
+    # Rule: the SAME model + dim are used for indexing and search. Do not change
+    # these without re-indexing the whole knowledge base.
+    embeddings_base_url: str = "https://api.aitunnel.ru/v1"
+    embeddings_api_key: str = ""
+    embeddings_model: str = "text-embedding-3-large"
+    embeddings_dim: int = 1536
 
     # Personal Telegram secretary
     telegram_bot_token: str = ""

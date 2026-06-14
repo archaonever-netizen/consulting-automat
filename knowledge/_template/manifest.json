@@ -1,0 +1,12 @@
+{
+  "key": "example_source",
+  "title": "Example Methodology",
+  "source_type": "methodology_framework",
+  "methodology": "EXAMPLE",
+  "version": "1.0",
+  "language": "en",
+  "confidential": false,
+  "source_url": "",
+  "pdf_file": "example.pdf",
+  "notes": "Скопируйте эту папку, переименуйте, положите рядом PDF и заполните поля."
+}

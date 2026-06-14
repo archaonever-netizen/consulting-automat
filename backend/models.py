@@ -578,6 +578,9 @@ class KnowledgeSource(Base):
     processing_status: Mapped[str] = mapped_column(String(40), default='pending', nullable=False)
     checksum: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # RAG: confidentiality + methodology tag (added in RAG phase 1).
+    confidential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    methodology: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -635,7 +638,17 @@ class KnowledgeSourceFragment(Base):
     page_end: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     source_ref: Mapped[str] = mapped_column(String(500), nullable=False)
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # RAG metadata for filtered hybrid search (added in RAG phase 1).
+    methodology: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    maturity_level: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    content_type: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    lang: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    source_version: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    confidential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # NOTE: the Postgres-only `search_tsv` (tsvector) column and the pgvector
+    # embeddings live in the DB / `knowledge_embeddings` and are intentionally
+    # not mapped here so the ORM stays SQLite-compatible.
 
     source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource', back_populates='fragments')
 
@@ -683,6 +696,54 @@ class KnowledgeSourceSectionLink(Base):
     __table_args__ = (
         UniqueConstraint('source_id', 'section_id', 'relation_type', name='uq_knowledge_source_section'),
         Index('ix_knowledge_source_section_section', 'section_id'),
+    )
+
+
+class KnowledgeCard(Base):
+    """Generated retrievable cards: method cards, typical errors, diagnostic questions.
+
+    These are the core derived layer the Methodolog searches by `card_type`.
+    A card may only cite real source pages: `supporting_fragment_id` /
+    `page_start` / `page_end` point at the actual source fragment that backs it.
+    The Postgres-only generated `search_tsv` column is not mapped here so the
+    ORM stays SQLite-compatible.
+    """
+    __tablename__ = 'knowledge_cards'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sources.id', ondelete='CASCADE'), nullable=False
+    )
+    # 'method_card' | 'typical_error' | 'diagnostic_question'
+    card_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    # Stable key for idempotent re-generation (no duplicates on re-run).
+    card_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    methodology: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    maturity_level: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    content_origin: Mapped[str] = mapped_column(String(40), default='ai_generated', nullable=False)
+    lang: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    confidential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    supporting_fragment_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('knowledge_source_fragments.id', ondelete='SET NULL'), nullable=True
+    )
+    page_start: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    source_ref: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource')
+
+    __table_args__ = (
+        UniqueConstraint('source_id', 'card_key', name='uq_knowledge_cards_key'),
+        Index('ix_cards_type', 'card_type'),
+        Index('ix_cards_methodology', 'methodology'),
+        Index('ix_cards_source', 'source_id'),
     )
 
 
