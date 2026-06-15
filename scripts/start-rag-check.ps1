@@ -74,7 +74,23 @@ $Backend.Id | Set-Content $BackendPid
 
 Write-Host "Запуск проверочного бэкенда против Postgres из .env.local..." -ForegroundColor Cyan
 Write-Host "Логи: $BackendLog" -ForegroundColor DarkGray
-Start-Sleep -Seconds 6
+
+# Ждём готовности: первый старт против Supabase (create_all + миграции + сиды по
+# сети) может занять до минуты. Открываем браузер только когда /api/health отвечает.
+Write-Host "Ожидаю готовности приложения (до ~90 сек на первом старте)..." -ForegroundColor DarkGray
+$ready = $false
+for ($i = 0; $i -lt 30; $i++) {
+    Start-Sleep -Seconds 3
+    try {
+        $h = Invoke-WebRequest -Uri "$BackendUrl/api/health" -UseBasicParsing -TimeoutSec 4
+        if ($h.StatusCode -eq 200) { $ready = $true; break }
+    } catch { }
+}
+if ($ready) {
+    Write-Host "Приложение готово: $BackendUrl" -ForegroundColor Green
+} else {
+    Write-Host "Приложение не ответило вовремя — проверьте лог: $BackendLog" -ForegroundColor Yellow
+}
 
 if (-not $NoBrowser) {
     $browser = Get-Command msedge.exe -ErrorAction SilentlyContinue
