@@ -87,7 +87,7 @@ def _extract_json(raw: str) -> dict:
     return json.loads(s)
 
 
-def _chat(model: str, system: str, user: str, max_tokens: int = 1400) -> str:
+def _chat(model: str, system: str, user: str, max_tokens: int = 1400) -> tuple[str, int]:
     from openai import OpenAI
     settings = get_settings()
     client = OpenAI(api_key=settings.promptra_api_key, base_url=settings.promptra_base_url, timeout=120)
@@ -97,21 +97,23 @@ def _chat(model: str, system: str, user: str, max_tokens: int = 1400) -> str:
         temperature=0.2,
         max_tokens=max_tokens,
     )
-    return resp.choices[0].message.content or ""
+    usage = getattr(resp, "usage", None)
+    tokens = int(getattr(usage, "total_tokens", 0) or 0)
+    return (resp.choices[0].message.content or ""), tokens
 
 
-def _generate_for_fragment(model: str, frag: dict) -> dict | None:
+def _generate_for_fragment(model: str, frag: dict) -> tuple[dict | None, int]:
     user = (
         f"Раздел: {frag['title']}\n"
         f"Страница: {frag['page_start']}–{frag['page_end']}\n\n"
         f"Текст фрагмента:\n{frag['text'][:MAX_INPUT_CHARS]}"
     )
     try:
-        raw = _chat(model, SYSTEM_PROMPT, user)
-        return _extract_json(raw)
+        raw, tokens = _chat(model, SYSTEM_PROMPT, user)
+        return _extract_json(raw), tokens
     except Exception as e:  # noqa: BLE001
         print(f"  ! fragment {frag['id']} failed: {type(e).__name__}: {str(e)[:120]}")
-        return None
+        return None, 0
 
 
 def _is_skippable(title: str, text: str) -> bool:
@@ -166,14 +168,14 @@ async def _write_fragment_cards(conn, frag: dict, parsed: dict, model: str, fhas
         return written
 
 
-async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str) -> None:
+async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str) -> int:
     exists = await conn.fetchval(
         "SELECT 1 FROM knowledge_source_layers WHERE source_id=$1 AND layer_type='description_ru'",
         source_id,
     )
     if exists:
         print("  doc summary (ru): already exists, skipped")
-        return
+        return 0
     titles = await conn.fetch(
         "SELECT title FROM knowledge_source_fragments WHERE source_id=$1 ORDER BY sort_order LIMIT 60",
         source_id,
@@ -185,7 +187,8 @@ async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str) ->
         f"Только по оглавлению, без выдумок.\n\nОглавление:\n{outline}"
     )
     try:
-        text = await asyncio.to_thread(_chat, model, "Ты — методолог. Пиши деловой русский.", user, 500)
+        text, doc_tokens = await asyncio.to_thread(
+            _chat, model, "Ты — методолог. Пиши деловой русский.", user, 500)
         text = text.strip()
         if text:
             await conn.execute(
@@ -195,8 +198,10 @@ async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str) ->
                 source_id, text,
             )
             print("  doc summary (ru): created")
+        return doc_tokens
     except Exception as e:  # noqa: BLE001
         print(f"  doc summary failed: {type(e).__name__}: {str(e)[:120]}")
+        return 0
 
 
 async def run(source_key: str, model: str, limit: int | None) -> None:
@@ -248,26 +253,30 @@ async def run(source_key: str, model: str, limit: int | None) -> None:
               f"skipped_unchanged={skipped_done} skipped_frontmatter={skipped_frontmatter}")
 
         total_cards = 0
+        gen_tokens = 0
         for i in range(0, len(todo), CONCURRENCY):
             batch = todo[i:i + CONCURRENCY]
             parsed_list = await asyncio.gather(
                 *[asyncio.to_thread(_generate_for_fragment, model, f) for f in batch]
             )
-            for frag, parsed in zip(batch, parsed_list):
+            for frag, (parsed, tok) in zip(batch, parsed_list):
+                gen_tokens += tok
                 if parsed is None:
                     continue  # failed parse → leave for retry next run
                 total_cards += await _write_fragment_cards(conn, frag, parsed, model, frag["_hash"])
             print(f"  processed {min(i + CONCURRENCY, len(todo))}/{len(todo)} fragments, cards so far={total_cards}")
 
-        await _gen_doc_summary(conn, source_id, source_key, model)
+        gen_tokens += await _gen_doc_summary(conn, source_id, source_key, model)
 
         by_type = await conn.fetch(
             "SELECT card_type, count(*) AS n FROM knowledge_cards WHERE source_id=$1 GROUP BY card_type ORDER BY card_type",
             source_id,
         )
-        print(f"[done] source={source_key} new_cards_this_run={total_cards}")
+        print(f"[done] source={source_key} new_cards_this_run={total_cards} tokens={gen_tokens}")
         for r in by_type:
             print(f"   {r['card_type']}: {r['n']} total")
+        return {"cards": total_cards, "tokens": gen_tokens,
+                "to_generate": len(todo), "skipped_unchanged": skipped_done}
     finally:
         await conn.close()
 

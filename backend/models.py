@@ -747,6 +747,39 @@ class KnowledgeCard(Base):
     )
 
 
+class IngestJob(Base):
+    """Background import job for the «Add methodology» screen.
+
+    Tracks one source-ingest run: status/stage/progress, token spend and the
+    stored PDF path. The PDF in Supabase Storage and this row are kept even on
+    failure (so the founder can retry); only half-written DB data is cleaned.
+    """
+    __tablename__ = 'ingest_jobs'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # draft | queued | running | done | failed
+    status: Mapped[str] = mapped_column(String(20), default='draft', nullable=False)
+    # extract | ingest | embed_fragments | layers | embed_cards | attach | finished
+    stage: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    progress: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    storage_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    framework_key: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    framework_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    methodology: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    confidential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    est_pages: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    est_cost_rub: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    tokens_embeddings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tokens_generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class KaitenConnection(Base):
     """Подключение пользователя к его рабочему пространству Kaiten.
 

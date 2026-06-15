@@ -20,7 +20,7 @@ from datetime import datetime
 from hashlib import sha256
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import (
@@ -41,10 +41,14 @@ def load_manifest(key: str) -> dict:
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
-async def ingest_source(db: AsyncSession, key: str) -> dict:
+async def ingest_source(db: AsyncSession, key: str, *, mark_processed: bool = True) -> dict:
     """Load (or refresh) one knowledge source from its committed artifacts.
 
     Returns a small status dict: {"status": "unchanged"|"imported", ...}.
+
+    mark_processed=False keeps the source in 'processing' (invisible to search)
+    until the background pipeline finishes embeddings + layers — used by the
+    «Add methodology» orchestrator so partial imports never leak into search.
     """
     manifest = load_manifest(key)
     source_dir = KNOWLEDGE_DIR / key
@@ -62,11 +66,11 @@ async def ingest_source(db: AsyncSession, key: str) -> dict:
 
     checksum = sha256(fulltext_path.read_bytes() + fragments_path.read_bytes()).hexdigest()
     existing = await db.scalar(select(KnowledgeSource).where(KnowledgeSource.key == key))
-    if (
-        existing is not None
-        and existing.checksum == checksum
-        and existing.processing_status == "processed"
-    ):
+    if existing is not None and existing.checksum == checksum:
+        # Artifacts unchanged → keep existing fragments (and their ids) so a
+        # resumed import re-uses already-computed embeddings/layers instead of
+        # recomputing them. ingest is atomic, so a matching checksum means the
+        # fragments are fully present.
         await _ensure_sections(db, existing)
         await db.commit()
         return {"status": "unchanged", "key": key, "source_id": existing.id}
@@ -139,8 +143,9 @@ async def ingest_source(db: AsyncSession, key: str) -> dict:
             },
         ))
 
-    source.processing_status = "processed"
-    source.processed_at = datetime.utcnow()
+    if mark_processed:
+        source.processing_status = "processed"
+        source.processed_at = datetime.utcnow()
     await _ensure_sections(db, source)
     await db.commit()
     return {
@@ -183,3 +188,42 @@ async def _ensure_sections(db: AsyncSession, source: KnowledgeSource) -> None:
     )
     await db.flush()
     await _link_source(db, source, sources, "listed_under", 10)
+
+
+async def cleanup_source(db: AsyncSession, source_key: str) -> dict:
+    """Remove ALL database data for a source key. Idempotent.
+
+    Deletes the polymorphic / non-cascading rows first (embeddings, generation
+    state, framework links), then the source row (its texts, fragments, cards,
+    layers and section links go via ON DELETE CASCADE). Does NOT touch the
+    stored PDF or the ingest job.
+
+    Used to cancel/abandon a failed import and (future) to delete or replace an
+    existing methodology. Postgres-only side tables are guarded by dialect.
+    """
+    source = await db.scalar(select(KnowledgeSource).where(KnowledgeSource.key == source_key))
+    if source is None:
+        return {"removed": False, "reason": "not_found", "key": source_key}
+    source_id = source.id
+
+    is_pg = db.bind.dialect.name == "postgresql"
+    if is_pg:
+        # knowledge_embeddings / knowledge_generation_state are pgvector-only and
+        # have no FK to the source, so remove their rows explicitly.
+        await db.execute(text(
+            "DELETE FROM knowledge_embeddings WHERE "
+            "(owner_type='fragment' AND owner_id IN "
+            " (SELECT id FROM knowledge_source_fragments WHERE source_id=:sid)) "
+            "OR (owner_type='card' AND owner_id IN "
+            " (SELECT id FROM knowledge_cards WHERE source_id=:sid))"
+        ), {"sid": source_id})
+        await db.execute(text(
+            "DELETE FROM knowledge_generation_state WHERE owner_type='fragment' AND owner_id IN "
+            "(SELECT id FROM knowledge_source_fragments WHERE source_id=:sid)"
+        ), {"sid": source_id})
+    # framework_sources (cluster link) exists on both dialects.
+    await db.execute(text("DELETE FROM framework_sources WHERE source_id=:sid"), {"sid": source_id})
+
+    await db.delete(source)  # cascade: texts, fragments, cards, layers, section links
+    await db.commit()
+    return {"removed": True, "key": source_key, "source_id": source_id}

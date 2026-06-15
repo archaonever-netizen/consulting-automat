@@ -25,7 +25,7 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from backend.core.config import get_settings  # noqa: E402
-from backend.services.embeddings_client import embed_texts  # noqa: E402
+from backend.services.embeddings_client import embed_texts_with_usage  # noqa: E402
 
 # Embedding-input char cap (~6k tokens) so very long fragments never exceed the
 # model limit. The stored source text itself is never truncated.
@@ -104,9 +104,11 @@ async def _index_owner(conn, owner_type: str, source_key: str | None, batch: int
         todo.append({"id": r["id"], "text": text, "hash": h, "confidential": r["confidential"]})
 
     embedded = 0
+    tokens = 0
     for i in range(0, len(todo), batch):
         chunk = todo[i:i + batch]
-        vectors = await asyncio.to_thread(embed_texts, [c["text"] for c in chunk])
+        vectors, tok = await asyncio.to_thread(embed_texts_with_usage, [c["text"] for c in chunk])
+        tokens += tok
         async with conn.transaction():
             for c, vec in zip(chunk, vectors):
                 await conn.execute(
@@ -123,21 +125,25 @@ async def _index_owner(conn, owner_type: str, source_key: str | None, batch: int
         print(f"  [{owner_type}] embedded {embedded}/{len(todo)}")
 
     return {"owner": owner_type, "total": len(rows), "embedded": embedded,
-            "skipped": len(rows) - embedded}
+            "skipped": len(rows) - embedded, "tokens": tokens}
 
 
-async def run(owners: list[str], source_key: str | None, batch: int) -> None:
+async def run(owners: list[str], source_key: str | None, batch: int) -> list[dict]:
     import asyncpg
     conn = await asyncpg.connect(_pg_dsn(), timeout=30, statement_cache_size=0)
+    results = []
     try:
         for owner_type in owners:
             result = await _index_owner(conn, owner_type, source_key, batch)
+            results.append(result)
             print(
                 f"[done] {result['owner']}: total={result['total']} "
-                f"embedded={result['embedded']} skipped(unchanged)={result['skipped']}"
+                f"embedded={result['embedded']} skipped(unchanged)={result['skipped']} "
+                f"tokens={result['tokens']}"
             )
     finally:
         await conn.close()
+    return results
 
 
 def main() -> None:

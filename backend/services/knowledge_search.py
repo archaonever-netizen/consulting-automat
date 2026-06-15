@@ -90,6 +90,7 @@ async def _cards_vector(conn, qvec, methodology, card_type, source_keys, limit):
         "WHERE ($2::text IS NULL OR c.methodology=$2) "
         "  AND ($3::text IS NULL OR c.card_type=$3) "
         "  AND ($4::text[] IS NULL OR s.key = ANY($4)) "
+        "  AND s.processing_status = 'processed' "
         "ORDER BY e.embedding <=> $1::vector LIMIT $5",
         qvec, methodology, card_type, source_keys, limit,
     )
@@ -107,6 +108,7 @@ async def _cards_keyword(conn, query, methodology, card_type, source_keys, limit
         "  AND ($2::text IS NULL OR c.methodology=$2) "
         "  AND ($3::text IS NULL OR c.card_type=$3) "
         "  AND ($4::text[] IS NULL OR s.key = ANY($4)) "
+        "  AND s.processing_status = 'processed' "
         "ORDER BY kscore DESC LIMIT $5",
         query, methodology, card_type, source_keys, limit,
     )
@@ -123,6 +125,7 @@ async def _fragments_vector(conn, qvec, methodology, source_keys, limit):
         "JOIN knowledge_sources s ON s.id=f.source_id "
         "WHERE ($2::text IS NULL OR f.methodology=$2) "
         "  AND ($3::text[] IS NULL OR s.key = ANY($3)) "
+        "  AND s.processing_status = 'processed' "
         "ORDER BY e.embedding <=> $1::vector LIMIT $4",
         qvec, methodology, source_keys, limit,
     )
@@ -138,6 +141,7 @@ async def _fragments_keyword(conn, query, methodology, source_keys, limit):
         "WHERE f.search_tsv @@ plainto_tsquery('simple',$1) "
         "  AND ($2::text IS NULL OR f.methodology=$2) "
         "  AND ($3::text[] IS NULL OR s.key = ANY($3)) "
+        "  AND s.processing_status = 'processed' "
         "ORDER BY kscore DESC LIMIT $4",
         query, methodology, source_keys, limit,
     )

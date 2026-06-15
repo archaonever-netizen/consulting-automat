@@ -56,6 +56,12 @@ class Settings(BaseSettings):
     embeddings_model: str = "text-embedding-3-large"
     embeddings_dim: int = 1536
 
+    # Supabase Storage (originals of uploaded source PDFs). service_role key —
+    # server-only (bypasses RLS), never expose to the frontend.
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_storage_bucket: str = "knowledge-sources"
+
     # Personal Telegram secretary
     telegram_bot_token: str = ""
     telegram_webhook_secret: str = ""

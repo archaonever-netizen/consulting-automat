@@ -32,6 +32,7 @@ from .routes import (  # noqa: E402
     knowledge,
     projects,
     secretary,
+    sources,
     tasks,
 )
 from .services.bots import seed_bots  # noqa: E402
@@ -245,6 +246,7 @@ app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
+app.include_router(sources.router, prefix="/api/knowledge", tags=["sources"])
 app.include_router(kaiten.router, prefix="/api/kaiten", tags=["kaiten"])
 app.include_router(goals.router, prefix="/api/goals", tags=["goals"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
