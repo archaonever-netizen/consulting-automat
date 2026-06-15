@@ -1,4 +1,4 @@
-# Создаёт на рабочем столе ярлык «SHEF RAG Check» для разовой живой проверки RAG
+﻿# Создаёт на рабочем столе ярлык «SHEF RAG Check» для разовой живой проверки RAG
 # (запуск против Postgres из .env.local). Не путать с обычным «SHEF Local Lab».
 $ErrorActionPreference = "Stop"
 
