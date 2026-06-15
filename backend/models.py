@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
-    Integer, String, Boolean, Text, DateTime, Float, JSON,
+    Integer, String, Boolean, Text, DateTime, Date, Float, JSON,
     ForeignKey, UniqueConstraint, CheckConstraint, Index, text
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -810,3 +810,177 @@ class GoalDocument(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     owner: Mapped[Optional['User']] = relationship('User', lazy='joined')
+
+
+# ─────────────────────────── ИИ-Сотрудники (боты) ───────────────────────────
+# Раздел «ИИ-Сотрудники»: карточки ботов поверх готовых бэкенд-агентов.
+# Промпты, модель и привязки бота хранятся в БД (а не в хардкоде), чтобы разные
+# боты вели себя по-разному на одном движке. Все модели — SQLite-совместимы.
+
+class Bot(Base):
+    """ИИ-Сотрудник: карточка бота со своим конфигом (промпты, модель, привязки).
+
+    Агент-движок (`agent_impl`, напр. 'methodolog') читает промпты и модель
+    отсюда. Два промпта работают по-разному:
+      • system_prompt    — основная роль/поведение, идёт как system-роль;
+      • persistent_prompt — короткая стоячая инструкция, автоматически
+        добавляется к КАЖДОМУ запросу бота (не теряется в длинных диалогах).
+    """
+    __tablename__ = 'bots'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    persistent_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    # Какой бэкенд-агент обслуживает бота (привязка к готовому движку).
+    agent_impl: Mapped[str] = mapped_column(String(40), default='methodolog', nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    framework_links: Mapped[List['BotFramework']] = relationship(
+        'BotFramework', back_populates='bot', cascade='all, delete-orphan'
+    )
+    department_links: Mapped[List['BotDepartment']] = relationship(
+        'BotDepartment', back_populates='bot', cascade='all, delete-orphan'
+    )
+    token_usage: Mapped[List['BotTokenUsage']] = relationship(
+        'BotTokenUsage', back_populates='bot', cascade='all, delete-orphan'
+    )
+
+
+class Framework(Base):
+    """Фреймворк = именованная группа источников знаний (BPMM, CMMI…).
+
+    Терминология: в UI это «Фреймворк», технически он опирается на существующее
+    поле `methodology`/источники RAG (см. KnowledgeSource) — параллельной системы
+    знаний не строим, переиспользуем фильтры гибридного поиска. Переиспользуем
+    между ботами (many-to-many через BotFramework).
+    """
+    __tablename__ = 'frameworks'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    source_links: Mapped[List['FrameworkSource']] = relationship(
+        'FrameworkSource', back_populates='framework', cascade='all, delete-orphan'
+    )
+    bot_links: Mapped[List['BotFramework']] = relationship(
+        'BotFramework', back_populates='framework', cascade='all, delete-orphan'
+    )
+
+
+class FrameworkSource(Base):
+    """Связь фреймворк ↔ источник знаний (knowledge_sources). M2M."""
+    __tablename__ = 'framework_sources'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    framework_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('frameworks.id', ondelete='CASCADE'), nullable=False
+    )
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sources.id', ondelete='CASCADE'), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    framework: Mapped['Framework'] = relationship('Framework', back_populates='source_links')
+    source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource', lazy='joined')
+
+    __table_args__ = (
+        UniqueConstraint('framework_id', 'source_id', name='uq_framework_source'),
+    )
+
+
+class BotFramework(Base):
+    """Связь бот ↔ фреймворк. M2M (фреймворки переиспользуемы между ботами)."""
+    __tablename__ = 'bot_frameworks'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('bots.id', ondelete='CASCADE'), nullable=False
+    )
+    framework_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('frameworks.id', ondelete='CASCADE'), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    bot: Mapped['Bot'] = relationship('Bot', back_populates='framework_links')
+    framework: Mapped['Framework'] = relationship('Framework', back_populates='bot_links')
+
+    __table_args__ = (
+        UniqueConstraint('bot_id', 'framework_id', name='uq_bot_framework'),
+    )
+
+
+class BotDepartment(Base):
+    """Связь бот ↔ отдел (departments). Делает бота «Сотрудником» отдела. M2M."""
+    __tablename__ = 'bot_departments'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('bots.id', ondelete='CASCADE'), nullable=False
+    )
+    department_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('departments.id', ondelete='CASCADE'), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    bot: Mapped['Bot'] = relationship('Bot', back_populates='department_links')
+    department: Mapped['Department'] = relationship('Department', lazy='joined')
+
+    __table_args__ = (
+        UniqueConstraint('bot_id', 'department_id', name='uq_bot_department'),
+    )
+
+
+class BotTokenUsage(Base):
+    """Лог расхода токенов по боту с датами (счётчик за день/неделю/месяц).
+
+    Каждый вызов бота (в т.ч. проверочный чат) пишет строку под своим bot_id.
+    Счётчики за период — агрегация SUM(total_tokens) по usage_date.
+    """
+    __tablename__ = 'bot_token_usage'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('bots.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    usage_date: Mapped[Date] = mapped_column(Date, nullable=False, index=True)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # 'test' — проверочный чат в карточке; 'prod' — боевые вызовы.
+    source: Mapped[str] = mapped_column(String(20), default='test', nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    bot: Mapped['Bot'] = relationship('Bot', back_populates='token_usage')
+
+
+class EditLock(Base):
+    """Единый владельческий пароль-замок на редактирование промптов/настроек ботов.
+
+    Одна строка на всё приложение (id=1). Пароль хранится только как bcrypt-хэш
+    (через werkzeug), открытым текстом не лежит. Не путать с паролем входа.
+    """
+    __tablename__ = 'edit_lock'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def set_password(self, raw: str):
+        """Хешировать и сохранить пароль-замок."""
+        self.password_hash = generate_password_hash(raw)
+
+    def check_password(self, raw: str) -> bool:
+        """Проверить пароль-замок. Если пароль ещё не задан — доступа нет."""
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, raw)

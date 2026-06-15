@@ -50,7 +50,18 @@ SYSTEM_PROMPT = (
 )
 
 
-def _chat_json(model: str, system: str, user: str) -> dict:
+def _usage_dict(resp) -> dict:
+    """Расход токенов из ответа провайдера (нули, если usage не пришёл)."""
+    u = getattr(resp, "usage", None)
+    return {
+        "prompt_tokens": int(getattr(u, "prompt_tokens", 0) or 0),
+        "completion_tokens": int(getattr(u, "completion_tokens", 0) or 0),
+        "total_tokens": int(getattr(u, "total_tokens", 0) or 0),
+    }
+
+
+def _chat_json(model: str, system: str, user: str) -> tuple[dict, dict]:
+    """Вызвать модель и вернуть (распарсенный JSON, расход токенов)."""
     from openai import OpenAI
     settings = get_settings()
     client = OpenAI(api_key=settings.promptra_api_key, base_url=settings.promptra_base_url, timeout=120)
@@ -67,7 +78,7 @@ def _chat_json(model: str, system: str, user: str) -> dict:
     else:
         i, j = raw.find("{"), raw.rfind("}")
         raw = raw[i:j + 1] if i != -1 and j != -1 else "{}"
-    return json.loads(raw)
+    return json.loads(raw), _usage_dict(resp)
 
 
 def _evidence_block(hits: list[SearchHit]) -> tuple[str, dict[str, SearchHit]]:
@@ -125,18 +136,44 @@ def render(answer: dict, labels: dict[str, SearchHit]) -> str:
 
 
 async def ask_methodolog(
-    query: str, *, methodology: str | None = None, model: str = METHODOLOG_MODEL
+    query: str,
+    *,
+    methodology: str | None = None,
+    model: str = METHODOLOG_MODEL,
+    system_prompt: str | None = None,
+    persistent_prompt: str | None = None,
+    source_keys: list[str] | None = None,
 ) -> dict:
-    """Return {'answer': str, 'evidence': [SearchHit], 'raw': dict}."""
-    hits = await search(query, scope="both", methodology=methodology, limit=MAX_EVIDENCE)
+    """Запустить агента-Методолога с конфигом бота (промпты/модель/источники из БД).
+
+    Все параметры конфига опциональны — при отсутствии используются прежние
+    значения (захардкоженный SYSTEM_PROMPT, METHODOLOG_MODEL, поиск по всей базе),
+    чтобы существующие скрипты/вызовы не сломались.
+
+      • system_prompt     — роль бота, идёт как system-роль;
+      • persistent_prompt — стоячая инструкция, добавляется к КАЖДОМУ запросу;
+      • source_keys       — ключи источников фреймворков бота (фильтр поиска).
+
+    Возвращает {'answer': str, 'evidence': [SearchHit], 'raw': dict, 'usage': dict}.
+    """
+    system = system_prompt or SYSTEM_PROMPT
+    hits = await search(
+        query, scope="both", methodology=methodology, source_keys=source_keys, limit=MAX_EVIDENCE
+    )
     evidence, labels = _evidence_block(hits)
     if not hits:
         user = f"РАССУЖДЕНИЕ ПОЛЬЗОВАТЕЛЯ:\n{query}\n\nНАЙДЕННЫЕ ВЫДЕРЖКИ: (ничего не найдено)\n\nОтветь по схеме; has_support=false."
     else:
         user = f"РАССУЖДЕНИЕ ПОЛЬЗОВАТЕЛЯ:\n{query}\n\nНАЙДЕННЫЕ ВЫДЕРЖКИ:\n{evidence}\n\nОтветь по схеме."
 
+    # Постоянный промпт добавляется к каждому запросу как стоячее напоминание,
+    # чтобы не теряться в длинных диалогах.
+    if persistent_prompt and persistent_prompt.strip():
+        user = f"{user}\n\nПОСТОЯННАЯ ИНСТРУКЦИЯ:\n{persistent_prompt.strip()}"
+
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     try:
-        raw = await asyncio.to_thread(_chat_json, model, SYSTEM_PROMPT, user)
+        raw, usage = await asyncio.to_thread(_chat_json, model, system, user)
     except Exception as e:  # noqa: BLE001
         raw = {
             "restate": query, "risk": "Не удалось получить ответ модели.",
@@ -144,4 +181,4 @@ async def ask_methodolog(
             "clarifying_questions": [], "better_formulation": "",
             "_error": f"{type(e).__name__}: {str(e)[:160]}",
         }
-    return {"answer": render(raw, labels), "evidence": hits, "raw": raw}
+    return {"answer": render(raw, labels), "evidence": hits, "raw": raw, "usage": usage}

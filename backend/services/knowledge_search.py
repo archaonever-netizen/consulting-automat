@@ -75,7 +75,10 @@ def _hit_from_fragment(r, *, vscore=None, kscore=None) -> SearchHit:
 
 
 # ── Retrievers (cards) ─────────────────────────────────────────────────────
-async def _cards_vector(conn, qvec, methodology, card_type, limit):
+# `source_keys` фильтрует выдачу по набору источников (фреймворк = группа
+# источников знаний). None — без фильтра; это переиспользует существующую
+# колонку s.key, а не строит параллельную систему отбора.
+async def _cards_vector(conn, qvec, methodology, card_type, source_keys, limit):
     rows = await conn.fetch(
         "SELECT c.id, c.title, c.body, c.card_type, c.methodology, c.page_start, c.page_end, "
         "       c.source_ref, s.key AS source_key, sf.title AS section, "
@@ -86,13 +89,14 @@ async def _cards_vector(conn, qvec, methodology, card_type, limit):
         "LEFT JOIN knowledge_source_fragments sf ON sf.id=c.supporting_fragment_id "
         "WHERE ($2::text IS NULL OR c.methodology=$2) "
         "  AND ($3::text IS NULL OR c.card_type=$3) "
-        "ORDER BY e.embedding <=> $1::vector LIMIT $4",
-        qvec, methodology, card_type, limit,
+        "  AND ($4::text[] IS NULL OR s.key = ANY($4)) "
+        "ORDER BY e.embedding <=> $1::vector LIMIT $5",
+        qvec, methodology, card_type, source_keys, limit,
     )
     return [_hit_from_card(r, vscore=r["vscore"]) for r in rows]
 
 
-async def _cards_keyword(conn, query, methodology, card_type, limit):
+async def _cards_keyword(conn, query, methodology, card_type, source_keys, limit):
     rows = await conn.fetch(
         "SELECT c.id, c.title, c.body, c.card_type, c.methodology, c.page_start, c.page_end, "
         "       c.source_ref, s.key AS source_key, sf.title AS section, "
@@ -102,14 +106,15 @@ async def _cards_keyword(conn, query, methodology, card_type, limit):
         "WHERE c.search_tsv @@ plainto_tsquery('simple',$1) "
         "  AND ($2::text IS NULL OR c.methodology=$2) "
         "  AND ($3::text IS NULL OR c.card_type=$3) "
-        "ORDER BY kscore DESC LIMIT $4",
-        query, methodology, card_type, limit,
+        "  AND ($4::text[] IS NULL OR s.key = ANY($4)) "
+        "ORDER BY kscore DESC LIMIT $5",
+        query, methodology, card_type, source_keys, limit,
     )
     return [_hit_from_card(r, kscore=r["kscore"]) for r in rows]
 
 
 # ── Retrievers (fragments) ─────────────────────────────────────────────────
-async def _fragments_vector(conn, qvec, methodology, limit):
+async def _fragments_vector(conn, qvec, methodology, source_keys, limit):
     rows = await conn.fetch(
         "SELECT f.id, f.title, f.full_text, f.methodology, f.page_start, f.page_end, "
         "       f.source_ref, s.key AS source_key, 1-(e.embedding <=> $1::vector) AS vscore "
@@ -117,13 +122,14 @@ async def _fragments_vector(conn, qvec, methodology, limit):
         "JOIN knowledge_source_fragments f ON f.id=e.owner_id AND e.owner_type='fragment' "
         "JOIN knowledge_sources s ON s.id=f.source_id "
         "WHERE ($2::text IS NULL OR f.methodology=$2) "
-        "ORDER BY e.embedding <=> $1::vector LIMIT $3",
-        qvec, methodology, limit,
+        "  AND ($3::text[] IS NULL OR s.key = ANY($3)) "
+        "ORDER BY e.embedding <=> $1::vector LIMIT $4",
+        qvec, methodology, source_keys, limit,
     )
     return [_hit_from_fragment(r, vscore=r["vscore"]) for r in rows]
 
 
-async def _fragments_keyword(conn, query, methodology, limit):
+async def _fragments_keyword(conn, query, methodology, source_keys, limit):
     rows = await conn.fetch(
         "SELECT f.id, f.title, f.full_text, f.methodology, f.page_start, f.page_end, "
         "       f.source_ref, s.key AS source_key, "
@@ -131,8 +137,9 @@ async def _fragments_keyword(conn, query, methodology, limit):
         "FROM knowledge_source_fragments f JOIN knowledge_sources s ON s.id=f.source_id "
         "WHERE f.search_tsv @@ plainto_tsquery('simple',$1) "
         "  AND ($2::text IS NULL OR f.methodology=$2) "
-        "ORDER BY kscore DESC LIMIT $3",
-        query, methodology, limit,
+        "  AND ($3::text[] IS NULL OR s.key = ANY($3)) "
+        "ORDER BY kscore DESC LIMIT $4",
+        query, methodology, source_keys, limit,
     )
     return [_hit_from_fragment(r, kscore=r["kscore"]) for r in rows]
 
@@ -179,18 +186,22 @@ async def hybrid_search(
     scope: str = "cards",          # 'cards' | 'fragments' | 'both'
     methodology: str | None = None,
     card_type: str | None = None,  # method_card | typical_error | diagnostic_question
+    source_keys: list[str] | None = None,  # фильтр по источникам (фреймворк бота)
     limit: int = 10,
     candidate_k: int = CANDIDATE_K,
 ) -> list[SearchHit]:
     qvec = _vec_literal(await asyncio.to_thread(embed_text, query))
+    # Пустой список источников трактуем как «без фильтра» (бот без фреймворков
+    # ищет по всей базе), чтобы случайно не обнулить выдачу.
+    keys = source_keys or None
 
     lists: list[list[SearchHit]] = []
     if scope in ("cards", "both"):
-        lists.append(await _cards_vector(conn, qvec, methodology, card_type, candidate_k))
-        lists.append(await _cards_keyword(conn, query, methodology, card_type, candidate_k))
+        lists.append(await _cards_vector(conn, qvec, methodology, card_type, keys, candidate_k))
+        lists.append(await _cards_keyword(conn, query, methodology, card_type, keys, candidate_k))
     if scope in ("fragments", "both"):
-        lists.append(await _fragments_vector(conn, qvec, methodology, candidate_k))
-        lists.append(await _fragments_keyword(conn, query, methodology, candidate_k))
+        lists.append(await _fragments_vector(conn, qvec, methodology, keys, candidate_k))
+        lists.append(await _fragments_keyword(conn, query, methodology, keys, candidate_k))
 
     fused = _rrf_fuse(lists)
     deduped = _dedup(fused)

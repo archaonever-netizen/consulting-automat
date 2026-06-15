@@ -22,6 +22,7 @@ from .models import User  # noqa: E402
 from .routes import (  # noqa: E402
     agent,
     auth,
+    bots,
     briefs,
     chat,
     clients,
@@ -33,6 +34,7 @@ from .routes import (  # noqa: E402
     secretary,
     tasks,
 )
+from .services.bots import seed_bots  # noqa: E402
 from .services.knowledge import seed_bpmm_source, seed_if_empty  # noqa: E402
 
 settings = get_settings()
@@ -190,6 +192,7 @@ async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as db:
         await seed_if_empty(db)
         await seed_bpmm_source(db)
+        await seed_bots(db)
     yield
     # Cleanup on shutdown
     from .services.kaiten_client import close_shared_client
@@ -246,6 +249,7 @@ app.include_router(kaiten.router, prefix="/api/kaiten", tags=["kaiten"])
 app.include_router(goals.router, prefix="/api/goals", tags=["goals"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(secretary.router, prefix="/api/secretary", tags=["secretary"])
+app.include_router(bots.router, prefix="/api/bots", tags=["bots"])
 
 
 # ── Раздача собранного фронтенда (SPA) ──

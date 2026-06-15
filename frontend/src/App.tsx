@@ -28,6 +28,8 @@ const ChatPage = lazy(() => import('./pages/ChatPage'));
 const OrchestrationPage = lazy(() => import('./pages/OrchestrationPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
 const SecretaryPage = lazy(() => import('./pages/SecretaryPage'));
+const EmployeesPage = lazy(() => import('./pages/EmployeesPage'));
+const EmployeeDetailPage = lazy(() => import('./pages/EmployeeDetailPage'));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token');
@@ -55,6 +57,8 @@ export default function App() {
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="briefs/:briefId" element={<BriefFormPage />} />
+          <Route path="employees" element={<EmployeesPage />} />
+          <Route path="employees/:id" element={<EmployeeDetailPage />} />
           <Route path="company" element={<CompanyPage />} />
           <Route path="company/functions/:id" element={<FunctionDetailPage />} />
           <Route path="company/departments/:id" element={<DepartmentDetailPage />} />

@@ -25,6 +25,7 @@ const INVALIDATION_RULES: Array<[RegExp, string[]]> = [
   [/^\/api\/projects/, ['projects', 'clients', 'home']],
   [/^\/api\/briefs/, ['clients', 'home']],
   [/^\/api\/company/, ['company']],
+  [/^\/api\/bots/, ['bots']],
   [/^\/api\/knowledge/, ['knowledge', 'knowledge-sources']],
   [/^\/api\/goals/, ['goals']],
   [/^\/api\/tasks/, ['tasks']],
