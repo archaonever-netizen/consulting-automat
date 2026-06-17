@@ -17,6 +17,7 @@ from __future__ import annotations
 import asyncio
 import json
 import sys
+import traceback
 from pathlib import Path
 
 from sqlalchemy import text
@@ -146,8 +147,11 @@ async def run_ingest_job(job_id: int, *, _fail_after: str | None = None) -> dict
     except Exception as exc:  # noqa: BLE001
         # Keep PDF + job + partial (invisible) data for a resume; do NOT clean up.
         # Tokens already accumulated per step, so the failed spend stays counted.
-        await _update(job_id, status="failed",
-                      error=f"{type(exc).__name__}: {str(exc)[:400]}")
+        # Store the FULL traceback (error is TEXT) and flush it to stdout so the
+        # real cause survives in the log — never lose it to truncation again.
+        tb = traceback.format_exc()
+        print(tb, flush=True)
+        await _update(job_id, status="failed", error=tb)
         async with AsyncSessionLocal() as db:
             j = await db.get(IngestJob, job_id)
             summary.update({"status": "failed", "error": str(exc),
