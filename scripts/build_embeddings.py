@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import socket
 import sys
 from hashlib import sha256
 from pathlib import Path
@@ -41,6 +42,61 @@ def _pg_dsn() -> str:
     return raw.replace("postgresql+asyncpg://", "postgresql://").replace(
         "postgres+asyncpg://", "postgres://"
     )
+
+
+async def _connect():
+    """Open a fresh asyncpg connection with TCP keepalive enabled."""
+    import asyncpg
+    conn = await asyncpg.connect(_pg_dsn(), timeout=30, statement_cache_size=0)
+    _enable_keepalive(conn)
+    return conn
+
+
+def _enable_keepalive(conn) -> None:
+    """Best-effort TCP keepalive: long batch jobs hold the connection while slow
+    embedding/LLM calls run, and an idle socket can be silently dropped by the
+    pooler/NAT. Keepalive probes keep it alive (and surface a real drop fast).
+    Touches private transport internals, so everything is guarded."""
+    try:
+        sock = conn._transport.get_extra_info("socket")  # noqa: SLF001
+    except Exception:  # noqa: BLE001
+        sock = None
+    if sock is None:
+        return
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        if hasattr(socket, "TCP_KEEPIDLE"):  # Linux
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 30)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+        elif hasattr(socket, "SIO_KEEPALIVE_VALS"):  # Windows
+            sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 30000, 10000))  # on, idle ms, interval ms
+    except OSError:
+        pass
+
+
+async def _exec_with_reconnect(conn, op):
+    """Run `await op(conn)`; if the connection was dropped (idle-timeout / pooler
+    recycle / network blip), reconnect once and retry the whole op.
+
+    Safe because every write here is idempotent (ON CONFLICT upserts), so
+    replaying a batch never duplicates or corrupts. Returns (live_conn, result)
+    — the connection may be a new object."""
+    import asyncpg
+    drop_errs = (asyncpg.InterfaceError, asyncpg.ConnectionDoesNotExistError, OSError)
+    if conn is None or conn.is_closed():
+        conn = await _connect()
+    try:
+        return conn, await op(conn)
+    except drop_errs as e:  # noqa: BLE001
+        print(f"  ⚠ соединение к БД потеряно ({type(e).__name__}: {str(e)[:80]}); "
+              "переподключаюсь и повторяю пачку…")
+        try:
+            await conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+        conn = await _connect()
+        return conn, await op(conn)
 
 
 def _content_hash(model: str, dim: int, text: str) -> str:
@@ -109,32 +165,38 @@ async def _index_owner(conn, owner_type: str, source_key: str | None, batch: int
         chunk = todo[i:i + batch]
         vectors, tok = await asyncio.to_thread(embed_texts_with_usage, [c["text"] for c in chunk])
         tokens += tok
-        async with conn.transaction():
-            for c, vec in zip(chunk, vectors):
-                await conn.execute(
-                    "INSERT INTO knowledge_embeddings "
-                    "(owner_type, owner_id, model_name, dim, embedding, content_hash, confidential) "
-                    "VALUES ($1,$2,$3,$4,$5::vector,$6,$7) "
-                    "ON CONFLICT (owner_type, owner_id, model_name) DO UPDATE SET "
-                    "embedding = EXCLUDED.embedding, dim = EXCLUDED.dim, "
-                    "content_hash = EXCLUDED.content_hash, confidential = EXCLUDED.confidential, "
-                    "updated_at = now()",
-                    owner_type, c["id"], model, dim, _vec_literal(vec), c["hash"], c["confidential"],
-                )
+
+        # Reconnect-safe write: the embedding call above can take long enough for
+        # an idle DB connection to be dropped; reconnect + retry before/around the
+        # write. Idempotent upsert makes the retry safe.
+        async def _write(cx, chunk=chunk, vectors=vectors):
+            async with cx.transaction():
+                for item, vec in zip(chunk, vectors):
+                    await cx.execute(
+                        "INSERT INTO knowledge_embeddings "
+                        "(owner_type, owner_id, model_name, dim, embedding, content_hash, confidential) "
+                        "VALUES ($1,$2,$3,$4,$5::vector,$6,$7) "
+                        "ON CONFLICT (owner_type, owner_id, model_name) DO UPDATE SET "
+                        "embedding = EXCLUDED.embedding, dim = EXCLUDED.dim, "
+                        "content_hash = EXCLUDED.content_hash, confidential = EXCLUDED.confidential, "
+                        "updated_at = now()",
+                        owner_type, item["id"], model, dim, _vec_literal(vec), item["hash"], item["confidential"],
+                    )
+
+        conn, _ = await _exec_with_reconnect(conn, _write)
         embedded += len(chunk)
         print(f"  [{owner_type}] embedded {embedded}/{len(todo)}")
 
-    return {"owner": owner_type, "total": len(rows), "embedded": embedded,
-            "skipped": len(rows) - embedded, "tokens": tokens}
+    return conn, {"owner": owner_type, "total": len(rows), "embedded": embedded,
+                  "skipped": len(rows) - embedded, "tokens": tokens}
 
 
 async def run(owners: list[str], source_key: str | None, batch: int) -> list[dict]:
-    import asyncpg
-    conn = await asyncpg.connect(_pg_dsn(), timeout=30, statement_cache_size=0)
+    conn = await _connect()
     results = []
     try:
         for owner_type in owners:
-            result = await _index_owner(conn, owner_type, source_key, batch)
+            conn, result = await _index_owner(conn, owner_type, source_key, batch)
             results.append(result)
             print(
                 f"[done] {result['owner']}: total={result['total']} "

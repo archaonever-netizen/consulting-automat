@@ -24,6 +24,7 @@ import argparse
 import asyncio
 import json
 import re
+import socket
 import sys
 from hashlib import sha256
 from pathlib import Path
@@ -39,6 +40,7 @@ DEFAULT_MODEL = "google/gemini-3.1-flash-lite"
 CONCURRENCY = 4
 MIN_TEXT_CHARS = 200
 MAX_INPUT_CHARS = 12000
+MAX_JSON_RETRIES = 2  # повторы генерации при невалидном JSON (всего попыток = +1)
 # Front-matter titles that almost never carry methodology content.
 SKIP_TITLE_HINTS = (
     "preface", "table of contents", "copyright", "notice", "trademark",
@@ -75,6 +77,61 @@ def _pg_dsn() -> str:
     )
 
 
+async def _connect():
+    """Open a fresh asyncpg connection with TCP keepalive enabled."""
+    import asyncpg
+    conn = await asyncpg.connect(_pg_dsn(), timeout=30, statement_cache_size=0)
+    _enable_keepalive(conn)
+    return conn
+
+
+def _enable_keepalive(conn) -> None:
+    """Best-effort TCP keepalive: long batch jobs hold the connection while slow
+    LLM calls run, and an idle socket can be silently dropped by the pooler/NAT.
+    Keepalive probes keep it alive (and surface a real drop fast). Touches private
+    transport internals, so everything is guarded."""
+    try:
+        sock = conn._transport.get_extra_info("socket")  # noqa: SLF001
+    except Exception:  # noqa: BLE001
+        sock = None
+    if sock is None:
+        return
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+        if hasattr(socket, "TCP_KEEPIDLE"):  # Linux
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 30)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+        elif hasattr(socket, "SIO_KEEPALIVE_VALS"):  # Windows
+            sock.ioctl(socket.SIO_KEEPALIVE_VALS, (1, 30000, 10000))  # on, idle ms, interval ms
+    except OSError:
+        pass
+
+
+async def _exec_with_reconnect(conn, op):
+    """Run `await op(conn)`; if the connection was dropped (idle-timeout / pooler
+    recycle / network blip), reconnect once and retry the whole op.
+
+    Safe because every write here is idempotent (delete+reinsert per fragment /
+    ON CONFLICT upserts), so replaying never duplicates or corrupts. Returns
+    (live_conn, result) — the connection may be a new object."""
+    import asyncpg
+    drop_errs = (asyncpg.InterfaceError, asyncpg.ConnectionDoesNotExistError, OSError)
+    if conn is None or conn.is_closed():
+        conn = await _connect()
+    try:
+        return conn, await op(conn)
+    except drop_errs as e:  # noqa: BLE001
+        print(f"  ⚠ соединение к БД потеряно ({type(e).__name__}: {str(e)[:80]}); "
+              "переподключаюсь и повторяю…")
+        try:
+            await conn.close()
+        except Exception:  # noqa: BLE001
+            pass
+        conn = await _connect()
+        return conn, await op(conn)
+
+
 def _extract_json(raw: str) -> dict:
     s = raw.strip()
     fence = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", s, re.DOTALL)
@@ -103,17 +160,34 @@ def _chat(model: str, system: str, user: str, max_tokens: int = 1400) -> tuple[s
 
 
 def _generate_for_fragment(model: str, frag: dict) -> tuple[dict | None, int]:
-    user = (
+    base_user = (
         f"Раздел: {frag['title']}\n"
         f"Страница: {frag['page_start']}–{frag['page_end']}\n\n"
         f"Текст фрагмента:\n{frag['text'][:MAX_INPUT_CHARS]}"
     )
-    try:
-        raw, tokens = _chat(model, SYSTEM_PROMPT, user)
-        return _extract_json(raw), tokens
-    except Exception as e:  # noqa: BLE001
-        print(f"  ! fragment {frag['id']} failed: {type(e).__name__}: {str(e)[:120]}")
-        return None, 0
+    tokens_total = 0
+    # Self-heal a single malformed reply: retry on invalid JSON with a stricter
+    # «верни только JSON» reminder. Spend of retries is counted. Non-JSON errors
+    # (network etc.) are not retried here — they're left for the next run.
+    for attempt in range(1, MAX_JSON_RETRIES + 2):
+        user = base_user if attempt == 1 else (
+            base_user
+            + "\n\nВАЖНО: верни ТОЛЬКО валидный JSON по схеме из инструкции — без пояснений, "
+              "без markdown-ограждений, с корректными запятыми и кавычками."
+        )
+        try:
+            raw, tokens = _chat(model, SYSTEM_PROMPT, user)
+            tokens_total += tokens
+            return _extract_json(raw), tokens_total
+        except json.JSONDecodeError as e:
+            print(f"  ! fragment {frag['id']} невалидный JSON "
+                  f"(попытка {attempt}/{MAX_JSON_RETRIES + 1}): {str(e)[:80]}")
+            continue
+        except Exception as e:  # noqa: BLE001 — сетевые/прочие сбои не ретраим здесь
+            print(f"  ! fragment {frag['id']} failed: {type(e).__name__}: {str(e)[:120]}")
+            return None, tokens_total
+    print(f"  ! fragment {frag['id']} пропущен после {MAX_JSON_RETRIES + 1} попыток (невалидный JSON)")
+    return None, tokens_total
 
 
 def _is_skippable(title: str, text: str) -> bool:
@@ -168,18 +242,20 @@ async def _write_fragment_cards(conn, frag: dict, parsed: dict, model: str, fhas
         return written
 
 
-async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str) -> int:
-    exists = await conn.fetchval(
-        "SELECT 1 FROM knowledge_source_layers WHERE source_id=$1 AND layer_type='description_ru'",
-        source_id,
-    )
+async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str):
+    """Returns (live_conn, tokens). Reconnect-safe: the LLM call in the middle can
+    outlast an idle DB connection."""
+    conn, exists = await _exec_with_reconnect(
+        conn, lambda c: c.fetchval(
+            "SELECT 1 FROM knowledge_source_layers WHERE source_id=$1 AND layer_type='description_ru'",
+            source_id))
     if exists:
         print("  doc summary (ru): already exists, skipped")
-        return 0
-    titles = await conn.fetch(
-        "SELECT title FROM knowledge_source_fragments WHERE source_id=$1 ORDER BY sort_order LIMIT 60",
-        source_id,
-    )
+        return conn, 0
+    conn, titles = await _exec_with_reconnect(
+        conn, lambda c: c.fetch(
+            "SELECT title FROM knowledge_source_fragments WHERE source_id=$1 ORDER BY sort_order LIMIT 60",
+            source_id))
     outline = "\n".join(f"- {r['title']}" for r in titles)
     user = (
         f"Документ: {source_key}. Ниже оглавление (английское). Напиши КРАТКОЕ описание "
@@ -191,22 +267,21 @@ async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str) ->
             _chat, model, "Ты — методолог. Пиши деловой русский.", user, 500)
         text = text.strip()
         if text:
-            await conn.execute(
-                "INSERT INTO knowledge_source_layers "
-                "(source_id, layer_type, title, content, content_origin, sort_order, created_at) "
-                "VALUES ($1,'description_ru','Краткое описание (RU)',$2,'ai_generated',5, now())",
-                source_id, text,
-            )
+            conn, _ = await _exec_with_reconnect(
+                conn, lambda c, t=text: c.execute(
+                    "INSERT INTO knowledge_source_layers "
+                    "(source_id, layer_type, title, content, content_origin, sort_order, created_at) "
+                    "VALUES ($1,'description_ru','Краткое описание (RU)',$2,'ai_generated',5, now())",
+                    source_id, t))
             print("  doc summary (ru): created")
-        return doc_tokens
+        return conn, doc_tokens
     except Exception as e:  # noqa: BLE001
         print(f"  doc summary failed: {type(e).__name__}: {str(e)[:120]}")
-        return 0
+        return conn, 0
 
 
 async def run(source_key: str, model: str, limit: int | None) -> None:
-    import asyncpg
-    conn = await asyncpg.connect(_pg_dsn(), timeout=30, statement_cache_size=0)
+    conn = await _connect()
     try:
         src = await conn.fetchrow("SELECT id FROM knowledge_sources WHERE key=$1", source_key)
         if not src:
@@ -263,10 +338,15 @@ async def run(source_key: str, model: str, limit: int | None) -> None:
                 gen_tokens += tok
                 if parsed is None:
                     continue  # failed parse → leave for retry next run
-                total_cards += await _write_fragment_cards(conn, frag, parsed, model, frag["_hash"])
+                # The LLM batch above can outlast an idle DB connection; reconnect
+                # + retry around the write. delete+reinsert per fragment is idempotent.
+                conn, written = await _exec_with_reconnect(
+                    conn, lambda c, f=frag, p=parsed: _write_fragment_cards(c, f, p, model, f["_hash"]))
+                total_cards += written
             print(f"  processed {min(i + CONCURRENCY, len(todo))}/{len(todo)} fragments, cards so far={total_cards}")
 
-        gen_tokens += await _gen_doc_summary(conn, source_id, source_key, model)
+        conn, doc_tokens = await _gen_doc_summary(conn, source_id, source_key, model)
+        gen_tokens += doc_tokens
 
         by_type = await conn.fetch(
             "SELECT card_type, count(*) AS n FROM knowledge_cards WHERE source_id=$1 GROUP BY card_type ORDER BY card_type",
