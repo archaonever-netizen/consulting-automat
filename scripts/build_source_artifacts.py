@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -36,6 +37,26 @@ TARGET_CHARS = 2500
 # A single page longer than this is split further by paragraphs (still tagged
 # with that one page number, so the citation stays exact).
 PAGE_SPLIT_CHARS = int(TARGET_CHARS * 1.6)
+
+
+# Control characters that must never reach the DB. Postgres text columns cannot
+# store NUL (\x00) — an INSERT with one fails — and "dirty" PDFs leak NUL and
+# other control bytes. We keep TAB (\x09), LF (\x0a) and CR (\x0d); strip the
+# rest of the C0 range, DEL and the C1 range (\x7f–\x9f).
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
+
+
+def sanitize_text(value):
+    """Strip NUL bytes and other non-printable control characters before text is
+    written to the DB. The single place text cleaning happens — applied to every
+    extracted text field (full_text / fragment text / title …) and to card text.
+
+    Keeps tab, newline and carriage return. Non-str values pass through unchanged,
+    so it is safe to call on optional fields. Does NOT alter chunking or content
+    otherwise — pure string sanitization."""
+    if not isinstance(value, str):
+        return value
+    return _CONTROL_CHARS_RE.sub("", value)
 
 
 def load_manifest(key: str) -> dict:
@@ -73,7 +94,10 @@ def extract_pages(pdf_path: Path) -> list[str]:
                 pass  # table detection is best-effort; never lose the page
             if table_blocks:
                 text = (text + "\n\n" + "\n\n".join(table_blocks)).strip()
-            page_texts.append(text)
+            # Sanitize here, at the single extraction boundary: this covers the
+            # full text, every fragment chunk (derived from these pages) and the
+            # committed fulltext.txt — all before they ever reach the DB.
+            page_texts.append(sanitize_text(text))
     return page_texts
 
 
@@ -197,7 +221,9 @@ def build(key: str) -> dict:
             end_page = max(start_page, min(next_page - 1, len(page_texts)))
             sub_chunks = chunk_section(page_texts, start_page, end_page)
             for sub_index, chunk in enumerate(sub_chunks):
-                title = str(item["title"]).strip()
+                # Outline titles come from the PDF /Title entries and can also
+                # carry NUL/control bytes — sanitize before writing the fragment.
+                title = sanitize_text(str(item["title"]).strip())
                 fragments.write(json.dumps({
                     "sort_order": order,
                     "title": title,

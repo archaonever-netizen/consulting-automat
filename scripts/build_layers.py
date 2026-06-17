@@ -32,8 +32,12 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+_SCRIPTS = Path(__file__).resolve().parent
+if str(_SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(_SCRIPTS))
 
 from backend.core.config import get_settings  # noqa: E402
+from build_source_artifacts import sanitize_text  # noqa: E402 — общий санитайзер текста перед записью в БД
 
 GENERATOR = "cards_v1"
 DEFAULT_MODEL = "google/gemini-3.1-flash-lite"
@@ -211,10 +215,13 @@ async def _write_fragment_cards(conn, frag: dict, parsed: dict, model: str, fhas
         ]
         for card_type, json_key in type_map:
             for idx, item in enumerate(parsed.get(json_key, []) or []):
-                title = (item.get("title") or "").strip()
-                body = (item.get("body") or "").strip()
+                title = sanitize_text((item.get("title") or "").strip())
+                body = sanitize_text((item.get("body") or "").strip())
                 if not title or not body:
                     continue
+                # maturity_level — колонка varchar(40); модель иногда возвращает
+                # длинную фразу вместо короткого уровня, поэтому подрезаем под ширину.
+                maturity_level = sanitize_text((item.get("maturity_level") or "").strip())[:40] or None
                 await conn.execute(
                     "INSERT INTO knowledge_cards "
                     "(source_id, card_type, card_key, methodology, maturity_level, title, body, "
@@ -226,7 +233,7 @@ async def _write_fragment_cards(conn, frag: dict, parsed: dict, model: str, fhas
                     " page_start=EXCLUDED.page_start, page_end=EXCLUDED.page_end, source_ref=EXCLUDED.source_ref, "
                     " content_hash=EXCLUDED.content_hash, updated_at=now()",
                     frag["source_id"], card_type, f"{card_type}:f{frag['id']}:{idx}",
-                    frag["methodology"], (item.get("maturity_level") or "").strip() or None,
+                    frag["methodology"], maturity_level,
                     title[:300], body, frag["confidential"], frag["id"],
                     frag["page_start"], frag["page_end"], frag["source_ref"], idx, fhash,
                     json.dumps({"fragment_title": frag["title"]}, ensure_ascii=False),
@@ -265,7 +272,7 @@ async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str):
     try:
         text, doc_tokens = await asyncio.to_thread(
             _chat, model, "Ты — методолог. Пиши деловой русский.", user, 500)
-        text = text.strip()
+        text = sanitize_text(text.strip())
         if text:
             conn, _ = await _exec_with_reconnect(
                 conn, lambda c, t=text: c.execute(
