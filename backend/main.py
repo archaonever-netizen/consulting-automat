@@ -183,19 +183,40 @@ def _ensure_knowledge_rag_columns(conn):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Create tables on startup (dev only — prod uses Alembic)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        await conn.run_sync(_ensure_client_columns)
-        await conn.run_sync(_ensure_company_columns)
-        await conn.run_sync(_ensure_task_columns)
-        await conn.run_sync(_ensure_subchat_columns)
-        await conn.run_sync(_ensure_knowledge_rag_columns)
-    await _seed_founder()
-    async with AsyncSessionLocal() as db:
-        await seed_if_empty(db)
-        await seed_bpmm_source(db)
-        await seed_bots(db)
+    # Инициализация БД и сидов — в защищённом блоке с таймаутом. Если БД на старте
+    # недоступна или операция виснет (неверный DATABASE_URL, недоступная Supabase,
+    # блокировка), веб-сервер ВСЁ РАВНО должен подняться и отвечать health-check, а
+    # причина — попасть в лог. Иначе старт виснет молча, а оркестратор (Amvera)
+    # бесконечно показывает «развёртывается».
+    import asyncio
+    import logging
+    log = logging.getLogger("startup")
+
+    async def _init_db() -> None:
+        # Create tables on startup (dev only — prod uses Alembic)
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+            await conn.run_sync(_ensure_client_columns)
+            await conn.run_sync(_ensure_company_columns)
+            await conn.run_sync(_ensure_task_columns)
+            await conn.run_sync(_ensure_subchat_columns)
+            await conn.run_sync(_ensure_knowledge_rag_columns)
+        await _seed_founder()
+        async with AsyncSessionLocal() as db:
+            await seed_if_empty(db)
+            await seed_bpmm_source(db)
+            await seed_bots(db)
+
+    db_target = settings.database_url.split("@")[-1]
+    try:
+        log.warning("startup: инициализация БД (target=%s)", db_target)
+        await asyncio.wait_for(_init_db(), timeout=90)
+        log.warning("startup: инициализация БД завершена успешно")
+    except Exception:
+        log.exception(
+            "startup: инициализация БД ПРОВАЛЕНА/таймаут — сервер поднимется без сидов; "
+            "проверьте DATABASE_URL и доступность БД"
+        )
     yield
     # Cleanup on shutdown
     from .services.kaiten_client import close_shared_client
