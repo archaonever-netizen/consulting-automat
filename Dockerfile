@@ -6,8 +6,11 @@ WORKDIR /app
 COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 
-# Код бэкенда и собранный фронтенд (frontend/dist закоммичен в репо)
+# Код бэкенда, скрипты RAG-конвейера и собранный фронтенд (frontend/dist закоммичен в репо).
+# scripts/ обязателен в проде: экран «Добавить методологию» импортирует из него конвейер
+# (build_source_artifacts / build_embeddings / build_layers) — см. backend/services/source_ingest_runner.py.
 COPY backend backend
+COPY scripts scripts
 COPY frontend/dist frontend/dist
 COPY BPMM/BPMM.fulltext.txt BPMM/BPMM.fulltext.txt
 COPY BPMM/BPMM.fragments.jsonl BPMM/BPMM.fragments.jsonl
