@@ -6,6 +6,7 @@ export interface TaskFormData {
   goal: string;
   action_description: string;
   expected_result: string;
+  preparation_notes: string;
   start_time: string; // формат input[datetime-local]: 'YYYY-MM-DDTHH:mm' или ''
   duration_minutes: string;
 }
@@ -16,6 +17,7 @@ export interface TaskPayload {
   goal: string | null;
   action_description: string | null;
   expected_result: string | null;
+  preparation_notes: string | null;
   start_time: string | null;
   duration_minutes: number | null;
 }
@@ -27,6 +29,7 @@ export function emptyTaskForm(): TaskFormData {
     goal: '',
     action_description: '',
     expected_result: '',
+    preparation_notes: '',
     start_time: '',
     duration_minutes: '',
   };
@@ -46,6 +49,7 @@ export function taskToForm(t: {
   goal?: string | null;
   action_description?: string | null;
   expected_result?: string | null;
+  preparation_notes?: string | null;
   start_time?: string | null;
   duration_minutes?: number | null;
 }): TaskFormData {
@@ -55,6 +59,7 @@ export function taskToForm(t: {
     goal: t.goal ?? '',
     action_description: t.action_description ?? '',
     expected_result: t.expected_result ?? '',
+    preparation_notes: t.preparation_notes ?? '',
     start_time: isoToLocalInput(t.start_time),
     duration_minutes: t.duration_minutes != null ? String(t.duration_minutes) : '',
   };
@@ -72,6 +77,7 @@ export function buildTaskPayload(f: TaskFormData): TaskPayload | null {
     goal: f.goal.trim() || null,
     action_description: f.action_description.trim() || null,
     expected_result: f.expected_result.trim() || null,
+    preparation_notes: f.preparation_notes.trim() || null,
     start_time: f.start_time ? `${f.start_time}:00` : null,
     duration_minutes: duration != null && !Number.isNaN(duration) ? duration : null,
   };

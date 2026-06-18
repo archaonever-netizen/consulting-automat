@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import api from '../services/api';
 import Icon from '../components/Icon';
 import {
@@ -18,6 +19,7 @@ interface Task {
   start_time?: string;
   duration_minutes?: number;
   input_data?: string;
+  preparation_notes?: string;
   goal?: string;
   action_description?: string;
   expected_result?: string;
@@ -54,6 +56,7 @@ function errText(err: unknown, fallback: string): string {
 }
 
 export default function TasksPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const { data: tasks = [], isLoading: loading } = useQuery({
     queryKey: ['tasks'],
     queryFn: async () => (await api.get<Task[]>('/api/tasks')).data,
@@ -67,6 +70,13 @@ export default function TasksPage() {
   // По умолчанию выбрана первая задача (как раньше), выбор хранится по id,
   // чтобы переживать фоновое обновление списка из кэша.
   const selected = tasks.find(t => t.id === selectedId) ?? tasks[0] ?? null;
+
+  useEffect(() => {
+    const taskId = Number(searchParams.get('taskId'));
+    if (taskId && tasks.some(t => t.id === taskId)) {
+      setSelectedId(taskId);
+    }
+  }, [searchParams, tasks]);
 
   const [modal, setModal] = useState<Modal>(null);
   const [form, setForm] = useState<TaskFormData>(emptyTaskForm());
@@ -169,7 +179,10 @@ export default function TasksPage() {
                 <button
                   key={t.id}
                   className={`tasks-item${selected?.id === t.id ? ' active' : ''}`}
-                  onClick={() => setSelectedId(t.id)}
+                  onClick={() => {
+                    setSelectedId(t.id);
+                    setSearchParams({ taskId: String(t.id) });
+                  }}
                 >
                   <div className="tasks-item-row">
                     <span className="tasks-item-title">{t.title}</span>
@@ -200,6 +213,9 @@ export default function TasksPage() {
               )}
               {selected.expected_result && (
                 <div className="tasks-sec"><div className="eyebrow">Ожидаемый результат</div><p>{selected.expected_result}</p></div>
+              )}
+              {selected.preparation_notes && (
+                <div className="tasks-sec"><div className="eyebrow">Подготовка и заметки</div><p>{selected.preparation_notes}</p></div>
               )}
 
               <div className="tasks-sec">
@@ -283,6 +299,12 @@ export default function TasksPage() {
                 <textarea className="form-input" rows={2} value={form.expected_result}
                   placeholder="Как поймём, что задача выполнена"
                   onChange={e => setF({ expected_result: e.target.value })} />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Подготовка и заметки</label>
+                <textarea className="form-input" rows={3} value={form.preparation_notes}
+                  placeholder="Что подготовить перед задачей, ссылки, вводные или важные заметки"
+                  onChange={e => setF({ preparation_notes: e.target.value })} />
               </div>
               <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end', marginTop: '1rem' }}>
                 <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setModal(null)}>Отмена</button>

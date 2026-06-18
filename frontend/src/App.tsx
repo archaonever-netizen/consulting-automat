@@ -13,6 +13,8 @@ import HomePage from './pages/HomePage';
 // HomePage — это первые экраны после открытия приложения.
 const ClientsPage = lazy(() => import('./pages/ClientsPage'));
 const ClientDetailPage = lazy(() => import('./pages/ClientDetailPage'));
+const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
+const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
 const BriefFormPage = lazy(() => import('./pages/BriefFormPage'));
 const CompanyPage = lazy(() => import('./pages/CompanyPage'));
 const FunctionDetailPage = lazy(() => import('./pages/FunctionDetailPage'));
@@ -25,6 +27,9 @@ const GoalDecompositionPage = lazy(() => import('./pages/GoalDecompositionPage')
 const ChatPage = lazy(() => import('./pages/ChatPage'));
 const OrchestrationPage = lazy(() => import('./pages/OrchestrationPage'));
 const KnowledgePage = lazy(() => import('./pages/KnowledgePage'));
+const SecretaryPage = lazy(() => import('./pages/SecretaryPage'));
+const EmployeesPage = lazy(() => import('./pages/EmployeesPage'));
+const EmployeeDetailPage = lazy(() => import('./pages/EmployeeDetailPage'));
 
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = localStorage.getItem('access_token');
@@ -49,7 +54,11 @@ export default function App() {
           <Route index element={<HomePage />} />
           <Route path="clients" element={<ClientsPage />} />
           <Route path="clients/:clientId" element={<ClientDetailPage />} />
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="briefs/:briefId" element={<BriefFormPage />} />
+          <Route path="employees" element={<EmployeesPage />} />
+          <Route path="employees/:id" element={<EmployeeDetailPage />} />
           <Route path="company" element={<CompanyPage />} />
           <Route path="company/functions/:id" element={<FunctionDetailPage />} />
           <Route path="company/departments/:id" element={<DepartmentDetailPage />} />
@@ -57,6 +66,7 @@ export default function App() {
           <Route path="goals/:goalId" element={<GoalDecompositionPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="chat" element={<ChatPage />} />
+          <Route path="secretary" element={<SecretaryPage />} />
           <Route path="orchestration" element={<OrchestrationPage />} />
           <Route path="knowledge" element={<KnowledgePage />} />
           <Route path="tracker" element={<TrackerPage />} />

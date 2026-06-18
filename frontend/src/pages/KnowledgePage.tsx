@@ -4,6 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
+import AddMethodologyModal from '../components/AddMethodologyModal';
 
 // База знаний — редактируемая внутренняя документация ШЕФ.
 // Контент хранится в БД (knowledge_categories / knowledge_articles) и доступен
@@ -121,6 +122,7 @@ export default function KnowledgePage() {
     staleTime: 5 * 60_000,
   });
   const isFounder = !!me?.is_founder;
+  const [showAddMethodology, setShowAddMethodology] = useState(false);
   const { data: cats = [], isLoading: catsLoading } = useQuery<Category[]>({
     queryKey: ['knowledge'],
     queryFn: async () => (await api.get<Category[]>('/api/knowledge')).data,
@@ -267,7 +269,14 @@ export default function KnowledgePage() {
             <section id="kb-source-tree" ref={setRef('kb-source-tree')} className="kb-section">
               <div className="kb-sec-head">
                 <div className="eyebrow">Методологии и фреймворки</div>
+                {isFounder && (
+                  <button className="btn btn-primary" style={{ fontSize: 13, padding: '6px 12px' }}
+                    onClick={() => setShowAddMethodology(true)}>
+                    ➕ Добавить методологию
+                  </button>
+                )}
               </div>
+              {showAddMethodology && <AddMethodologyModal onClose={() => setShowAddMethodology(false)} />}
               <div className="kb-cards">
                 {sourceCards.map(({ source, path }) => {
                   const description = source.layers.find(l => l.layer_type === 'description');

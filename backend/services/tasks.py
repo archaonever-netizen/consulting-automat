@@ -1,6 +1,7 @@
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
 from sqlalchemy.orm import selectinload
+
 from ..models import TaskCompletion, UserTask
 from ..schemas.tasks import TaskComplete, TaskCreate, TaskUpdate
 
@@ -24,6 +25,7 @@ async def create_task(db: AsyncSession, data: TaskCreate, user_id: int) -> UserT
         start_time=data.start_time,
         duration_minutes=data.duration_minutes,
         input_data=data.input_data,
+        preparation_notes=data.preparation_notes,
         goal=data.goal,
         action_description=data.action_description,
         expected_result=data.expected_result,
@@ -45,7 +47,12 @@ async def get_task(db: AsyncSession, task_id: int, user_id: int) -> UserTask | N
     return result.scalar_one_or_none()
 
 
-async def update_task(db: AsyncSession, task_id: int, data: TaskUpdate, user_id: int) -> UserTask | None:
+async def update_task(
+    db: AsyncSession,
+    task_id: int,
+    data: TaskUpdate,
+    user_id: int,
+) -> UserTask | None:
     task = await get_task(db, task_id, user_id)
     if task is None:
         return None
@@ -56,7 +63,12 @@ async def update_task(db: AsyncSession, task_id: int, data: TaskUpdate, user_id:
     return task
 
 
-async def complete_task(db: AsyncSession, task_id: int, data: TaskComplete, user_id: int) -> UserTask | None:
+async def complete_task(
+    db: AsyncSession,
+    task_id: int,
+    data: TaskComplete,
+    user_id: int,
+) -> UserTask | None:
     """Завершить задачу: статус completed/failed + запись результатов (TaskCompletion)."""
     task = await get_task(db, task_id, user_id)
     if task is None:

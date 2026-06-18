@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional, List
 from sqlalchemy import (
-    Integer, String, Boolean, Text, DateTime, Float, JSON,
+    Integer, String, Boolean, Text, DateTime, Date, Float, JSON,
     ForeignKey, UniqueConstraint, CheckConstraint, Index, text
 )
 from sqlalchemy.orm import relationship, Mapped, mapped_column
@@ -198,6 +198,99 @@ class Client(Base):
     profile: Mapped[Optional['CompanyProfile']] = relationship('CompanyProfile', back_populates='client', cascade='all, delete-orphan', uselist=False)
     chat_sessions: Mapped[List['ChatSession']] = relationship('ChatSession', back_populates='client', cascade='all, delete-orphan')
     tasks: Mapped[List['UserTask']] = relationship('UserTask', back_populates='client', cascade='all, delete-orphan')
+    projects: Mapped[List['Project']] = relationship(
+        'Project', back_populates='client', cascade='all, delete-orphan'
+    )
+    portal_users: Mapped[List['ClientUser']] = relationship(
+        'ClientUser', back_populates='client', cascade='all, delete-orphan'
+    )
+    documents: Mapped[List['ClientDocument']] = relationship(
+        'ClientDocument', back_populates='client', cascade='all, delete-orphan'
+    )
+
+
+class ClientUser(Base):
+    """Сотрудник компании-клиента — пользователь клиентского портала.
+
+    Отдельный кластер пользователей (не путать с `users` — сотрудниками нашей
+    компании). Создаётся и управляется ТОЛЬКО нашим сотрудником из карточки
+    клиента (вкладка «Организационная структура»). Пароль на Этапе 1 задаётся
+    вручную нашим сотрудником и хранится только как хэш (как у `User`).
+
+    Права «попроще»: `role` — текстовая метка роли, `sections` — список ключей
+    разрешённых разделов портала (скелет: project|stages|status|documents|
+    events|info). Сам портал и вход клиента появятся на Этапе 2; здесь — только
+    учётка и доступы.
+    """
+    __tablename__ = 'client_users'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    role: Mapped[str] = mapped_column(String(100), default='', server_default='', nullable=False)
+    # Ключи разрешённых разделов портала (JSON-массив строк).
+    sections: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    client: Mapped['Client'] = relationship('Client', back_populates='portal_users')
+
+    def set_password(self, raw: str):
+        """Хешировать и сохранить пароль (open-text в БД не хранится)."""
+        self.password_hash = generate_password_hash(raw)
+
+    def check_password(self, raw: str) -> bool:
+        """Проверить пароль клиента портала."""
+        return check_password_hash(self.password_hash, raw)
+
+
+class ClientDocument(Base):
+    """Документ/файл, опубликованный для клиента (раздел «Документы и файлы»).
+
+    Файл хранится на сервере (Этап 2 — локальная ФС, см. services/client_documents);
+    в БД лежит относительный путь `stored_path`. Загружает наш сотрудник из
+    карточки клиента; клиент в портале видит и скачивает. Принадлежит клиенту
+    (а не конкретному проекту) — портал на Этапе 2 работает на уровне клиента.
+    """
+    __tablename__ = 'client_documents'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    stored_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), default='application/octet-stream', nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    uploaded_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    client: Mapped['Client'] = relationship('Client', back_populates='documents')
+
+
+class Project(Base):
+    """Consulting project bound to exactly one client."""
+    __tablename__ = 'projects'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    client: Mapped['Client'] = relationship('Client', back_populates='projects')
 
 
 class Brief(Base):
@@ -349,6 +442,7 @@ class UserTask(Base):
     assigned_to_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
     created_by_id: Mapped[int] = mapped_column(Integer, ForeignKey('users.id'), nullable=False)
     input_data: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    preparation_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     start_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     duration_minutes: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     expected_result: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
@@ -404,6 +498,12 @@ class UserSubChat(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     session_id: Mapped[int] = mapped_column(Integer, ForeignKey('user_chat_sessions.id'), nullable=False)
     task_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('user_tasks.id'), nullable=True)
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    source: Mapped[str] = mapped_column(String(40), default='app', server_default='app', nullable=False)
+    telegram_chat_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    telegram_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    telegram_username: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    telegram_full_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     version: Mapped[int] = mapped_column(Integer, default=1)
     tokens_used: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -550,6 +650,9 @@ class KnowledgeSource(Base):
     processing_status: Mapped[str] = mapped_column(String(40), default='pending', nullable=False)
     checksum: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # RAG: confidentiality + methodology tag (added in RAG phase 1).
+    confidential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    methodology: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
     added_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     processed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
@@ -607,7 +710,17 @@ class KnowledgeSourceFragment(Base):
     page_end: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     source_ref: Mapped[str] = mapped_column(String(500), nullable=False)
     metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # RAG metadata for filtered hybrid search (added in RAG phase 1).
+    methodology: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    maturity_level: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    content_type: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    lang: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    source_version: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    confidential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # NOTE: the Postgres-only `search_tsv` (tsvector) column and the pgvector
+    # embeddings live in the DB / `knowledge_embeddings` and are intentionally
+    # not mapped here so the ORM stays SQLite-compatible.
 
     source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource', back_populates='fragments')
 
@@ -656,6 +769,87 @@ class KnowledgeSourceSectionLink(Base):
         UniqueConstraint('source_id', 'section_id', 'relation_type', name='uq_knowledge_source_section'),
         Index('ix_knowledge_source_section_section', 'section_id'),
     )
+
+
+class KnowledgeCard(Base):
+    """Generated retrievable cards: method cards, typical errors, diagnostic questions.
+
+    These are the core derived layer the Methodolog searches by `card_type`.
+    A card may only cite real source pages: `supporting_fragment_id` /
+    `page_start` / `page_end` point at the actual source fragment that backs it.
+    The Postgres-only generated `search_tsv` column is not mapped here so the
+    ORM stays SQLite-compatible.
+    """
+    __tablename__ = 'knowledge_cards'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sources.id', ondelete='CASCADE'), nullable=False
+    )
+    # 'method_card' | 'typical_error' | 'diagnostic_question'
+    card_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    # Stable key for idempotent re-generation (no duplicates on re-run).
+    card_key: Mapped[str] = mapped_column(String(160), nullable=False)
+    methodology: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    maturity_level: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    title: Mapped[str] = mapped_column(String(300), nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    content_origin: Mapped[str] = mapped_column(String(40), default='ai_generated', nullable=False)
+    lang: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    confidential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    supporting_fragment_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('knowledge_source_fragments.id', ondelete='SET NULL'), nullable=True
+    )
+    page_start: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    page_end: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    source_ref: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    content_hash: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource')
+
+    __table_args__ = (
+        UniqueConstraint('source_id', 'card_key', name='uq_knowledge_cards_key'),
+        Index('ix_cards_type', 'card_type'),
+        Index('ix_cards_methodology', 'methodology'),
+        Index('ix_cards_source', 'source_id'),
+    )
+
+
+class IngestJob(Base):
+    """Background import job for the «Add methodology» screen.
+
+    Tracks one source-ingest run: status/stage/progress, token spend and the
+    stored PDF path. The PDF in Supabase Storage and this row are kept even on
+    failure (so the founder can retry); only half-written DB data is cleaned.
+    """
+    __tablename__ = 'ingest_jobs'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    source_key: Mapped[str] = mapped_column(String(80), nullable=False)
+    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # draft | queued | running | done | failed
+    status: Mapped[str] = mapped_column(String(20), default='draft', nullable=False)
+    # extract | ingest | embed_fragments | layers | embed_cards | attach | finished
+    stage: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    progress: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    storage_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    framework_key: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    framework_name: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    methodology: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    language: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    confidential: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    est_pages: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    est_cost_rub: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    tokens_embeddings: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    tokens_generation: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class KaitenConnection(Base):
@@ -721,3 +915,177 @@ class GoalDocument(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     owner: Mapped[Optional['User']] = relationship('User', lazy='joined')
+
+
+# ─────────────────────────── ИИ-Сотрудники (боты) ───────────────────────────
+# Раздел «ИИ-Сотрудники»: карточки ботов поверх готовых бэкенд-агентов.
+# Промпты, модель и привязки бота хранятся в БД (а не в хардкоде), чтобы разные
+# боты вели себя по-разному на одном движке. Все модели — SQLite-совместимы.
+
+class Bot(Base):
+    """ИИ-Сотрудник: карточка бота со своим конфигом (промпты, модель, привязки).
+
+    Агент-движок (`agent_impl`, напр. 'methodolog') читает промпты и модель
+    отсюда. Два промпта работают по-разному:
+      • system_prompt    — основная роль/поведение, идёт как system-роль;
+      • persistent_prompt — короткая стоячая инструкция, автоматически
+        добавляется к КАЖДОМУ запросу бота (не теряется в длинных диалогах).
+    """
+    __tablename__ = 'bots'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    system_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    persistent_prompt: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    model: Mapped[Optional[str]] = mapped_column(String(80), nullable=True)
+    # Какой бэкенд-агент обслуживает бота (привязка к готовому движку).
+    agent_impl: Mapped[str] = mapped_column(String(40), default='methodolog', nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    framework_links: Mapped[List['BotFramework']] = relationship(
+        'BotFramework', back_populates='bot', cascade='all, delete-orphan'
+    )
+    department_links: Mapped[List['BotDepartment']] = relationship(
+        'BotDepartment', back_populates='bot', cascade='all, delete-orphan'
+    )
+    token_usage: Mapped[List['BotTokenUsage']] = relationship(
+        'BotTokenUsage', back_populates='bot', cascade='all, delete-orphan'
+    )
+
+
+class Framework(Base):
+    """Фреймворк = именованная группа источников знаний (BPMM, CMMI…).
+
+    Терминология: в UI это «Фреймворк», технически он опирается на существующее
+    поле `methodology`/источники RAG (см. KnowledgeSource) — параллельной системы
+    знаний не строим, переиспользуем фильтры гибридного поиска. Переиспользуем
+    между ботами (many-to-many через BotFramework).
+    """
+    __tablename__ = 'frameworks'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    key: Mapped[str] = mapped_column(String(80), unique=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    source_links: Mapped[List['FrameworkSource']] = relationship(
+        'FrameworkSource', back_populates='framework', cascade='all, delete-orphan'
+    )
+    bot_links: Mapped[List['BotFramework']] = relationship(
+        'BotFramework', back_populates='framework', cascade='all, delete-orphan'
+    )
+
+
+class FrameworkSource(Base):
+    """Связь фреймворк ↔ источник знаний (knowledge_sources). M2M."""
+    __tablename__ = 'framework_sources'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    framework_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('frameworks.id', ondelete='CASCADE'), nullable=False
+    )
+    source_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('knowledge_sources.id', ondelete='CASCADE'), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    framework: Mapped['Framework'] = relationship('Framework', back_populates='source_links')
+    source: Mapped['KnowledgeSource'] = relationship('KnowledgeSource', lazy='joined')
+
+    __table_args__ = (
+        UniqueConstraint('framework_id', 'source_id', name='uq_framework_source'),
+    )
+
+
+class BotFramework(Base):
+    """Связь бот ↔ фреймворк. M2M (фреймворки переиспользуемы между ботами)."""
+    __tablename__ = 'bot_frameworks'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('bots.id', ondelete='CASCADE'), nullable=False
+    )
+    framework_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('frameworks.id', ondelete='CASCADE'), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    bot: Mapped['Bot'] = relationship('Bot', back_populates='framework_links')
+    framework: Mapped['Framework'] = relationship('Framework', back_populates='bot_links')
+
+    __table_args__ = (
+        UniqueConstraint('bot_id', 'framework_id', name='uq_bot_framework'),
+    )
+
+
+class BotDepartment(Base):
+    """Связь бот ↔ отдел (departments). Делает бота «Сотрудником» отдела. M2M."""
+    __tablename__ = 'bot_departments'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('bots.id', ondelete='CASCADE'), nullable=False
+    )
+    department_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('departments.id', ondelete='CASCADE'), nullable=False
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    bot: Mapped['Bot'] = relationship('Bot', back_populates='department_links')
+    department: Mapped['Department'] = relationship('Department', lazy='joined')
+
+    __table_args__ = (
+        UniqueConstraint('bot_id', 'department_id', name='uq_bot_department'),
+    )
+
+
+class BotTokenUsage(Base):
+    """Лог расхода токенов по боту с датами (счётчик за день/неделю/месяц).
+
+    Каждый вызов бота (в т.ч. проверочный чат) пишет строку под своим bot_id.
+    Счётчики за период — агрегация SUM(total_tokens) по usage_date.
+    """
+    __tablename__ = 'bot_token_usage'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    bot_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('bots.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    usage_date: Mapped[Date] = mapped_column(Date, nullable=False, index=True)
+    prompt_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    completion_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_tokens: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    # 'test' — проверочный чат в карточке; 'prod' — боевые вызовы.
+    source: Mapped[str] = mapped_column(String(20), default='test', nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    bot: Mapped['Bot'] = relationship('Bot', back_populates='token_usage')
+
+
+class EditLock(Base):
+    """Единый владельческий пароль-замок на редактирование промптов/настроек ботов.
+
+    Одна строка на всё приложение (id=1). Пароль хранится только как bcrypt-хэш
+    (через werkzeug), открытым текстом не лежит. Не путать с паролем входа.
+    """
+    __tablename__ = 'edit_lock'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def set_password(self, raw: str):
+        """Хешировать и сохранить пароль-замок."""
+        self.password_hash = generate_password_hash(raw)
+
+    def check_password(self, raw: str) -> bool:
+        """Проверить пароль-замок. Если пароль ещё не задан — доступа нет."""
+        if not self.password_hash:
+            return False
+        return check_password_hash(self.password_hash, raw)

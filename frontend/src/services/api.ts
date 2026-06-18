@@ -21,12 +21,17 @@ api.interceptors.request.use((config) => {
 // Любая успешная мутация (POST/PUT/PATCH/DELETE) сбрасывает связанные ключи —
 // страницам не нужно помнить об этом самим.
 const INVALIDATION_RULES: Array<[RegExp, string[]]> = [
+  [/^\/api\/clients\/\d+\/portal-users/, ['portal-users']],
+  [/^\/api\/clients\/\d+\/documents/, ['client-documents']],
   [/^\/api\/clients/, ['clients', 'home']],
+  [/^\/api\/projects/, ['projects', 'clients', 'home']],
   [/^\/api\/briefs/, ['clients', 'home']],
   [/^\/api\/company/, ['company']],
+  [/^\/api\/bots/, ['bots']],
   [/^\/api\/knowledge/, ['knowledge', 'knowledge-sources']],
   [/^\/api\/goals/, ['goals']],
   [/^\/api\/tasks/, ['tasks']],
+  [/^\/api\/secretary/, ['tasks']],
 ];
 
 api.interceptors.response.use(

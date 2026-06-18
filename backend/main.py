@@ -11,16 +11,34 @@ from pydantic.warnings import UnsupportedFieldAttributeWarning
 warnings.filterwarnings("ignore", category=UnsupportedFieldAttributeWarning)
 
 from fastapi import FastAPI, HTTPException  # noqa: E402
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
-from sqlalchemy import select
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.staticfiles import StaticFiles  # noqa: E402
+from sqlalchemy import select  # noqa: E402
 
-from .core.config import get_settings
-from .core.database import AsyncSessionLocal, Base, engine
-from .models import User
-from .routes import auth, clients, briefs, company, tasks, agent, chat, knowledge, kaiten, goals
-from .services.knowledge import seed_bpmm_source, seed_if_empty
+from .core.config import get_settings  # noqa: E402
+from .core.database import AsyncSessionLocal, Base, engine  # noqa: E402
+from .models import User  # noqa: E402
+from .routes import (  # noqa: E402
+    agent,
+    auth,
+    bots,
+    briefs,
+    chat,
+    clients,
+    company,
+    goals,
+    kaiten,
+    knowledge,
+    portal,
+    portal_users,
+    projects,
+    secretary,
+    sources,
+    tasks,
+)
+from .services.bots import seed_bots  # noqa: E402
+from .services.knowledge import seed_bpmm_source, seed_if_empty  # noqa: E402
 
 settings = get_settings()
 
@@ -38,8 +56,8 @@ async def _seed_founder():
 
     Следствие: при каждом старте пароль основателя приводится к значению env.
     """
-    email = os.getenv("FOUNDER_EMAIL")
-    password = os.getenv("FOUNDER_PASSWORD")
+    email = settings.founder_email
+    password = settings.founder_password
     if not email or not password:
         return
     email = email.lower().strip()  # как в authenticate_user — иначе вход не найдёт
@@ -49,14 +67,14 @@ async def _seed_founder():
         if founder is None:
             founder = User(
                 email=email,
-                full_name=os.getenv("FOUNDER_NAME", "Основатель"),
+                full_name=settings.founder_name or "Основатель",
                 is_founder=True,
             )
             db.add(founder)
         else:
             founder.email = email
-            if os.getenv("FOUNDER_NAME"):
-                founder.full_name = os.getenv("FOUNDER_NAME")
+            if settings.founder_name:
+                founder.full_name = settings.founder_name
         founder.is_active = True
         founder.set_password(password)
         await db.commit()
@@ -99,6 +117,70 @@ def _ensure_company_columns(conn):
             conn.execute(text(f"ALTER TABLE departments ADD COLUMN {col} JSON"))
 
 
+def _ensure_task_columns(conn):
+    """Idempotently add local task columns that create_all cannot add to existing DBs."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(conn)
+    task_cols = {c['name'] for c in inspector.get_columns('user_tasks')}
+    if 'preparation_notes' not in task_cols:
+        conn.execute(text("ALTER TABLE user_tasks ADD COLUMN preparation_notes TEXT"))
+
+
+def _ensure_subchat_columns(conn):
+    """Idempotently add Telegram chat columns for existing local DBs."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(conn)
+    subchat_cols = {c['name'] for c in inspector.get_columns('user_subchats')}
+    columns = {
+        'title': "ALTER TABLE user_subchats ADD COLUMN title VARCHAR(255)",
+        'source': "ALTER TABLE user_subchats ADD COLUMN source VARCHAR(40) DEFAULT 'app' NOT NULL",
+        'telegram_chat_id': "ALTER TABLE user_subchats ADD COLUMN telegram_chat_id INTEGER",
+        'telegram_user_id': "ALTER TABLE user_subchats ADD COLUMN telegram_user_id INTEGER",
+        'telegram_username': "ALTER TABLE user_subchats ADD COLUMN telegram_username VARCHAR(255)",
+        'telegram_full_name': "ALTER TABLE user_subchats ADD COLUMN telegram_full_name VARCHAR(255)",
+    }
+    for name, ddl in columns.items():
+        if name not in subchat_cols:
+            conn.execute(text(ddl))
+
+
+def _ensure_knowledge_rag_columns(conn):
+    """Idempotently add RAG metadata columns to existing knowledge tables.
+
+    On Supabase/Postgres these were already added by the RAG phase-1 migration,
+    so the inspector check skips them. On a local SQLite lab DB that was created
+    earlier, this adds the plain columns (the Postgres-only tsvector/vector
+    columns are not added here — RAG search runs on Postgres).
+    """
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(conn)
+    is_sqlite = conn.dialect.name == 'sqlite'
+    bool_default = '0' if is_sqlite else 'false'
+
+    src_cols = {c['name'] for c in inspector.get_columns('knowledge_sources')}
+    if 'confidential' not in src_cols:
+        conn.execute(text(
+            f"ALTER TABLE knowledge_sources ADD COLUMN confidential BOOLEAN NOT NULL DEFAULT {bool_default}"
+        ))
+    if 'methodology' not in src_cols:
+        conn.execute(text("ALTER TABLE knowledge_sources ADD COLUMN methodology VARCHAR(80)"))
+
+    frag_cols = {c['name'] for c in inspector.get_columns('knowledge_source_fragments')}
+    for col in ('methodology', 'maturity_level', 'content_type', 'lang', 'source_version'):
+        if col not in frag_cols:
+            size = 20 if col == 'lang' else (40 if col in ('maturity_level', 'content_type') else 80)
+            conn.execute(text(
+                f"ALTER TABLE knowledge_source_fragments ADD COLUMN {col} VARCHAR({size})"
+            ))
+    if 'confidential' not in frag_cols:
+        conn.execute(text(
+            f"ALTER TABLE knowledge_source_fragments ADD COLUMN confidential BOOLEAN NOT NULL DEFAULT {bool_default}"
+        ))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Create tables on startup (dev only — prod uses Alembic)
@@ -106,10 +188,14 @@ async def lifespan(app: FastAPI):
         await conn.run_sync(Base.metadata.create_all)
         await conn.run_sync(_ensure_client_columns)
         await conn.run_sync(_ensure_company_columns)
+        await conn.run_sync(_ensure_task_columns)
+        await conn.run_sync(_ensure_subchat_columns)
+        await conn.run_sync(_ensure_knowledge_rag_columns)
     await _seed_founder()
     async with AsyncSessionLocal() as db:
         await seed_if_empty(db)
         await seed_bpmm_source(db)
+        await seed_bots(db)
     yield
     # Cleanup on shutdown
     from .services.kaiten_client import close_shared_client
@@ -156,14 +242,20 @@ async def health():
 # Register routers
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
+app.include_router(portal_users.router, prefix="/api/clients", tags=["portal-users"])
+app.include_router(portal.router, prefix="/api/portal", tags=["portal"])
 app.include_router(briefs.router, prefix="/api/briefs", tags=["briefs"])
 app.include_router(company.router, prefix="/api/company", tags=["company"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
+app.include_router(sources.router, prefix="/api/knowledge", tags=["sources"])
 app.include_router(kaiten.router, prefix="/api/kaiten", tags=["kaiten"])
 app.include_router(goals.router, prefix="/api/goals", tags=["goals"])
+app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
+app.include_router(secretary.router, prefix="/api/secretary", tags=["secretary"])
+app.include_router(bots.router, prefix="/api/bots", tags=["bots"])
 
 
 # ── Раздача собранного фронтенда (SPA) ──
@@ -176,6 +268,12 @@ if os.path.isdir(_DIST):
         # /api/* сюда попадать не должен, но на всякий случай отдаём 404
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not found")
+        # Клиентский портал — ОТДЕЛЬНЫЙ бандл (portal.html). Любой путь /portal*
+        # без собственного файла отдаём в portal.html, чтобы он не подменялся
+        # основным приложением (index.html).
+        portal_index = os.path.join(_DIST, "portal.html")
+        if (full_path == "portal" or full_path.startswith("portal/")) and os.path.isfile(portal_index):
+            return FileResponse(portal_index)
         # Защита от path traversal: нормализуем путь и отдаём файл только если
         # он реально лежит внутри dist; всё остальное (вкл. /../...) — SPA fallback.
         candidate = os.path.normpath(os.path.join(_DIST, full_path))

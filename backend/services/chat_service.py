@@ -92,10 +92,11 @@ async def get_or_create_session(db: AsyncSession, user: User) -> UserChatSession
         select(UserSubChat).where(
             UserSubChat.session_id == session.id,
             UserSubChat.task_id.is_(None),
+            UserSubChat.source == 'app',
         )
     )
     if res_main.scalars().first() is None:
-        db.add(UserSubChat(session_id=session.id, task_id=None, version=1))
+        db.add(UserSubChat(session_id=session.id, task_id=None, source='app', version=1))
         await db.commit()
     return session
 
@@ -126,7 +127,86 @@ async def create_subchat(
     existing = result.scalars().all()
     version = max((s.version for s in existing), default=0) + 1
 
-    subchat = UserSubChat(session_id=session_id, task_id=task_id, version=version)
+    subchat = UserSubChat(session_id=session_id, task_id=task_id, source='app', version=version)
+    db.add(subchat)
+    await db.commit()
+    await db.refresh(subchat)
+    return subchat
+
+
+def build_telegram_chat_title(
+    telegram_chat_id: int,
+    telegram_user_id: int | None = None,
+    telegram_username: str | None = None,
+    telegram_full_name: str | None = None,
+) -> str:
+    """Build the compact title shown in the AI chats sidebar."""
+    username = (telegram_username or "").strip().lstrip("@")
+    full_name = (telegram_full_name or "").strip()
+    if username:
+        return f"@{username}"
+    if full_name:
+        return full_name
+    return f"Telegram ID {telegram_user_id or telegram_chat_id}"
+
+
+async def create_or_update_telegram_subchat(
+    db: AsyncSession,
+    session_id: int,
+    telegram_chat_id: int,
+    telegram_user_id: int | None = None,
+    telegram_username: str | None = None,
+    telegram_full_name: str | None = None,
+) -> UserSubChat:
+    title = build_telegram_chat_title(
+        telegram_chat_id=telegram_chat_id,
+        telegram_user_id=telegram_user_id,
+        telegram_username=telegram_username,
+        telegram_full_name=telegram_full_name,
+    )
+    identity_filter = (
+        UserSubChat.telegram_user_id == telegram_user_id
+        if telegram_user_id is not None
+        else UserSubChat.telegram_chat_id == telegram_chat_id
+    )
+    result = await db.execute(
+        select(UserSubChat).where(
+            UserSubChat.session_id == session_id,
+            UserSubChat.source == 'telegram',
+            identity_filter,
+        )
+    )
+    subchat = result.scalars().first()
+    username = (telegram_username or "").strip().lstrip("@") or None
+    full_name = (telegram_full_name or "").strip() or None
+    if subchat is not None:
+        subchat.title = title
+        subchat.telegram_chat_id = telegram_chat_id
+        subchat.telegram_user_id = telegram_user_id
+        subchat.telegram_username = username
+        subchat.telegram_full_name = full_name
+        await db.commit()
+        await db.refresh(subchat)
+        return subchat
+
+    version_result = await db.execute(
+        select(UserSubChat)
+        .where(UserSubChat.session_id == session_id)
+        .order_by(UserSubChat.version.desc())
+    )
+    existing = version_result.scalars().all()
+    version = max((s.version for s in existing), default=0) + 1
+    subchat = UserSubChat(
+        session_id=session_id,
+        task_id=None,
+        title=title,
+        source='telegram',
+        telegram_chat_id=telegram_chat_id,
+        telegram_user_id=telegram_user_id,
+        telegram_username=username,
+        telegram_full_name=full_name,
+        version=version,
+    )
     db.add(subchat)
     await db.commit()
     await db.refresh(subchat)
@@ -138,7 +218,7 @@ async def delete_subchat(db: AsyncSession, subchat_id: int) -> str:
     sub = await db.get(UserSubChat, subchat_id)
     if sub is None:
         return 'notfound'
-    if sub.task_id is None:
+    if sub.task_id is None and sub.source != 'telegram':
         return 'main'
     await db.delete(sub)
     await db.commit()
@@ -222,7 +302,11 @@ async def _build_system_prompt(db: AsyncSession, subchat: UserSubChat) -> str:
             expected_result=task.expected_result or "не указано",
             goal=task.goal or "не указано",
         )
-        empty = [lbl for f, lbl in _TASK_FIELD_LABELS.items() if not (getattr(task, f) or "").strip()]
+        empty = [
+            lbl
+            for f, lbl in _TASK_FIELD_LABELS.items()
+            if not (getattr(task, f) or "").strip()
+        ]
         if empty:
             task_context += (
                 "\n\nНезаполненные поля задачи: " + ", ".join(empty) + ".\n"
@@ -253,6 +337,37 @@ async def stream_response(
     subchat = result.scalar_one_or_none()
     if not subchat:
         yield f"data: {json.dumps({'error': 'Subchat not found'})}\n\n"
+        return
+
+    if subchat.source == 'telegram':
+        user_msg_record = UserChatMessage(
+            subchat_id=subchat_id,
+            role="user",
+            content=user_message,
+        )
+        db.add(user_msg_record)
+        await db.commit()
+
+        if subchat.telegram_chat_id is None:
+            yield f"data: {json.dumps({'error': 'Telegram chat_id is missing'})}\n\n"
+            return
+
+        from ..core.config import get_settings
+        from .telegram_secretary import send_telegram_message
+
+        settings = get_settings()
+        if not settings.telegram_bot_token:
+            yield f"data: {json.dumps({'error': 'TELEGRAM_BOT_TOKEN is not configured'})}\n\n"
+            return
+        try:
+            await send_telegram_message(subchat.telegram_chat_id, user_message)
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+            return
+
+        sent_event = {'sent': True, 'telegram_chat_id': subchat.telegram_chat_id}
+        yield f"data: {json.dumps(sent_event)}\n\n"
+        yield f"data: {json.dumps({'done': True})}\n\n"
         return
 
     # Сохранить сообщение пользователя в БД

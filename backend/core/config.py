@@ -1,5 +1,6 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings
 
 
 class DeepSeekConfig:
@@ -39,9 +40,40 @@ class Settings(BaseSettings):
     secret_key: str = "shef-dev-secret-key-change-in-prod"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    # Клиентский портал — ОТДЕЛЬНЫЙ секрет и срок жизни токена. Намеренно не
+    # совпадает с secret_key: внутренний токен сотрудника и токен клиента
+    # несовместимы, и при будущем выносе портала на отдельный сервер его секрет
+    # независим. В проде задать своим значением через env.
+    portal_secret_key: str = "shef-portal-dev-secret-change-in-prod"
+    portal_token_expire_minutes: int = 60 * 12  # 12 часов
+    portal_preview_expire_minutes: int = 30     # короткий preview для «Вид для клиента»
+    founder_email: str = ""
+    founder_password: str = ""
+    founder_name: str = "Основатель"
 
-    # LLM
+    # LLM (Promptra — chat only)
     promptra_api_key: str = ""
+    promptra_base_url: str = "https://api.promptra.ru/v1"
+
+    # Embeddings (AITunnel, OpenAI-compatible) — separate client from Promptra chat.
+    # Rule: the SAME model + dim are used for indexing and search. Do not change
+    # these without re-indexing the whole knowledge base.
+    embeddings_base_url: str = "https://api.aitunnel.ru/v1"
+    embeddings_api_key: str = ""
+    embeddings_model: str = "text-embedding-3-large"
+    embeddings_dim: int = 1536
+
+    # Supabase Storage (originals of uploaded source PDFs). service_role key —
+    # server-only (bypasses RLS), never expose to the frontend.
+    supabase_url: str = ""
+    supabase_service_key: str = ""
+    supabase_storage_bucket: str = "knowledge-sources"
+
+    # Personal Telegram secretary
+    telegram_bot_token: str = ""
+    telegram_webhook_secret: str = ""
+    secretary_owner_telegram_id: str = ""
+    secretary_local_user_email: str = ""
 
     # Декомпозиция целей (движок)
     decomposition_llm_provider: str = "promptra"   # promptra | anthropic
