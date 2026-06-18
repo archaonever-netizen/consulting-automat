@@ -331,6 +331,56 @@ function MultiSelectChecklist({
   );
 }
 
+function DraftCard<T extends { id: number }>({
+  card,
+  title,
+  onApply,
+  children,
+}: {
+  card: T;
+  title: string;
+  onApply: (next: T) => void;
+  children: (draft: T, patch: (value: Partial<T>) => void) => ReactNode;
+}) {
+  const [draft, setDraft] = useState<T>(card);
+  const [committed, setCommitted] = useState<T>(card);
+
+  // Resync the draft when the committed card changes from outside (e.g. after Apply
+  // recomputes a derived field). Adjusting state during render is the recommended
+  // alternative to a setState-in-effect for this case.
+  if (committed !== card) {
+    setCommitted(card);
+    setDraft(card);
+  }
+
+  const dirty = useMemo(
+    () => (Object.keys(card) as Array<keyof T>).some(key => card[key] !== draft[key]),
+    [card, draft],
+  );
+
+  const patch = (value: Partial<T>) => setDraft(current => ({ ...current, ...value }) as T);
+
+  return (
+    <div className="project-theory-card">
+      <div className="project-theory-card-head">
+        <div className="project-theory-card-title">{title}</div>
+        <span className={`project-theory-status-badge${dirty ? ' is-draft' : ''}`}>
+          {dirty ? 'Черновик' : 'Применено'}
+        </span>
+      </div>
+      {children(draft, patch)}
+      <div className="project-theory-card-foot">
+        <button className="btn btn-soft btn-sm" type="button" disabled={!dirty} onClick={() => setDraft(card)}>
+          Сбросить
+        </button>
+        <button className="btn btn-primary btn-sm" type="button" disabled={!dirty} onClick={() => onApply(draft)}>
+          Применить
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function DiagnosisSection({ number, title, note, children }: { number: string; title: string; note: string; children: ReactNode }) {
   return (
     <section className="project-theory-section">
@@ -377,7 +427,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
   }, [consequences, diagnosis.keyChallenge, diagnosis.limitingFactor, diagnosis.strategicConclusion, facts, symptoms]);
 
   useEffect(() => {
-    writeProjectDiagnosisSnapshot(projectId, {
+    const timer = setTimeout(() => writeProjectDiagnosisSnapshot(projectId, {
       projectId,
       updatedAt: new Date().toISOString(),
       rawRequest: diagnosis.rawRequest,
@@ -416,7 +466,8 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
         label: consequence.deterioration || `Последствие ${index + 1}`,
         summary: compactJoin([consequence.deterioration, consequence.affected, consequence.timing, consequence.damage, consequence.source]),
       })),
-    });
+    }), 400);
+    return () => clearTimeout(timer);
   }, [
     alternatives,
     consequences,
@@ -540,26 +591,25 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
 
       <DiagnosisSection number="4" title="Проверка против Теории проекта" note="Повторяемые строки фиксируют разрыв: ожидалось X, фактически Y, подтверждается фактом Z.">
         <div className="project-theory-repeater">
-          {gaps.map((gap, index) => {
-            const relation = getRelation(theoryRelations, gap.theoryBlock);
-
-            return (
-              <div className="project-theory-card" key={gap.id}>
-                <div className="project-theory-card-head">
-                  <div className="project-theory-card-title">Разрыв теории и реальности {index + 1}</div>
-                  <span className="project-theory-status-badge">{gap.status}</span>
-                </div>
+          {gaps.map((gap, index) => (
+            <DraftCard
+              key={gap.id}
+              card={gap}
+              title={`Разрыв теории и реальности ${index + 1}`}
+              onApply={next => updateGap(gap.id, next)}
+            >
+              {(draft, patch) => (
                 <div className="project-theory-grid two">
-                  <SelectField label="Связанный блок Теории проекта" options={theoryRelations.map(item => item.title)} value={relation.title} onChange={title => updateGap(gap.id, { theoryBlock: theoryRelations.find(item => item.title === title)?.id || gap.theoryBlock })} />
-                  <TextField label="Ожидаемое состояние из Теории проекта" value={gap.expectedState} readOnly />
-                  <TextField label="Наблюдаемая реальность" placeholder="Что происходит фактически?" value={gap.observedReality} onChange={value => updateGap(gap.id, { observedReality: value })} multiline />
-                  <TextField label="Разрыв" placeholder="Ожидалось X, фактически Y" value={gap.gap} onChange={value => updateGap(gap.id, { gap: value })} multiline />
-                  <SelectField label="Подтверждающий факт" options={factNames} value={gap.confirmingFact} onChange={value => updateGap(gap.id, { confirmingFact: value })} />
-                  <SelectField label="Статус разрыва" options={relationStatusOptions} value={gap.status} onChange={value => updateGap(gap.id, { status: value })} />
+                  <SelectField label="Связанный блок Теории проекта" options={theoryRelations.map(item => item.title)} value={getRelation(theoryRelations, draft.theoryBlock).title} onChange={title => patch({ theoryBlock: theoryRelations.find(item => item.title === title)?.id || draft.theoryBlock })} />
+                  <TextField label="Ожидаемое состояние из Теории проекта" value={draft.expectedState} readOnly />
+                  <TextField label="Наблюдаемая реальность" placeholder="Что происходит фактически?" value={draft.observedReality} onChange={value => patch({ observedReality: value })} multiline />
+                  <TextField label="Разрыв" placeholder="Ожидалось X, фактически Y" value={draft.gap} onChange={value => patch({ gap: value })} multiline />
+                  <SelectField label="Подтверждающий факт" options={factNames} value={draft.confirmingFact} onChange={value => patch({ confirmingFact: value })} />
+                  <SelectField label="Статус разрыва" options={relationStatusOptions} value={draft.status} onChange={value => patch({ status: value })} />
                 </div>
-              </div>
-            );
-          })}
+              )}
+            </DraftCard>
+          ))}
           <button
             className="project-theory-add-card"
             type="button"
@@ -579,17 +629,23 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">Наблюдаемые симптомы</div>
             {symptoms.map((symptom, index) => (
-              <div className="project-theory-card" key={symptom.id}>
-                <div className="project-theory-card-title">Симптом {index + 1}</div>
-                <div className="project-theory-grid two">
-                  <TextField label="Описание симптома" value={symptom.description} onChange={value => updateSymptom(symptom.id, { description: value })} multiline />
-                  <TextField label="Где проявляется" value={symptom.location} onChange={value => updateSymptom(symptom.id, { location: value })} />
-                  <TextField label="Кого затрагивает" value={symptom.affected} onChange={value => updateSymptom(symptom.id, { affected: value })} />
-                  <TextField label="Частота / масштаб" value={symptom.frequency} onChange={value => updateSymptom(symptom.id, { frequency: value })} />
-                  <SelectField label="Связанный разрыв" options={gapNames} value={symptom.relatedGap} onChange={value => updateSymptom(symptom.id, { relatedGap: value })} />
-                  <SelectField label="Источник данных" options={dataSourceOptions} value={symptom.dataSource} onChange={value => updateSymptom(symptom.id, { dataSource: value })} />
-                </div>
-              </div>
+              <DraftCard
+                key={symptom.id}
+                card={symptom}
+                title={`Симптом ${index + 1}`}
+                onApply={next => updateSymptom(symptom.id, next)}
+              >
+                {(draft, patch) => (
+                  <div className="project-theory-grid two">
+                    <TextField label="Описание симптома" value={draft.description} onChange={value => patch({ description: value })} multiline />
+                    <TextField label="Где проявляется" value={draft.location} onChange={value => patch({ location: value })} />
+                    <TextField label="Кого затрагивает" value={draft.affected} onChange={value => patch({ affected: value })} />
+                    <TextField label="Частота / масштаб" value={draft.frequency} onChange={value => patch({ frequency: value })} />
+                    <SelectField label="Связанный разрыв" options={gapNames} value={draft.relatedGap} onChange={value => patch({ relatedGap: value })} />
+                    <SelectField label="Источник данных" options={dataSourceOptions} value={draft.dataSource} onChange={value => patch({ dataSource: value })} />
+                  </div>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setSymptoms(current => [...current, createSymptom(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -600,17 +656,23 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">Факты</div>
             {facts.map((fact, index) => (
-              <div className="project-theory-card" key={fact.id}>
-                <div className="project-theory-card-title">Факт {index + 1}</div>
-                <div className="project-theory-grid two">
-                  <TextField label="Показатель / наблюдение" value={fact.indicator} onChange={value => updateFact(fact.id, { indicator: value })} />
-                  <TextField label="Значение" value={fact.value} onChange={value => updateFact(fact.id, { value })} />
-                  <TextField label="Период" value={fact.period} onChange={value => updateFact(fact.id, { period: value })} />
-                  <SelectField label="Источник данных" options={dataSourceOptions} value={fact.dataSource} onChange={value => updateFact(fact.id, { dataSource: value })} />
-                  <SelectField label="Надежность источника" options={reliabilityOptions} value={fact.reliability} onChange={value => updateFact(fact.id, { reliability: value })} />
-                  <SelectField label="Что подтверждает" options={[...symptomNames, ...gapNames, 'Диагностическое суждение']} value={fact.confirms} onChange={value => updateFact(fact.id, { confirms: value })} />
-                </div>
-              </div>
+              <DraftCard
+                key={fact.id}
+                card={fact}
+                title={`Факт ${index + 1}`}
+                onApply={next => updateFact(fact.id, next)}
+              >
+                {(draft, patch) => (
+                  <div className="project-theory-grid two">
+                    <TextField label="Показатель / наблюдение" value={draft.indicator} onChange={value => patch({ indicator: value })} />
+                    <TextField label="Значение" value={draft.value} onChange={value => patch({ value })} />
+                    <TextField label="Период" value={draft.period} onChange={value => patch({ period: value })} />
+                    <SelectField label="Источник данных" options={dataSourceOptions} value={draft.dataSource} onChange={value => patch({ dataSource: value })} />
+                    <SelectField label="Надежность источника" options={reliabilityOptions} value={draft.reliability} onChange={value => patch({ reliability: value })} />
+                    <SelectField label="Что подтверждает" options={[...symptomNames, ...gapNames, 'Диагностическое суждение']} value={draft.confirms} onChange={value => patch({ confirms: value })} />
+                  </div>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setFacts(current => [...current, createFact(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -635,13 +697,21 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">Альтернативные объяснения</div>
             {alternatives.map((alternative, index) => (
-              <div className="project-theory-card" key={alternative.id}>
-                <div className="project-theory-card-title">Альтернатива {index + 1}</div>
-                <TextField label="Возможная причина" value={alternative.reason} onChange={value => updateAlternative(alternative.id, { reason: value })} multiline />
-                <SelectField label="Что ее подтверждает" options={factNames} value={alternative.confirms} onChange={value => updateAlternative(alternative.id, { confirms: value })} />
-                <SelectField label="Что ее опровергает" options={factNames} value={alternative.refutes} onChange={value => updateAlternative(alternative.id, { refutes: value })} />
-                <SelectField label="Статус" options={alternativeStatusOptions} value={alternative.status} onChange={value => updateAlternative(alternative.id, { status: value })} />
-              </div>
+              <DraftCard
+                key={alternative.id}
+                card={alternative}
+                title={`Альтернатива ${index + 1}`}
+                onApply={next => updateAlternative(alternative.id, next)}
+              >
+                {(draft, patch) => (
+                  <>
+                    <TextField label="Возможная причина" value={draft.reason} onChange={value => patch({ reason: value })} multiline />
+                    <SelectField label="Что ее подтверждает" options={factNames} value={draft.confirms} onChange={value => patch({ confirms: value })} />
+                    <SelectField label="Что ее опровергает" options={factNames} value={draft.refutes} onChange={value => patch({ refutes: value })} />
+                    <SelectField label="Статус" options={alternativeStatusOptions} value={draft.status} onChange={value => patch({ status: value })} />
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setAlternatives(current => [...current, createAlternative(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -652,15 +722,23 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">Проверка диагноза</div>
             {verifications.map((verification, index) => (
-              <div className="project-theory-card" key={verification.id}>
-                <div className="project-theory-card-title">Проверка {index + 1}</div>
-                <TextField label="Что проверяем" value={verification.subject} onChange={value => updateVerification(verification.id, { subject: value })} multiline />
-                <SelectField label="Метод проверки" options={verificationMethodOptions} value={verification.method} onChange={value => updateVerification(verification.id, { method: value })} />
-                <TextField label="Факт, который подтвердит диагноз" value={verification.confirmFact} onChange={value => updateVerification(verification.id, { confirmFact: value })} multiline />
-                <TextField label="Факт, который опровергнет диагноз" value={verification.refuteFact} onChange={value => updateVerification(verification.id, { refuteFact: value })} multiline />
-                <TextField label="Срок проверки" value={verification.deadline} onChange={value => updateVerification(verification.id, { deadline: value })} />
-                <TextField label="Ответственный" value={verification.owner} onChange={value => updateVerification(verification.id, { owner: value })} />
-              </div>
+              <DraftCard
+                key={verification.id}
+                card={verification}
+                title={`Проверка ${index + 1}`}
+                onApply={next => updateVerification(verification.id, next)}
+              >
+                {(draft, patch) => (
+                  <>
+                    <TextField label="Что проверяем" value={draft.subject} onChange={value => patch({ subject: value })} multiline />
+                    <SelectField label="Метод проверки" options={verificationMethodOptions} value={draft.method} onChange={value => patch({ method: value })} />
+                    <TextField label="Факт, который подтвердит диагноз" value={draft.confirmFact} onChange={value => patch({ confirmFact: value })} multiline />
+                    <TextField label="Факт, который опровергнет диагноз" value={draft.refuteFact} onChange={value => patch({ refuteFact: value })} multiline />
+                    <TextField label="Срок проверки" value={draft.deadline} onChange={value => patch({ deadline: value })} />
+                    <TextField label="Ответственный" value={draft.owner} onChange={value => patch({ owner: value })} />
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setVerifications(current => [...current, createVerification(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -671,14 +749,22 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">Последствия без изменений</div>
             {consequences.map((consequence, index) => (
-              <div className="project-theory-card" key={consequence.id}>
-                <div className="project-theory-card-title">Последствие {index + 1}</div>
-                <TextField label="Что ухудшится" value={consequence.deterioration} onChange={value => updateConsequence(consequence.id, { deterioration: value })} multiline />
-                <TextField label="Кого затронет" value={consequence.affected} onChange={value => updateConsequence(consequence.id, { affected: value })} />
-                <TextField label="Срок наступления" value={consequence.timing} onChange={value => updateConsequence(consequence.id, { timing: value })} />
-                <TextField label="Возможный ущерб" value={consequence.damage} onChange={value => updateConsequence(consequence.id, { damage: value })} />
-                <SelectField label="Источник оценки" options={dataSourceOptions} value={consequence.source} onChange={value => updateConsequence(consequence.id, { source: value })} />
-              </div>
+              <DraftCard
+                key={consequence.id}
+                card={consequence}
+                title={`Последствие ${index + 1}`}
+                onApply={next => updateConsequence(consequence.id, next)}
+              >
+                {(draft, patch) => (
+                  <>
+                    <TextField label="Что ухудшится" value={draft.deterioration} onChange={value => patch({ deterioration: value })} multiline />
+                    <TextField label="Кого затронет" value={draft.affected} onChange={value => patch({ affected: value })} />
+                    <TextField label="Срок наступления" value={draft.timing} onChange={value => patch({ timing: value })} />
+                    <TextField label="Возможный ущерб" value={draft.damage} onChange={value => patch({ damage: value })} />
+                    <SelectField label="Источник оценки" options={dataSourceOptions} value={draft.source} onChange={value => patch({ source: value })} />
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setConsequences(current => [...current, createConsequence(current.length + 1)])}>
               <Icon name="plus" size={16} />

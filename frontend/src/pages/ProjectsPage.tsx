@@ -1,16 +1,44 @@
-import { useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
+import type { NavigateFunction } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import Icon from '../components/Icon';
 import ProjectFormModal from '../components/ProjectFormModal';
 import api from '../services/api';
 import type { Project, ProjectClientOption } from '../types/projects';
 
+const ProjectCard = memo(function ProjectCard({ project, navigate }: { project: Project; navigate: NavigateFunction }) {
+  return (
+    <article className="project-card">
+      <div className="project-card-head">
+        <span className="project-icon"><Icon name="template" size={19} /></span>
+        <div className="project-card-title">
+          <h3>{project.name}</h3>
+          <Link to={`/clients/${project.client_id}`} onClick={e => e.stopPropagation()}>{project.client_name}</Link>
+        </div>
+      </div>
+      <p>{project.description || 'Описание проекта пока не добавлено.'}</p>
+      <div className="project-card-foot">
+        <span>Обновлено: {project.updated_at_fmt}</span>
+        <button className="btn btn-soft btn-sm" onClick={() => navigate(`/projects/${project.id}`)}>
+          Открыть <Icon name="arrowRight" size={15} />
+        </button>
+      </div>
+    </article>
+  );
+});
+
 export default function ProjectsPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [query, setQuery] = useState('');
+  const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setSearch(query.trim().toLowerCase()), 150);
+    return () => clearTimeout(timer);
+  }, [query]);
 
   const { data: projects = [], isLoading: projectsLoading, isError: projectsError } = useQuery<Project[]>({
     queryKey: ['projects'],
@@ -28,13 +56,12 @@ export default function ProjectsPage() {
     navigate(`/projects/${response.data.id}`);
   }
 
-  const search = query.trim().toLowerCase();
-  const filtered = projects.filter(project => (
+  const filtered = useMemo(() => projects.filter(project => (
     !search
     || project.name.toLowerCase().includes(search)
     || project.client_name.toLowerCase().includes(search)
     || (project.description || '').toLowerCase().includes(search)
-  ));
+  )), [projects, search]);
 
   if (projectsLoading || clientsLoading) {
     return <div className="page"><div className="loading-bar"></div></div>;
@@ -92,24 +119,9 @@ export default function ProjectsPage() {
       )}
 
       {!projectsError && filtered.length > 0 && (
-        <div className="projects-grid">
-          {filtered.map((project, i) => (
-            <article key={project.id} className={`project-card rise d${Math.min(i + 1, 6)}`}>
-              <div className="project-card-head">
-                <span className="project-icon"><Icon name="template" size={19} /></span>
-                <div className="project-card-title">
-                  <h3>{project.name}</h3>
-                  <Link to={`/clients/${project.client_id}`} onClick={e => e.stopPropagation()}>{project.client_name}</Link>
-                </div>
-              </div>
-              <p>{project.description || 'Описание проекта пока не добавлено.'}</p>
-              <div className="project-card-foot">
-                <span>Обновлено: {project.updated_at_fmt}</span>
-                <button className="btn btn-soft btn-sm" onClick={() => navigate(`/projects/${project.id}`)}>
-                  Открыть <Icon name="arrowRight" size={15} />
-                </button>
-              </div>
-            </article>
+        <div className="projects-grid rise d1">
+          {filtered.map((project) => (
+            <ProjectCard key={project.id} project={project} navigate={navigate} />
           ))}
         </div>
       )}
