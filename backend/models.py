@@ -201,6 +201,78 @@ class Client(Base):
     projects: Mapped[List['Project']] = relationship(
         'Project', back_populates='client', cascade='all, delete-orphan'
     )
+    portal_users: Mapped[List['ClientUser']] = relationship(
+        'ClientUser', back_populates='client', cascade='all, delete-orphan'
+    )
+    documents: Mapped[List['ClientDocument']] = relationship(
+        'ClientDocument', back_populates='client', cascade='all, delete-orphan'
+    )
+
+
+class ClientUser(Base):
+    """Сотрудник компании-клиента — пользователь клиентского портала.
+
+    Отдельный кластер пользователей (не путать с `users` — сотрудниками нашей
+    компании). Создаётся и управляется ТОЛЬКО нашим сотрудником из карточки
+    клиента (вкладка «Организационная структура»). Пароль на Этапе 1 задаётся
+    вручную нашим сотрудником и хранится только как хэш (как у `User`).
+
+    Права «попроще»: `role` — текстовая метка роли, `sections` — список ключей
+    разрешённых разделов портала (скелет: project|stages|status|documents|
+    events|info). Сам портал и вход клиента появятся на Этапе 2; здесь — только
+    учётка и доступы.
+    """
+    __tablename__ = 'client_users'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    email: Mapped[str] = mapped_column(String(255), unique=True, nullable=False, index=True)
+    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    role: Mapped[str] = mapped_column(String(100), default='', server_default='', nullable=False)
+    # Ключи разрешённых разделов портала (JSON-массив строк).
+    sections: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    client: Mapped['Client'] = relationship('Client', back_populates='portal_users')
+
+    def set_password(self, raw: str):
+        """Хешировать и сохранить пароль (open-text в БД не хранится)."""
+        self.password_hash = generate_password_hash(raw)
+
+    def check_password(self, raw: str) -> bool:
+        """Проверить пароль клиента портала."""
+        return check_password_hash(self.password_hash, raw)
+
+
+class ClientDocument(Base):
+    """Документ/файл, опубликованный для клиента (раздел «Документы и файлы»).
+
+    Файл хранится на сервере (Этап 2 — локальная ФС, см. services/client_documents);
+    в БД лежит относительный путь `stored_path`. Загружает наш сотрудник из
+    карточки клиента; клиент в портале видит и скачивает. Принадлежит клиенту
+    (а не конкретному проекту) — портал на Этапе 2 работает на уровне клиента.
+    """
+    __tablename__ = 'client_documents'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    stored_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    content_type: Mapped[str] = mapped_column(String(120), default='application/octet-stream', nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    uploaded_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    client: Mapped['Client'] = relationship('Client', back_populates='documents')
 
 
 class Project(Base):

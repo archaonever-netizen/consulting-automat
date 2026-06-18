@@ -40,6 +40,13 @@ class Settings(BaseSettings):
     secret_key: str = "shef-dev-secret-key-change-in-prod"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 60 * 24 * 7  # 7 days
+    # Клиентский портал — ОТДЕЛЬНЫЙ секрет и срок жизни токена. Намеренно не
+    # совпадает с secret_key: внутренний токен сотрудника и токен клиента
+    # несовместимы, и при будущем выносе портала на отдельный сервер его секрет
+    # независим. В проде задать своим значением через env.
+    portal_secret_key: str = "shef-portal-dev-secret-change-in-prod"
+    portal_token_expire_minutes: int = 60 * 12  # 12 часов
+    portal_preview_expire_minutes: int = 30     # короткий preview для «Вид для клиента»
     founder_email: str = ""
     founder_password: str = ""
     founder_name: str = "Основатель"

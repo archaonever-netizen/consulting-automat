@@ -3,8 +3,8 @@ import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
 
 describe('PROJECT_FRAMEWORK_CARDS', () => {
   it('contains the fixed project framework cards in order', () => {
-    expect(PROJECT_FRAMEWORK_CARDS).toHaveLength(13);
-    expect(PROJECT_FRAMEWORK_CARDS.map(card => card.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]);
+    expect(PROJECT_FRAMEWORK_CARDS).toHaveLength(14);
+    expect(PROJECT_FRAMEWORK_CARDS.map(card => card.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
     expect(PROJECT_FRAMEWORK_CARDS.map(card => card.title)).toEqual([
       'Теория проекта',
       'Диагноз',
@@ -19,6 +19,7 @@ describe('PROJECT_FRAMEWORK_CARDS', () => {
       'Бизнес-процессы',
       'Задачи',
       'Факты и обучение',
+      'Весь проект',
     ]);
   });
 

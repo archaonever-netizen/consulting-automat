@@ -705,3 +705,415 @@ npm.cmd run test -- src/pages/tasks/logic.test.ts
 - Обязательно переносить frontend-компонент и изменения `ProjectCanvas`/`ProjectWorkspace`/`styles.css`.
 - Осторожно переносить `frontend/dist`: только если основной репозиторий хранит собранный frontend.
 - Для полноценного продукта нужен следующий шаг: схема данных и API для сохранения "Теории проекта", а затем вычисляемые проверки заполненности.
+
+---
+
+## Проекты / полноэкранный workspace проекта
+
+### Контекст
+
+- Репозиторий: `D:\consulting-automat-lab`
+- Ветка: `telegram-secretary-local-core`
+- Дата: 2026-06-15
+- Цель: увеличить полезную рабочую область раздела "Проекты" и сделать карточку проекта похожей на полноэкранное рабочее окно в рамках текущей дизайн-системы.
+
+### Что реализовано
+
+- Детальная страница проекта `/projects/:id` переведена в полноэкранный workspace без внешних page-отступов и отдельной верхней `detail-top` панели.
+- Навигация назад к списку проектов и ссылка на клиента перенесены в верхний toolbar проекта.
+- Toolbar проекта стал компактнее, получил blur-фон и защиту от переполнения длинных названий через ellipsis.
+- Основной левый sidebar приложения автоматически сворачивается при входе на маршрут `/projects/:id`.
+- Автосворачивание не ломает ручной override: внутри workspace sidebar можно развернуть кнопкой, а при переходе на другой проект auto-state сбрасывается.
+- Ширины внутренних панелей workspace немного уплотнены: больше пространства у центрального canvas.
+
+### Изменённые файлы
+
+- `frontend/src/components/Layout.tsx` - route-aware автосворачивание sidebar для project workspace.
+- `frontend/src/pages/ProjectDetailPage.tsx` - удалена внешняя верхняя панель, включён полноэкранный класс.
+- `frontend/src/components/projects/ProjectToolbar.tsx` - добавлены back/action links и новая структура toolbar.
+- `frontend/src/styles/styles.css` - полноэкранная оболочка workspace, стили toolbar и адаптив.
+- `frontend/dist/index.html` и `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run build` в `D:\consulting-automat-lab\frontend` - успешно, `tsc -b && vite build`.
+- `git diff --check` - успешно, замечаний по whitespace нет.
+- `scripts\start-local-lab.ps1` через `powershell.exe -ExecutionPolicy Bypass -File ...` - успешно, frontend доступен на `http://127.0.0.1:5174`.
+- Проверен локальный API после авторизации тестовым пользователем: `/api/projects` возвращает проект `id=1`.
+
+### Риски и следующие шаги
+
+- Визуальный screenshot-тест через in-app Browser не выполнен: навык Browser прочитан, но Node REPL-инструмент для управления браузером не обнаружился через tool discovery в этой сессии.
+- Перед переносом решить, переносить ли обновлённый `frontend/dist`, так как сборка заменила hash-файлы.
+- После появления доступного браузерного инструмента желательно открыть `/projects/1` на desktop и mobile widths и проверить отсутствие горизонтального скролла, корректную высоту canvas и поведение кнопки сворачивания sidebar.
+
+---
+
+## Проекты / Миссия проекта: связки ценности
+
+### Контекст
+
+- Репозиторий: `D:\consulting-automat-lab`
+- Ветка: `telegram-secretary-local-core`
+- Дата: 2026-06-15
+- Цель: заменить разрозненные поля блока "Миссия проекта" на повторяемые связки "для кого / роль / потребность / полезное изменение".
+
+### Что реализовано
+
+- В блоке "Миссия проекта" поле "Для кого проект создает ценность?" стало списком связок.
+- Первая связка показывается сразу, без нажатия "Добавить".
+- Кнопка "Добавить" создает новую строку связки.
+- В каждой связке есть выпадающий список выгодоприобретателя: клиенты, сотрудники, собственник / акционер, подразделение, партнеры, общество / сообщество, другое.
+- При выборе "Другое" появляется дополнительное текстовое поле для уточнения группы.
+- В той же связке заполняются "Уточнение роли / группы", "Какую потребность должна решить" и "Какое полезное изменение должно произойти".
+- Кнопка утверждения с иконкой `check` активируется только после заполнения обязательных полей.
+- После утверждения строка фиксируется, а действия переносятся в меню с тремя точками: "Редактировать" и "Удалить".
+- Поле "Формулировка миссии" сохранено отдельным общим полем.
+- Добавлена адаптивная верстка строк связок для desktop/tablet/mobile.
+- Поля внутри одной связки выровнены по единой сетке: одинаковая ширина колонок и одинаковая высота контролов.
+- Дизайн кнопки утверждения уточнен: иконка стала заметнее, а сам action-control остался компактным круглым элементом, не крупной текстовой кнопкой.
+- Подпись "Какое полезное изменение должно произойти" укорочена до "Полезное изменение" для более аккуратной строки; примеры внутри полей сохранены.
+- Верхний отступ в строках связок уплотнен: зона подписей и высота контролов уменьшены без изменения структуры.
+- Верхняя зона подписей дополнительно уменьшена до визуального баланса с нижним отступом строки.
+- Добавлен визуальный route между полями связки: серые рамки и линии по умолчанию, желтая подсветка заполненных участков, синее состояние после утверждения связки.
+- Раздел "Качество" перестроен в измеримый блок контроля дефектов: объект качества, требование, тип дефекта, метрика, формула, минимально допустимое значение, источник, частота и владелец качества.
+- Минимально допустимое значение сделано составным контролом: направление нормы, число и единица измерения.
+- Источник контроля сделан множественным списком, чтобы можно было собрать комбинации вроде "CRM + журнал жалоб".
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/ProjectTheoryCanvas.tsx` - состояние и UI связок миссии.
+- `frontend/src/styles/styles.css` - стили строк связок, меню действий, кнопки утверждения и адаптива.
+- `frontend/dist/index.html` и `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run build` в `D:\consulting-automat-lab\frontend` - успешно, `tsc -b && vite build`.
+- `npm.cmd exec eslint -- src/components/projects/ProjectTheoryCanvas.tsx` - успешно.
+- `git diff --check` - успешно, замечаний по whitespace нет.
+- `powershell.exe -ExecutionPolicy Bypass -File scripts\start-local-lab.ps1` - успешно.
+- `Invoke-WebRequest http://127.0.0.1:5174/` - `200`.
+- `Invoke-WebRequest http://127.0.0.1:5174/projects` - `200`.
+- `Invoke-WebRequest http://127.0.0.1:8010/api/projects` - backend доступен, ответ `Not authenticated` без сессии.
+
+### Риски и следующие шаги
+
+- Визуальный screenshot-тест через in-app Browser не выполнен: Browser skill прочитан, но Node REPL-инструмент для управления браузером не найден через tool discovery в этой сессии.
+- Данные связок пока живут только в состоянии frontend-компонента, как и остальная текущая форма "Теории проекта"; для продукта нужен следующий шаг с API/моделью сохранения.
+- Перед переносом решить, переносить ли обновлённый `frontend/dist`, так как сборка заменила hash-файлы.
+
+---
+
+## Проекты / Качество как контроль дефектов
+
+### Контекст
+
+- Репозиторий: `D:\consulting-automat-lab`
+- Ветка: `telegram-secretary-local-core`
+- Дата: 2026-06-15
+- Цель: привести модальное окно "Качество" внутри workspace проекта к измеримой структуре контроля дефектов вместо общего текстового показателя качества.
+
+### Что реализовано
+
+- Блок "Качество" оставлен как набор измеримых полей: объект качества, требование, тип дефекта, метрика качества, формула расчета, минимально допустимое значение, источник контроля, частота контроля и владелец качества.
+- Убран лишний контрол привязки к результату внутри самого блока качества, чтобы интерфейс соответствовал заданному списку полей.
+- Список типов дефектов сокращен до дефектной логики: ошибка, возврат, жалоба, переделка, нарушение SLA, неполное выполнение и другое.
+- Метрики качества приведены к измеримым вариантам: % дефектов, % возвратов, количество жалоб, First Pass Yield, SLA, оценка клиента и объектно-специфичные варианты.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/ProjectTheoryCanvas.tsx` - уточнена структура и справочники блока "Качество".
+- `frontend/dist/index.html` и `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run build` в `D:\consulting-automat-lab\frontend` - успешно, `tsc -b && vite build`.
+- `npm.cmd exec eslint src/components/projects/ProjectTheoryCanvas.tsx` - успешно.
+- `git diff --check` - успешно, замечаний по whitespace нет.
+- `npm.cmd run lint` - падает на ранее существующих ошибках вне измененного блока (`Layout.tsx`, `ChatPage.tsx`, `TrackerPage.tsx` и другие); ошибок по `ProjectTheoryCanvas.tsx` нет.
+
+### Риски и следующие шаги
+
+- Данные блока пока живут только в состоянии frontend-компонента, как и остальная текущая форма "Теории проекта"; для продукта нужен следующий шаг с API/моделью сохранения.
+- Перед переносом решить, переносить ли обновлённый `frontend/dist`, если после сборки изменятся hash-файлы.
+
+---
+
+## Проекты / Зависимости блока качества
+
+### Контекст
+
+- Репозиторий: `D:\consulting-automat-lab`
+- Ветка: `telegram-secretary-local-core`
+- Дата: 2026-06-15
+- Цель: добавить зависимость полей блока "Качество" от выбранного объекта качества без изменения визуальной структуры UI.
+
+### Что реализовано
+
+- Добавлено data-driven дерево зависимостей: объект качества -> источник контроля -> тип дефекта -> метрика качества -> формула расчета.
+- При выборе объекта качества автоматически меняются доступные типы дефектов, источники контроля, стартовая метрика и формула расчета.
+- При выборе/снятии типа дефекта список метрик сужается до метрик выбранных дефектов, а формула пересчитывается под выбранную метрику.
+- При выборе метрики качества формула расчета автоматически подставляется из дерева зависимостей.
+- Добавлены зависимости для объектов: продукт / изделие, услуга / сервис, клиентское обслуживание, розничное обслуживание / точка продаж, поставщик / входящий товар, оборудование / инфраструктура и другое.
+- UI не перестраивался: сохранены прежние контролы select, checkbox-list и textarea.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/ProjectTheoryCanvas.tsx` - добавлено дерево зависимостей и обработчики автоматической подстановки.
+- `frontend/dist/index.html` и `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd exec eslint src/components/projects/ProjectTheoryCanvas.tsx` - успешно.
+- `npm.cmd run build` в `D:\consulting-automat-lab\frontend` - успешно, `tsc -b && vite build`.
+- `git diff --check` - успешно, замечаний по whitespace нет.
+
+### Риски и следующие шаги
+
+- Данные блока пока живут только в состоянии frontend-компонента; для продукта нужен следующий шаг с API/моделью сохранения.
+- Перед переносом решить, переносить ли обновлённый `frontend/dist`, так как сборка снова заменила hash-файлы.
+
+---
+
+## Проекты / Экран Диагноз
+
+### Контекст
+
+- Репозиторий: `D:\consulting-automat-lab`
+- Ветка: `telegram-secretary-local-core`
+- Дата: 2026-06-17
+- Цель: добавить в workspace проекта экран "Диагноз", связанный с блоками экрана "Теория проекта".
+
+### Что реализовано
+
+- В центральном canvas для framework-карточки `Диагноз` теперь открывается отдельный экран `ProjectDiagnosisCanvas`.
+- Добавлена связь с экраном "Теория проекта": диагноз проверяет блоки миссии, выгодоприобретателя, критериев результата, компетенций, ограничений, качества и сохраняемого ядра.
+- Добавлены основные блоки диагноза:
+  - сырой запрос клиента;
+  - тип и контекст запроса;
+  - разрывы между Теорией проекта и наблюдаемой реальностью;
+  - симптомы и факты;
+  - область диагноза;
+  - ключевой вызов, тип препятствия, ограничивающий фактор и масштаб;
+  - альтернативные объяснения;
+  - проверки диагноза;
+  - последствия без изменений;
+  - вывод для стратегического выбора;
+  - итоговая формулировка диагноза.
+- Добавлена методологическая проверка диагноза с автоматическим статусом по заполненности ключевых условий.
+- Добавлена frontend-связь с экраном "Теория проекта": `ProjectTheoryCanvas` публикует компактный snapshot по проекту, а `ProjectDiagnosisCanvas` читает его и подставляет ожидаемое состояние в строки разрывов.
+- Строки разрывов в "Диагнозе" создаются по блокам Теории проекта: миссия, выгодоприобретатель, критерии результата, компетенции, ограничения, качество, сохраняемое ядро.
+- При выборе другого связанного блока поле "Ожидаемое состояние из Теории проекта" обновляется из snapshot этого блока.
+- Данные экрана пока живут во frontend: snapshot хранится в `localStorage` по id проекта, полноценной backend-модели сохранения еще нет.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/ProjectCanvas.tsx` - подключено отображение экрана `Диагноз`.
+- `frontend/src/components/projects/ProjectDiagnosisCanvas.tsx` - новый структурированный экран диагноза.
+- `frontend/src/components/projects/ProjectTheoryCanvas.tsx` - добавлена публикация snapshot для зависимостей экрана "Диагноз".
+- `frontend/src/components/projects/ProjectWorkspace.tsx` - id проекта передается в canvas-компоненты.
+- `frontend/src/components/projects/projectTheorySnapshot.ts` - общий тип и helpers для snapshot экрана "Теория проекта".
+- `frontend/src/styles/styles.css` - добавлены стили связей с Теорией проекта и адаптивные сетки диагноза.
+- `frontend/dist/index.html`, `frontend/dist/portal.html` и `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd exec eslint -- src/components/projects/ProjectDiagnosisCanvas.tsx src/components/projects/ProjectCanvas.tsx` в `D:\consulting-automat-lab\frontend` - успешно.
+- `npm.cmd exec eslint -- src/components/projects/ProjectTheoryCanvas.tsx src/components/projects/ProjectDiagnosisCanvas.tsx src/components/projects/ProjectCanvas.tsx src/components/projects/ProjectWorkspace.tsx src/components/projects/projectTheorySnapshot.ts` в `D:\consulting-automat-lab\frontend` - успешно.
+- `npm.cmd run build` в `D:\consulting-automat-lab\frontend` - успешно, `tsc -b && vite build`.
+- `git diff --check` - успешно, замечаний по whitespace нет.
+- `powershell.exe -ExecutionPolicy Bypass -File scripts\start-local-lab.ps1` - успешно.
+- `Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5174/` - `200`.
+- `Invoke-WebRequest -UseBasicParsing http://127.0.0.1:5174/projects` - `200`.
+- `Invoke-WebRequest -UseBasicParsing http://127.0.0.1:8010/api/projects` - backend доступен, ответ `Not authenticated` без сессии.
+
+### Риски и следующие шаги
+
+- Для продукта нужен следующий шаг: модель/API сохранения данных диагноза, сохранение полной формы "Теории проекта" и настоящие relation-связи на backend.
+- Визуальный screenshot-тест через in-app Browser не выполнен: Browser skill прочитан, но tool discovery не предоставил Node/browser runtime в этой сессии.
+- Перед переносом решить, переносить ли `frontend/dist`, если после сборки обновятся hash-файлы.
+
+---
+
+## Проекты / Экран Стратегический выбор
+
+### Контекст
+
+- Репозиторий: `D:\consulting-automat-lab`
+- Ветка: `telegram-secretary-local-core`
+- Дата: 2026-06-17
+- Цель: добавить в workspace проекта экран "Стратегический выбор", связанный с экранами "Диагноз" и "Теория проекта".
+
+### Что реализовано
+
+- В центральном canvas для framework-карточки `Стратегический выбор` теперь открывается отдельный экран `ProjectStrategicChoiceCanvas`.
+- Экран читает snapshot из "Диагноза": ключевой вызов, тип препятствия, ограничивающий фактор, последствия, итоговую формулировку и вывод для стратегического выбора.
+- Экран читает snapshot из "Теории проекта": миссию, выгодоприобретателей, критерии результата, компетенции, ограничения, качество и сохраняемое ядро.
+- Добавлены основные блоки стратегического выбора:
+  - связь с Диагнозом и Теорией проекта;
+  - стратегический вопрос;
+  - winning aspiration;
+  - where to play;
+  - how to win;
+  - тип способа выигрыша;
+  - capabilities;
+  - management systems;
+  - альтернативы выбора;
+  - альтернатива "ничего не делать";
+  - принятый стратегический выбор;
+  - trade-offs;
+  - guiding policy;
+  - coherent actions;
+  - гипотезы и выход в следующий экран;
+  - методологическая проверка.
+- Автогенерация стратегического вопроса использует препятствие из "Диагноза", выгодоприобретателя и критерий результата из "Теории проекта", а также ограничения / сохраняемое ядро.
+- Автогенерация принятого выбора и guiding policy подставляет where/how to win, capabilities, management systems и trade-offs.
+- Добавлен snapshot "Диагноза" в `localStorage`, чтобы следующий экран мог подтягивать его данные по id проекта.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/ProjectCanvas.tsx` - подключено отображение экрана `Стратегический выбор`.
+- `frontend/src/components/projects/ProjectStrategicChoiceCanvas.tsx` - новый структурированный экран стратегического выбора.
+- `frontend/src/components/projects/ProjectDiagnosisCanvas.tsx` - добавлена публикация snapshot для зависимостей экрана "Стратегический выбор".
+- `frontend/src/components/projects/projectDiagnosisSnapshot.ts` - общий тип и helpers для snapshot экрана "Диагноз".
+- `frontend/src/styles/styles.css` - добавлены стили связей с источниками и выходного блока стратегического выбора.
+- `frontend/dist/index.html`, `frontend/dist/portal.html` и `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd exec eslint -- src/components/projects/ProjectStrategicChoiceCanvas.tsx src/components/projects/ProjectCanvas.tsx src/components/projects/ProjectDiagnosisCanvas.tsx src/components/projects/projectDiagnosisSnapshot.ts src/components/projects/projectTheorySnapshot.ts` в `D:\consulting-automat-lab\frontend` - успешно.
+- `npm.cmd run build` в `D:\consulting-automat-lab\frontend` - успешно, `tsc -b && vite build`.
+
+### Риски и следующие шаги
+
+- Данные экранов пока связаны через frontend snapshot в `localStorage`, а не через backend-модель.
+- Для продукта нужен следующий шаг: сохранение полной формы "Стратегического выбора" и relation-связей на backend.
+- Перед переносом решить, переносить ли `frontend/dist`, так как после сборки обновились hash-файлы.
+
+---
+
+## Проекты / Экран Целевое состояние
+
+### Контекст
+
+- Репозиторий: `D:\consulting-automat-lab`
+- Ветка: `telegram-secretary-local-core`
+- Дата: 2026-06-17
+- Цель: добавить в workspace проекта экран "Целевое состояние", связанный с экранами "Теория проекта", "Диагноз" и "Стратегический выбор".
+
+### Что реализовано
+
+- В центральном canvas для framework-карточки `Целевое состояние` теперь открывается отдельный экран `ProjectTargetStateCanvas`.
+- Экран читает snapshot из "Теории проекта": миссию, выгодоприобретателей, критерии результата, компетенции, ограничения, качество и сохраняемое ядро.
+- Экран читает snapshot из "Диагноза": ключевой вызов, препятствие, ограничивающий фактор, разрывы, симптомы, факты и итоговую формулировку.
+- Экран читает snapshot из "Стратегического выбора": winning aspiration, where to play, how to win, capabilities, management systems, trade-offs и guiding policy.
+- Добавлен snapshot "Стратегического выбора" в `localStorage`, чтобы "Целевое состояние" могло подтягивать его данные по id проекта.
+- Добавлены основные блоки целевого состояния:
+  - формулировка целевого состояния;
+  - тип целевого состояния;
+  - целевая позиция / where to play;
+  - способ победы / how to win;
+  - целевые результаты;
+  - целевая ценность для выгодоприобретателей;
+  - целевая операционная модель;
+  - целевые компетенции;
+  - целевые системы управления;
+  - целевое качество;
+  - сохраняемое ядро в целевом состоянии;
+  - таблица "что меняется / что остается";
+  - ограничения в целевом состоянии;
+  - целевое состояние как objective;
+  - key results;
+  - итоговая формулировка;
+  - методологическая проверка.
+- Автогенерация итоговых формулировок использует выбранные данные из предыдущих экранов, но оставляет поля редактируемыми.
+- Добавлена методологическая проверка: экран подсвечивает, хватает ли формулировки, where/how, измеримых результатов, выгодоприобретателей, операционной модели, компетенций, систем управления, качества, сохраняемого ядра, ограничений и key results.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/ProjectCanvas.tsx` - подключено отображение экрана `Целевое состояние`.
+- `frontend/src/components/projects/ProjectTargetStateCanvas.tsx` - новый структурированный экран целевого состояния.
+- `frontend/src/components/projects/ProjectStrategicChoiceCanvas.tsx` - добавлена публикация snapshot для зависимостей экрана "Целевое состояние".
+- `frontend/src/components/projects/projectStrategicChoiceSnapshot.ts` - общий тип и helpers для snapshot экрана "Стратегический выбор".
+- `frontend/dist/index.html`, `frontend/dist/portal.html` и `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd exec eslint -- src/components/projects/ProjectTargetStateCanvas.tsx src/components/projects/ProjectStrategicChoiceCanvas.tsx src/components/projects/ProjectCanvas.tsx src/components/projects/projectStrategicChoiceSnapshot.ts` в `D:\consulting-automat-lab\frontend` - успешно.
+- `npm.cmd run build` в `D:\consulting-automat-lab\frontend` - успешно, `tsc -b && vite build`.
+
+### Риски и следующие шаги
+
+- Данные экранов пока связаны через frontend snapshot в `localStorage`, а не через backend-модель.
+- Для продукта нужен следующий шаг: сохранение полной формы "Целевого состояния" и relation-связей на backend.
+- Перед переносом решить, переносить ли `frontend/dist`, так как после сборки обновились hash-файлы.
+
+---
+
+## Проекты / Оставшиеся разделы и финальная проверка
+
+### Контекст
+
+- Репозиторий: `D:\consulting-automat-lab`
+- Ветка: `telegram-secretary-local-core`
+- Дата: 2026-06-17
+- Цель: добавить оставшиеся разделы фреймворка проекта и экран "Весь проект" для финальной проверки связности.
+
+### Что реализовано
+
+- Добавлен общий экран `ProjectFrameworkSectionCanvas` для оставшихся разделов:
+  - `Стратегическая карта`;
+  - `Гипотезы`;
+  - `Проверки`;
+  - `Решения`;
+  - `OKR / KPI`;
+  - `Инициативы`;
+  - `Бизнес-процессы`;
+  - `Задачи`;
+  - `Факты и обучение`.
+- Для каждого раздела настроены:
+  - карточки с повторяемыми сущностями;
+  - поля по деревьям из методических `.txt` файлов;
+  - блок связи с предыдущими экранами;
+  - методологическая проверка заполненности;
+  - frontend snapshot в `localStorage` по id проекта.
+- Добавлен экран `Весь проект`:
+  - показывает сквозную зависимость всего фреймворка;
+  - читает snapshots всех разделов;
+  - показывает статусы разделов и количество заполненных карточек;
+  - выполняет финальную методологическую проверку графа проекта.
+- Добавлен snapshot "Целевого состояния", чтобы последующие разделы и финальная проверка могли читать его выходы.
+- В дерево карточек проекта добавлен новый раздел `Весь проект` с order `14`.
+- Обновлен тест дерева карточек проекта под 14 разделов.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/ProjectCanvas.tsx` - подключены оставшиеся разделы и экран `Весь проект`.
+- `frontend/src/components/projects/ProjectFrameworkSectionCanvas.tsx` - новый общий экран для операционных разделов фреймворка.
+- `frontend/src/components/projects/ProjectWholeProjectCanvas.tsx` - новый экран финальной проверки всего проекта.
+- `frontend/src/components/projects/ProjectTargetStateCanvas.tsx` - добавлена публикация snapshot целевого состояния.
+- `frontend/src/components/projects/projectFrameworkCards.ts` - добавлена карточка `Весь проект`.
+- `frontend/src/components/projects/projectFrameworkCards.test.ts` - обновлен тест порядка и состава карточек.
+- `frontend/src/components/projects/projectFrameworkSectionSnapshot.ts` - общий snapshot для оставшихся разделов.
+- `frontend/src/components/projects/projectTargetStateSnapshot.ts` - snapshot экрана "Целевое состояние".
+- `frontend/dist/index.html`, `frontend/dist/portal.html` и `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd exec eslint -- src/components/projects/ProjectFrameworkSectionCanvas.tsx src/components/projects/ProjectWholeProjectCanvas.tsx src/components/projects/ProjectTargetStateCanvas.tsx src/components/projects/ProjectCanvas.tsx src/components/projects/projectFrameworkCards.ts src/components/projects/projectFrameworkCards.test.ts src/components/projects/projectFrameworkSectionSnapshot.ts src/components/projects/projectTargetStateSnapshot.ts` в `D:\consulting-automat-lab\frontend` - успешно.
+- `npm.cmd run test -- src/components/projects/projectFrameworkCards.test.ts` в `D:\consulting-automat-lab\frontend` - успешно, 2 теста пройдены.
+- `npm.cmd run build` в `D:\consulting-automat-lab\frontend` - успешно, `tsc -b && vite build`.
+
+### Риски и следующие шаги
+
+- Данные новых экранов пока живут во frontend snapshot в `localStorage`; backend-модели и relation-связи для этих разделов еще не добавлены.
+- Экран "Гипотезы" восстановлен по общей архитектуре из `Весь проект.txt`, так как `Гипотезы.txt` на рабочем столе пустой.
+- Перед переносом решить, переносить ли `frontend/dist`, так как после сборки обновились hash-файлы.

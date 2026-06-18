@@ -30,6 +30,8 @@ from .routes import (  # noqa: E402
     goals,
     kaiten,
     knowledge,
+    portal,
+    portal_users,
     projects,
     secretary,
     sources,
@@ -240,6 +242,8 @@ async def health():
 # Register routers
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
+app.include_router(portal_users.router, prefix="/api/clients", tags=["portal-users"])
+app.include_router(portal.router, prefix="/api/portal", tags=["portal"])
 app.include_router(briefs.router, prefix="/api/briefs", tags=["briefs"])
 app.include_router(company.router, prefix="/api/company", tags=["company"])
 app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
@@ -264,6 +268,12 @@ if os.path.isdir(_DIST):
         # /api/* сюда попадать не должен, но на всякий случай отдаём 404
         if full_path.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not found")
+        # Клиентский портал — ОТДЕЛЬНЫЙ бандл (portal.html). Любой путь /portal*
+        # без собственного файла отдаём в portal.html, чтобы он не подменялся
+        # основным приложением (index.html).
+        portal_index = os.path.join(_DIST, "portal.html")
+        if (full_path == "portal" or full_path.startswith("portal/")) and os.path.isfile(portal_index):
+            return FileResponse(portal_index)
         # Защита от path traversal: нормализуем путь и отдаём файл только если
         # он реально лежит внутри dist; всё остальное (вкл. /../...) — SPA fallback.
         candidate = os.path.normpath(os.path.join(_DIST, full_path))

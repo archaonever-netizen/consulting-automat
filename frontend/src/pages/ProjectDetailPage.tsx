@@ -1,4 +1,4 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import Icon from '../components/Icon';
 import ProjectWorkspace from '../components/projects/ProjectWorkspace';
@@ -32,15 +32,7 @@ export default function ProjectDetailPage() {
   }
 
   return (
-    <div className="page project-detail-page">
-      <div className="detail-top">
-        <Link to="/projects" className="back"><Icon name="arrowLeft" size={18} />Проекты</Link>
-        <div className="detail-top-actions">
-          <Link to={`/clients/${project.client_id}`} className="btn btn-ghost btn-sm">
-            <Icon name="users" size={16} />Карточка клиента
-          </Link>
-        </div>
-      </div>
+    <div className="page project-detail-page project-modal-page">
       <ProjectWorkspace project={project} />
     </div>
   );

@@ -84,4 +84,10 @@ export const PROJECT_FRAMEWORK_CARDS: ProjectFrameworkCard[] = [
     description: 'Фактические данные, обратная связь, выводы и обновление модели проекта.',
     order: 13,
   },
+  {
+    id: 'whole-project',
+    title: 'Весь проект',
+    description: 'Финальная проверка связности всего фреймворка проекта.',
+    order: 14,
+  },
 ];

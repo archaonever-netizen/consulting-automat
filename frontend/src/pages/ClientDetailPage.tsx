@@ -5,10 +5,12 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
 import ProjectFormModal from '../components/ProjectFormModal';
+import ClientOrgStructure from '../components/clients/ClientOrgStructure';
+import ClientDocuments from '../components/clients/ClientDocuments';
 import { ShefMonoGlyph } from '../components/Logo';
 import type { Project } from '../types/projects';
 
-type Tab = 'overview' | 'projects' | 'briefs' | 'docs' | 'analytics' | 'tasks';
+type Tab = 'overview' | 'projects' | 'briefs' | 'org' | 'docs' | 'analytics' | 'tasks';
 
 interface BriefItem {
   id: number;
@@ -47,7 +49,7 @@ interface BriefCatalog {
   common: BriefMeta[];
 }
 const TAB_LABELS: Record<Tab, string> = {
-  overview: 'Обзор', projects: 'Проекты', briefs: 'Брифы', docs: 'Документы', analytics: 'Аналитика', tasks: 'Задачи',
+  overview: 'Обзор', projects: 'Проекты', briefs: 'Брифы', org: 'Организационная структура', docs: 'Документы', analytics: 'Аналитика', tasks: 'Задачи',
 };
 
 function statusPill(status: string) {
@@ -91,6 +93,19 @@ export default function ClientDetailPage() {
     await queryClient.invalidateQueries({ queryKey: ['clients'] });
     queryClient.invalidateQueries({ queryKey: ['projects'] });
     queryClient.invalidateQueries({ queryKey: ['home'] });
+  }
+
+  // «Вид для клиента»: берём короткий preview-токен и открываем портал в новой
+  // вкладке. Открываем portal.html — путь работает и в dev (vite), и в проде.
+  async function openClientView() {
+    if (!client) return;
+    try {
+      const res = await api.post(`/api/clients/${client.id}/portal-preview`);
+      const token: string = res.data.token;
+      window.open(`/portal.html?preview=${encodeURIComponent(token)}`, '_blank', 'noopener');
+    } catch {
+      alert('Не удалось открыть предпросмотр портала');
+    }
   }
 
   async function changeSize(size: string) {
@@ -202,6 +217,9 @@ export default function ClientDetailPage() {
             </div>
           </div>
           <div className="hero-actions">
+            <button className="btn btn-ghost" onClick={openClientView}>
+              <Icon name="share" size={16} />Вид для клиента
+            </button>
             <button className="btn btn-primary" onClick={() => navigate('/orchestration')}>
               <Icon name="sparkle" size={17} />Анализ в Сети агентов
             </button>
@@ -210,7 +228,7 @@ export default function ClientDetailPage() {
 
         <div className="detail-tabs">
           <div className="tabs">
-            {(['overview', 'projects', 'briefs', 'docs', 'analytics', 'tasks'] as Tab[]).map(t => (
+            {(['overview', 'projects', 'briefs', 'org', 'docs', 'analytics', 'tasks'] as Tab[]).map(t => (
               <button key={t} className={`tab${tab === t ? ' active' : ''}`} onClick={() => setTab(t)}>
                 {TAB_LABELS[t]}
               </button>
@@ -424,13 +442,9 @@ export default function ClientDetailPage() {
           </div>
         )}
 
-        {tab === 'docs' && (
-          <div className="empty-tab" style={{ marginTop: 22 }}>
-            <div className="ei"><Icon name="doc" size={24} /></div>
-            <b>Документы клиента</b>
-            <span>Загрузите финансовую отчётность, договоры и выгрузки CRM — ИИ проанализирует их автоматически.</span>
-          </div>
-        )}
+        {tab === 'org' && <ClientOrgStructure clientId={client.id} />}
+
+        {tab === 'docs' && <ClientDocuments clientId={client.id} />}
         {tab === 'analytics' && (
           <div className="empty-tab" style={{ marginTop: 22 }}>
             <div className="ei"><Icon name="chart" size={24} /></div>

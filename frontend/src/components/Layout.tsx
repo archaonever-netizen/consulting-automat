@@ -1,4 +1,4 @@
-import { Outlet, NavLink, useNavigate } from 'react-router-dom';
+import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Suspense, useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import api from '../services/api';
@@ -45,7 +45,11 @@ function initials(name: string): string {
 
 export default function Layout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [collapsed, setCollapsed] = useState(() => localStorage.getItem('sidebar_collapsed') === '1');
+  const [projectSidebarExpanded, setProjectSidebarExpanded] = useState(false);
+  const isProjectWorkspaceRoute = /^\/projects\/[^/]+/.test(location.pathname);
+  const sidebarCollapsed = collapsed || (isProjectWorkspaceRoute && !projectSidebarExpanded);
   // Общий ключ ['me'] с HomePage/KnowledgePage: профиль грузится один раз
   // и держится 5 минут — каркас при переходах рисуется мгновенно.
   const { data: user, isLoading: loading, isError } = useQuery<User>({
@@ -54,8 +58,22 @@ export default function Layout() {
     staleTime: 5 * 60_000,
   });
   useEffect(() => { if (isError) navigate('/login'); }, [isError, navigate]);
+  useEffect(() => { setProjectSidebarExpanded(false); }, [location.pathname]);
 
   function toggleSidebar() {
+    if (isProjectWorkspaceRoute) {
+      if (sidebarCollapsed) {
+        if (collapsed) {
+          localStorage.setItem('sidebar_collapsed', '0');
+          setCollapsed(false);
+        }
+        setProjectSidebarExpanded(true);
+        return;
+      }
+      setProjectSidebarExpanded(false);
+      return;
+    }
+
     setCollapsed(current => {
       const next = !current;
       localStorage.setItem('sidebar_collapsed', next ? '1' : '0');
@@ -69,7 +87,7 @@ export default function Layout() {
 
   return (
     <div className="app">
-      <aside className={'sidebar' + (collapsed ? ' sb-collapsed' : '')}>
+      <aside className={'sidebar' + (sidebarCollapsed ? ' sb-collapsed' : '')}>
         <div className="sb-logo">
           <ShefWordmark className="sb-mark" />
           <span className="tag">ИИ-консалтинг</span>
@@ -102,9 +120,9 @@ export default function Layout() {
           <span className="grow" />
           <button
             className="sb-collapse-toggle"
-            title={collapsed ? 'Развернуть' : 'Свернуть'}
-            aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
-            aria-pressed={collapsed}
+            title={sidebarCollapsed ? 'Развернуть' : 'Свернуть'}
+            aria-label={sidebarCollapsed ? 'Развернуть меню' : 'Свернуть меню'}
+            aria-pressed={sidebarCollapsed}
             onClick={toggleSidebar}
           >
             <Icon name="arrowLeft" size={18} />

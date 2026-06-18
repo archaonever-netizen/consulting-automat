@@ -1,5 +1,11 @@
 import Icon from '../Icon';
+import ProjectDiagnosisCanvas from './ProjectDiagnosisCanvas';
+import ProjectFrameworkSectionCanvas from './ProjectFrameworkSectionCanvas';
+import ProjectOkrCanvas from './ProjectOkrCanvas';
+import ProjectStrategicChoiceCanvas from './ProjectStrategicChoiceCanvas';
+import ProjectTargetStateCanvas from './ProjectTargetStateCanvas';
 import ProjectTheoryCanvas from './ProjectTheoryCanvas';
+import ProjectWholeProjectCanvas from './ProjectWholeProjectCanvas';
 
 export interface ProjectCanvasView {
   icon: string;
@@ -9,14 +15,72 @@ export interface ProjectCanvasView {
 }
 
 interface ProjectCanvasProps {
+  projectId: number;
   view: ProjectCanvasView;
 }
 
-export default function ProjectCanvas({ view }: ProjectCanvasProps) {
+export default function ProjectCanvas({ projectId, view }: ProjectCanvasProps) {
   if (view.frameworkCardId === 'project-theory') {
     return (
       <section className="project-canvas project-canvas-work">
-        <ProjectTheoryCanvas />
+        <ProjectTheoryCanvas key={projectId} projectId={projectId} />
+      </section>
+    );
+  }
+
+  if (view.frameworkCardId === 'diagnosis') {
+    return (
+      <section className="project-canvas project-canvas-work">
+        <ProjectDiagnosisCanvas key={projectId} projectId={projectId} />
+      </section>
+    );
+  }
+
+  if (view.frameworkCardId === 'strategic-choice') {
+    return (
+      <section className="project-canvas project-canvas-work">
+        <ProjectStrategicChoiceCanvas key={projectId} projectId={projectId} />
+      </section>
+    );
+  }
+
+  if (view.frameworkCardId === 'target-state') {
+    return (
+      <section className="project-canvas project-canvas-work">
+        <ProjectTargetStateCanvas key={projectId} projectId={projectId} />
+      </section>
+    );
+  }
+
+  if (view.frameworkCardId === 'whole-project') {
+    return (
+      <section className="project-canvas project-canvas-work">
+        <ProjectWholeProjectCanvas key={projectId} projectId={projectId} />
+      </section>
+    );
+  }
+
+  if (view.frameworkCardId === 'okr-kpi') {
+    return (
+      <section className="project-canvas project-canvas-work">
+        <ProjectOkrCanvas key={projectId} projectId={projectId} />
+      </section>
+    );
+  }
+
+  if (view.frameworkCardId && [
+    'strategy-map',
+    'hypotheses',
+    'experiments',
+    'decisions',
+    'initiatives',
+    'business-processes',
+    'tasks',
+    'facts-learning',
+  ].includes(view.frameworkCardId)) {
+    return (
+      <section className="project-canvas project-canvas-work">
+        <ProjectFrameworkSectionCanvas key={`${projectId}-${view.frameworkCardId}`} projectId={projectId} screenId={view.frameworkCardId} />
       </section>
     );
   }

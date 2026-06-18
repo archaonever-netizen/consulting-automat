@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Project } from '../../types/projects';
 import ProjectCanvas from './ProjectCanvas';
+import { seedFrameworkSectionSnapshots } from './ProjectFrameworkSectionCanvas';
 import ProjectLeftPanel from './ProjectLeftPanel';
+import { seedOkrSnapshot } from './ProjectOkrCanvas';
 import ProjectRightPanel from './ProjectRightPanel';
 import ProjectToolbar from './ProjectToolbar';
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
@@ -53,6 +55,11 @@ interface ProjectWorkspaceProps {
 export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState(PROJECT_FRAMEWORK_CARDS[0].id);
+
+  useEffect(() => {
+    seedFrameworkSectionSnapshots(project.id);
+    seedOkrSnapshot(project.id);
+  }, [project.id]);
   const activeSection = activeSectionId
     ? PROJECT_SECTIONS.find(section => section.id === activeSectionId) || null
     : null;
@@ -92,7 +99,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           activeCardId={activeSection ? null : activeFrameworkCard.id}
           onSelectFrameworkCard={selectFrameworkCard}
         />
-        <ProjectCanvas view={canvasView} />
+        <ProjectCanvas projectId={project.id} view={canvasView} />
         <ProjectRightPanel project={project} />
       </div>
     </div>

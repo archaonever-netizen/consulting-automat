@@ -55,6 +55,10 @@ Thumbs.db
 *.docx
 uvicorn_test*.log
 
+# Local runtime artifacts (PID-файлы, профиль браузера, логи) — регенерируются
+.local-lab/
+logs/
+
 # Claude Code
 .claude/
 .agents/
