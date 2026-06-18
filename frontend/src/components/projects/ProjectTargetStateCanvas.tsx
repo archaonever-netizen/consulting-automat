@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetSt
 import Icon from '../Icon';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
-import { writeProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
+import { readProjectTargetStateSnapshot, writeProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
 import { getFallbackProjectTheorySnapshot, readProjectTheorySnapshot, type ProjectTheoryBlockId } from './projectTheorySnapshot';
 
 type TargetState = {
@@ -336,6 +336,20 @@ function TargetSection({ number, title, note, children }: { number: string; titl
   );
 }
 
+type TargetForm = {
+  target: TargetState;
+  targetResults: TargetResult[];
+  stakeholderValues: StakeholderValue[];
+  operatingModels: OperatingModel[];
+  capabilityTargets: CapabilityTarget[];
+  managementTargets: ManagementSystemTarget[];
+  qualityTargets: QualityTarget[];
+  preserveTargets: PreserveTarget[];
+  constraintTargets: ConstraintTarget[];
+  comparisonRows: ComparisonRow[];
+  keyResults: KeyResult[];
+};
+
 interface ProjectTargetStateCanvasProps {
   projectId: number;
 }
@@ -365,23 +379,24 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
     ...strategy.capabilities.map(item => item.label),
   ].filter(Boolean);
 
-  const [target, setTarget] = useState<TargetState>(createTargetState);
-  const [targetResults, setTargetResults] = useState<TargetResult[]>(() => [createTargetResult(1, resultOptions[0] || '')]);
-  const [stakeholderValues, setStakeholderValues] = useState<StakeholderValue[]>(() => [createStakeholderValue(1, stakeholderOptions[0] || '')]);
-  const [operatingModels, setOperatingModels] = useState<OperatingModel[]>([createOperatingModel(1)]);
-  const [capabilityTargets, setCapabilityTargets] = useState<CapabilityTarget[]>(() => [createCapabilityTarget(1, competencyOptions[0] || strategy.capabilities[0]?.label || '')]);
-  const [managementTargets, setManagementTargets] = useState<ManagementSystemTarget[]>([createManagementSystemTarget(1)]);
-  const [qualityTargets, setQualityTargets] = useState<QualityTarget[]>(() => [createQualityTarget(1, qualityOptions[0] || '')]);
-  const [preserveTargets, setPreserveTargets] = useState<PreserveTarget[]>(() => [createPreserveTarget(1, preserveOptions[0] || '')]);
-  const [constraintTargets, setConstraintTargets] = useState<ConstraintTarget[]>(() => [createConstraintTarget(1, constraintOptions[0] || '')]);
-  const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>(createComparisonRows);
-  const [keyResults, setKeyResults] = useState<KeyResult[]>([createKeyResult(1)]);
+  const savedForm = useMemo(() => readProjectTargetStateSnapshot(projectId)?.form as TargetForm | undefined, [projectId]);
+  const [target, setTarget] = useState<TargetState>(() => savedForm?.target ?? createTargetState());
+  const [targetResults, setTargetResults] = useState<TargetResult[]>(() => savedForm?.targetResults ?? [createTargetResult(1, resultOptions[0] || '')]);
+  const [stakeholderValues, setStakeholderValues] = useState<StakeholderValue[]>(() => savedForm?.stakeholderValues ?? [createStakeholderValue(1, stakeholderOptions[0] || '')]);
+  const [operatingModels, setOperatingModels] = useState<OperatingModel[]>(() => savedForm?.operatingModels ?? [createOperatingModel(1)]);
+  const [capabilityTargets, setCapabilityTargets] = useState<CapabilityTarget[]>(() => savedForm?.capabilityTargets ?? [createCapabilityTarget(1, competencyOptions[0] || strategy.capabilities[0]?.label || '')]);
+  const [managementTargets, setManagementTargets] = useState<ManagementSystemTarget[]>(() => savedForm?.managementTargets ?? [createManagementSystemTarget(1)]);
+  const [qualityTargets, setQualityTargets] = useState<QualityTarget[]>(() => savedForm?.qualityTargets ?? [createQualityTarget(1, qualityOptions[0] || '')]);
+  const [preserveTargets, setPreserveTargets] = useState<PreserveTarget[]>(() => savedForm?.preserveTargets ?? [createPreserveTarget(1, preserveOptions[0] || '')]);
+  const [constraintTargets, setConstraintTargets] = useState<ConstraintTarget[]>(() => savedForm?.constraintTargets ?? [createConstraintTarget(1, constraintOptions[0] || '')]);
+  const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>(() => savedForm?.comparisonRows ?? createComparisonRows());
+  const [keyResults, setKeyResults] = useState<KeyResult[]>(() => savedForm?.keyResults ?? [createKeyResult(1)]);
 
   const statement = target.statement || `[система / функция / команда] работает для ${target.whereClient || strategy.whereClient || stakeholder.items[0]?.label || '[клиент / выгодоприобретатель]'} так, что ${targetResults[0]?.target || results.items[0]?.label || '[измеримый результат]'}, за счет ${target.howApproach || strategy.howToWin || '[how to win / capabilities / management systems]'}, без нарушения ${constraints.items[0]?.label || preserve.items[0]?.label || '[ограничения / сохраняемое ядро]'}.`;
   const finalStatement = target.finalStatement || `В целевом состоянии [система / функция / команда] действует в ${compactJoin([target.whereClient || strategy.whereClient, target.whereGeography || strategy.whereGeography, target.whereProduct || strategy.whereProduct, target.whereProcess || strategy.whereProcess]) || '[where to play]'}, выигрывает за счет ${target.howApproach || strategy.howToWin || '[how to win]'}, создает ${target.howValue || strategy.howValue || '[ценность]'} для ${target.whereClient || strategy.whereClient || stakeholder.items[0]?.label || '[клиент / выгодоприобретатель]'}, достигает ${targetResults.map(item => item.target || item.criterion).filter(Boolean).join(', ') || '[целевые результаты]'}, поддерживается ${capabilityTargets.map(item => item.competency).filter(Boolean).join(', ') || '[capabilities]'} + ${strategy.managementSystems || '[management systems]'}, соблюдает ${constraintTargets.map(item => item.constraint).filter(Boolean).join(', ') || '[ограничения]'} + ${qualityTargets.map(item => item.qualityIndicator).filter(Boolean).join(', ') || '[качество]'} и сохраняет ${preserveTargets.map(item => item.preserveElement).filter(Boolean).join(', ') || '[ядро]'}.`;
 
   useEffect(() => {
-    writeProjectTargetStateSnapshot(projectId, {
+    const timer = setTimeout(() => writeProjectTargetStateSnapshot(projectId, {
       projectId,
       updatedAt: new Date().toISOString(),
       statement,
@@ -435,19 +450,30 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         label: item.name.trim() || item.statement || `Key Result ${item.id}`,
         summary: compactJoin([item.metric, item.target, item.deadline, item.controlSource, item.indisputable]),
       })),
-    });
+      form: {
+        target, targetResults, stakeholderValues, operatingModels, capabilityTargets,
+        managementTargets, qualityTargets, preserveTargets, constraintTargets, comparisonRows, keyResults,
+      } satisfies TargetForm,
+    }), 400);
+    return () => clearTimeout(timer);
   }, [
     capabilityTargets,
+    comparisonRows,
     constraintTargets,
+    constraints.items,
     finalStatement,
     keyResults,
     managementTargets,
     operatingModels,
+    preserve.items,
     preserveTargets,
     projectId,
+    quality.items,
     qualityTargets,
+    results.items,
     statement,
     stakeholderValues,
+    strategy.capabilities,
     strategy.howAdvantage,
     strategy.howToWin,
     strategy.howValue,

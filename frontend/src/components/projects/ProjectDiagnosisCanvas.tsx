@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Icon from '../Icon';
-import { writeProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
+import { readProjectDiagnosisSnapshot, writeProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import {
   getFallbackProjectTheorySnapshot,
   readProjectTheorySnapshot,
@@ -82,6 +82,16 @@ type ConsequenceCard = {
   timing: string;
   damage: string;
   source: string;
+};
+
+type DiagnosisForm = {
+  diagnosis: DiagnosisState;
+  gaps: GapCard[];
+  symptoms: SymptomCard[];
+  facts: FactCard[];
+  alternatives: AlternativeCard[];
+  verifications: VerificationCard[];
+  consequences: ConsequenceCard[];
 };
 
 const statusOptions = ['Не заполнено', 'Заполнено частично', 'Есть методологическая ошибка', 'Валидно'];
@@ -406,13 +416,14 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
     [projectId],
   );
   const theoryRelations = theorySnapshot.blocks.length ? theorySnapshot.blocks : fallbackTheoryRelations;
-  const [diagnosis, setDiagnosis] = useState<DiagnosisState>(createDiagnosis);
-  const [gaps, setGaps] = useState<GapCard[]>(() => createGapsFromRelations(theoryRelations));
-  const [symptoms, setSymptoms] = useState<SymptomCard[]>([createSymptom(1)]);
-  const [facts, setFacts] = useState<FactCard[]>([createFact(1)]);
-  const [alternatives, setAlternatives] = useState<AlternativeCard[]>([createAlternative(1)]);
-  const [verifications, setVerifications] = useState<VerificationCard[]>([createVerification(1)]);
-  const [consequences, setConsequences] = useState<ConsequenceCard[]>([createConsequence(1)]);
+  const savedForm = useMemo(() => readProjectDiagnosisSnapshot(projectId)?.form as DiagnosisForm | undefined, [projectId]);
+  const [diagnosis, setDiagnosis] = useState<DiagnosisState>(() => savedForm?.diagnosis ?? createDiagnosis());
+  const [gaps, setGaps] = useState<GapCard[]>(() => savedForm?.gaps ?? createGapsFromRelations(theoryRelations));
+  const [symptoms, setSymptoms] = useState<SymptomCard[]>(() => savedForm?.symptoms ?? [createSymptom(1)]);
+  const [facts, setFacts] = useState<FactCard[]>(() => savedForm?.facts ?? [createFact(1)]);
+  const [alternatives, setAlternatives] = useState<AlternativeCard[]>(() => savedForm?.alternatives ?? [createAlternative(1)]);
+  const [verifications, setVerifications] = useState<VerificationCard[]>(() => savedForm?.verifications ?? [createVerification(1)]);
+  const [consequences, setConsequences] = useState<ConsequenceCard[]>(() => savedForm?.consequences ?? [createConsequence(1)]);
 
   const gapNames = gaps.map((gap, index) => `${index + 1}. ${getRelation(theoryRelations, gap.theoryBlock).title}`);
   const symptomNames = symptoms.map((symptom, index) => symptom.description || `Симптом ${index + 1}`);
@@ -466,6 +477,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
         label: consequence.deterioration || `Последствие ${index + 1}`,
         summary: compactJoin([consequence.deterioration, consequence.affected, consequence.timing, consequence.damage, consequence.source]),
       })),
+      form: { diagnosis, gaps, symptoms, facts, alternatives, verifications, consequences } satisfies DiagnosisForm,
     }), 400);
     return () => clearTimeout(timer);
   }, [
@@ -478,6 +490,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
     projectId,
     symptoms,
     theoryRelations,
+    verifications,
   ]);
 
   const validationChecks = [

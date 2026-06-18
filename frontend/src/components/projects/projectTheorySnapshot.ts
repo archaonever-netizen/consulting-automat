@@ -27,6 +27,9 @@ export type ProjectTheorySnapshot = {
   projectId: number;
   updatedAt: string;
   blocks: ProjectTheoryBlockSnapshot[];
+  // Полное состояние редактора (lossless) для восстановления ввода при возврате на экран.
+  // blocks выше — производная выжимка для нижележащих экранов.
+  form?: unknown;
 };
 
 export const PROJECT_THEORY_BLOCKS: Array<Omit<ProjectTheoryBlockSnapshot, 'expectedState' | 'items'>> = [

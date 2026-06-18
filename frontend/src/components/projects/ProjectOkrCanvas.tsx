@@ -139,6 +139,7 @@ function buildOkrSnapshot(projectId: number, objectives: ObjectiveCard[]): Proje
     })),
     completedChecks: checks.filter(([, value]) => value).length,
     totalChecks: checks.length,
+    form: objectives,
   };
 }
 
@@ -210,13 +211,19 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
     [theory],
   );
 
-  const [objectives, setObjectives] = useState<ObjectiveCard[]>(() => buildInitialObjectives(target));
+  const [objectives, setObjectives] = useState<ObjectiveCard[]>(() => {
+    const savedForm = readProjectFrameworkSectionSnapshot(projectId, SECTION_ID)?.form as ObjectiveCard[] | undefined;
+    return savedForm?.length ? savedForm : buildInitialObjectives(target);
+  });
 
   const validationChecks = buildOkrValidationChecks(objectives);
   const completedChecks = validationChecks.filter(([, value]) => value).length;
 
   useEffect(() => {
-    writeProjectFrameworkSectionSnapshot(projectId, SECTION_ID, buildOkrSnapshot(projectId, objectives));
+    const timer = setTimeout(() => {
+      writeProjectFrameworkSectionSnapshot(projectId, SECTION_ID, buildOkrSnapshot(projectId, objectives));
+    }, 400);
+    return () => clearTimeout(timer);
   }, [objectives, projectId]);
 
   function updateObjective(id: number, patch: Partial<ObjectiveCard>) {

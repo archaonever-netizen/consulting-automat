@@ -533,6 +533,7 @@ function buildSectionSnapshot(projectId: number, config: ScreenConfig, sources: 
     })),
     completedChecks: checks.filter(([, value]) => hasText(value)).length,
     totalChecks: checks.length,
+    form: records,
   };
 }
 
@@ -569,7 +570,11 @@ interface ProjectFrameworkSectionCanvasProps {
 export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: ProjectFrameworkSectionCanvasProps) {
   const sources = useProjectSources(projectId);
   const config = createConfigs(sources)[screenId];
-  const [records, setRecords] = useState<RecordState[]>(() => config ? [createRecord(config, sources, 1)] : []);
+  const [records, setRecords] = useState<RecordState[]>(() => {
+    const savedForm = readProjectFrameworkSectionSnapshot(projectId, screenId)?.form as RecordState[] | undefined;
+    if (savedForm?.length) return savedForm;
+    return config ? [createRecord(config, sources, 1)] : [];
+  });
 
   const validationChecks = useMemo<Array<[string, string]>>(() => config ? buildValidationChecks(config, sources, records) : [], [config, records, sources]);
 
@@ -577,7 +582,10 @@ export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: P
 
   useEffect(() => {
     if (!config) return;
-    writeProjectFrameworkSectionSnapshot(projectId, config.id, buildSectionSnapshot(projectId, config, sources, records));
+    const timer = setTimeout(() => {
+      writeProjectFrameworkSectionSnapshot(projectId, config.id, buildSectionSnapshot(projectId, config, sources, records));
+    }, 400);
+    return () => clearTimeout(timer);
   }, [config, projectId, records, sources]);
 
   if (!config) {

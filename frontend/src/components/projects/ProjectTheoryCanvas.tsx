@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Icon from '../Icon';
-import { PROJECT_THEORY_BLOCKS, writeProjectTheorySnapshot, type ProjectTheorySnapshotItem } from './projectTheorySnapshot';
+import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot, writeProjectTheorySnapshot, type ProjectTheorySnapshotItem } from './projectTheorySnapshot';
 
 type ResultCriterion = {
   id: number;
@@ -2053,24 +2053,41 @@ function getCriterionMethodStatus(criterion: ResultCriterion) {
   return `${progress.done}/${progress.total} проверок`;
 }
 
+type TheoryForm = {
+  mission: MissionCard;
+  stakeholders: StakeholderCard[];
+  nextStakeholderId: number;
+  criteria: ResultCriterion[];
+  nextCriterionId: number;
+  competencies: CompetencyCard[];
+  nextCompetencyId: number;
+  constraints: ConstraintCard[];
+  nextConstraintId: number;
+  qualityIndicators: QualityIndicatorCard[];
+  nextQualityIndicatorId: number;
+  preserveElements: PreserveElementCard[];
+  nextPreserveElementId: number;
+};
+
 interface ProjectTheoryCanvasProps {
   projectId: number;
 }
 
 export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasProps) {
-  const [mission, setMission] = useState<MissionCard>(createMissionCard);
-  const [stakeholders, setStakeholders] = useState<StakeholderCard[]>([createStakeholderCard(1)]);
-  const [nextStakeholderId, setNextStakeholderId] = useState(2);
-  const [criteria, setCriteria] = useState<ResultCriterion[]>([createCriterion(1)]);
-  const [nextCriterionId, setNextCriterionId] = useState(2);
-  const [competencies, setCompetencies] = useState<CompetencyCard[]>([createCompetencyCard(1)]);
-  const [nextCompetencyId, setNextCompetencyId] = useState(2);
-  const [constraints, setConstraints] = useState<ConstraintCard[]>([createConstraintCard(1)]);
-  const [nextConstraintId, setNextConstraintId] = useState(2);
-  const [qualityIndicators, setQualityIndicators] = useState<QualityIndicatorCard[]>([createQualityIndicatorCard(1)]);
-  const [nextQualityIndicatorId, setNextQualityIndicatorId] = useState(2);
-  const [preserveElements, setPreserveElements] = useState<PreserveElementCard[]>([createPreserveElementCard(1)]);
-  const [nextPreserveElementId, setNextPreserveElementId] = useState(2);
+  const savedForm = useMemo(() => readProjectTheorySnapshot(projectId)?.form as TheoryForm | undefined, [projectId]);
+  const [mission, setMission] = useState<MissionCard>(() => savedForm?.mission ?? createMissionCard());
+  const [stakeholders, setStakeholders] = useState<StakeholderCard[]>(() => savedForm?.stakeholders ?? [createStakeholderCard(1)]);
+  const [nextStakeholderId, setNextStakeholderId] = useState(() => savedForm?.nextStakeholderId ?? 2);
+  const [criteria, setCriteria] = useState<ResultCriterion[]>(() => savedForm?.criteria ?? [createCriterion(1)]);
+  const [nextCriterionId, setNextCriterionId] = useState(() => savedForm?.nextCriterionId ?? 2);
+  const [competencies, setCompetencies] = useState<CompetencyCard[]>(() => savedForm?.competencies ?? [createCompetencyCard(1)]);
+  const [nextCompetencyId, setNextCompetencyId] = useState(() => savedForm?.nextCompetencyId ?? 2);
+  const [constraints, setConstraints] = useState<ConstraintCard[]>(() => savedForm?.constraints ?? [createConstraintCard(1)]);
+  const [nextConstraintId, setNextConstraintId] = useState(() => savedForm?.nextConstraintId ?? 2);
+  const [qualityIndicators, setQualityIndicators] = useState<QualityIndicatorCard[]>(() => savedForm?.qualityIndicators ?? [createQualityIndicatorCard(1)]);
+  const [nextQualityIndicatorId, setNextQualityIndicatorId] = useState(() => savedForm?.nextQualityIndicatorId ?? 2);
+  const [preserveElements, setPreserveElements] = useState<PreserveElementCard[]>(() => savedForm?.preserveElements ?? [createPreserveElementCard(1)]);
+  const [nextPreserveElementId, setNextPreserveElementId] = useState(() => savedForm?.nextPreserveElementId ?? 2);
 
   const resultNames = useMemo(
     () => criteria.map((criterion, index) => criterion.statement.trim() || `Критерий результата ${index + 1}`),
@@ -2095,6 +2112,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
   );
 
   useEffect(() => {
+    const timer = setTimeout(() => {
     const blockById = Object.fromEntries(PROJECT_THEORY_BLOCKS.map(block => [block.id, block]));
     const missionSummary = summarizeMission(mission);
     const stakeholderItems = stakeholders.map((stakeholder, index) => {
@@ -2162,7 +2180,13 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
           items: preserveItems,
         },
       ],
+      form: {
+        mission, stakeholders, nextStakeholderId, criteria, nextCriterionId, competencies, nextCompetencyId,
+        constraints, nextConstraintId, qualityIndicators, nextQualityIndicatorId, preserveElements, nextPreserveElementId,
+      } satisfies TheoryForm,
     });
+    }, 400);
+    return () => clearTimeout(timer);
   }, [
     competencies,
     competencyNames,
@@ -2170,6 +2194,12 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     constraintNames,
     criteria,
     mission,
+    nextCompetencyId,
+    nextConstraintId,
+    nextCriterionId,
+    nextPreserveElementId,
+    nextQualityIndicatorId,
+    nextStakeholderId,
     preserveElementNames,
     preserveElements,
     projectId,

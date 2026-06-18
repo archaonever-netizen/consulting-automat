@@ -30,6 +30,8 @@ export type ProjectStrategicChoiceSnapshot = {
   tradeOffs: ProjectStrategicChoiceSnapshotItem[];
   actions: ProjectStrategicChoiceSnapshotItem[];
   hypotheses: ProjectStrategicChoiceSnapshotItem[];
+  // Полное состояние редактора (lossless) для восстановления ввода при возврате на экран.
+  form?: unknown;
 };
 
 export function getFallbackProjectStrategicChoiceSnapshot(projectId: number): ProjectStrategicChoiceSnapshot {

@@ -22,6 +22,8 @@ export type ProjectTargetStateSnapshot = {
   preserveTargets: ProjectTargetStateSnapshotItem[];
   constraints: ProjectTargetStateSnapshotItem[];
   keyResults: ProjectTargetStateSnapshotItem[];
+  // Полное состояние редактора (lossless) для восстановления ввода при возврате на экран.
+  form?: unknown;
 };
 
 export function getFallbackProjectTargetStateSnapshot(projectId: number): ProjectTargetStateSnapshot {

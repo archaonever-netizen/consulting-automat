@@ -23,6 +23,9 @@ export type ProjectDiagnosisSnapshot = {
   facts: ProjectDiagnosisSnapshotItem[];
   alternatives: ProjectDiagnosisSnapshotItem[];
   consequences: ProjectDiagnosisSnapshotItem[];
+  // Полное состояние редактора (lossless) для восстановления ввода при возврате на экран.
+  // Поля выше — производная выжимка для нижележащих экранов.
+  form?: unknown;
 };
 
 export function getFallbackProjectDiagnosisSnapshot(projectId: number): ProjectDiagnosisSnapshot {

@@ -13,6 +13,11 @@ export type ProjectFrameworkSectionSnapshot = {
   items: ProjectFrameworkSectionSnapshotItem[];
   completedChecks: number;
   totalChecks: number;
+  // Полное состояние редактора (lossless), чтобы восстанавливать ввод при возврате
+  // на экран. items выше — производная выжимка для нижележащих экранов. Тип зависит
+  // от продьюсера (records у обычных секций, objectives у OKR), поэтому хранится как
+  // непрозрачный payload и приводится к нужному типу при чтении.
+  form?: unknown;
 };
 
 export function getProjectFrameworkSectionSnapshotKey(projectId: number, sectionId: string) {

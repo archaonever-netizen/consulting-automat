@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import Icon from '../Icon';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
-import { writeProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
+import { readProjectStrategicChoiceSnapshot, writeProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { getFallbackProjectTheorySnapshot, readProjectTheorySnapshot, type ProjectTheoryBlockId } from './projectTheorySnapshot';
 
 type StrategicChoiceState = {
@@ -310,6 +310,15 @@ function StrategicSection({ number, title, note, children }: { number: string; t
   );
 }
 
+type StrategicChoiceForm = {
+  choice: StrategicChoiceState;
+  capabilities: CapabilityCard[];
+  alternatives: AlternativeCard[];
+  tradeOffs: TradeOffCard[];
+  actions: ActionCard[];
+  hypotheses: HypothesisCard[];
+};
+
 interface ProjectStrategicChoiceCanvasProps {
   projectId: number;
 }
@@ -331,12 +340,13 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
   const resultOptions = itemLabels(results.items, 'Сначала заполните критерии результата в Теории проекта');
   const stakeholderOptions = itemLabels(stakeholder.items, 'Сначала заполните выгодоприобретателей в Теории проекта');
 
-  const [choice, setChoice] = useState<StrategicChoiceState>(createChoice);
-  const [capabilities, setCapabilities] = useState<CapabilityCard[]>(() => [createCapability(1, competencyOptions[0] || '')]);
-  const [alternatives, setAlternatives] = useState<AlternativeCard[]>([createAlternative(1)]);
-  const [tradeOffs, setTradeOffs] = useState<TradeOffCard[]>([createTradeOff(1)]);
-  const [actions, setActions] = useState<ActionCard[]>([createAction(1)]);
-  const [hypotheses, setHypotheses] = useState<HypothesisCard[]>([createHypothesis(1)]);
+  const savedForm = useMemo(() => readProjectStrategicChoiceSnapshot(projectId)?.form as StrategicChoiceForm | undefined, [projectId]);
+  const [choice, setChoice] = useState<StrategicChoiceState>(() => savedForm?.choice ?? createChoice());
+  const [capabilities, setCapabilities] = useState<CapabilityCard[]>(() => savedForm?.capabilities ?? [createCapability(1, competencyOptions[0] || '')]);
+  const [alternatives, setAlternatives] = useState<AlternativeCard[]>(() => savedForm?.alternatives ?? [createAlternative(1)]);
+  const [tradeOffs, setTradeOffs] = useState<TradeOffCard[]>(() => savedForm?.tradeOffs ?? [createTradeOff(1)]);
+  const [actions, setActions] = useState<ActionCard[]>(() => savedForm?.actions ?? [createAction(1)]);
+  const [hypotheses, setHypotheses] = useState<HypothesisCard[]>(() => savedForm?.hypotheses ?? [createHypothesis(1)]);
 
   const obstacle = diagnosisSnapshot.keyChallenge || diagnosisSnapshot.obstacleType || '[главное препятствие из Диагноза]';
   const strategicQuestion = choice.strategicQuestion || `Как нам преодолеть ${obstacle} для ${stakeholder.items[0]?.label || '[выгодоприобретатель]'}, чтобы достичь ${results.items[0]?.label || '[критерий результата]'}, не нарушив ${constraints.items[0]?.label || preserve.items[0]?.label || '[ограничения / ядро]'}?`;
@@ -349,7 +359,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
   const guidingPolicy = choice.guidingPolicy || `Для преодоления ${obstacle} мы будем ${choice.howApproach || '[подход]'}, фокусируя ресурсы на ${choice.whereProcess || choice.whereClient || '[зона выбора]'} и отказываясь от ${tradeOffs[0]?.refusal || '[что не делаем]'}.`;
 
   useEffect(() => {
-    writeProjectStrategicChoiceSnapshot(projectId, {
+    const timer = setTimeout(() => writeProjectStrategicChoiceSnapshot(projectId, {
       projectId,
       updatedAt: new Date().toISOString(),
       strategicQuestion,
@@ -407,10 +417,13 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         label: hypothesis.name.trim() || hypothesis.assumption || `Гипотеза ${index + 1}`,
         summary: compactJoin([hypothesis.assumption, hypothesis.choiceLink, hypothesis.confirms, hypothesis.refutes]),
       })),
-    });
+      form: { choice, capabilities, alternatives, tradeOffs, actions, hypotheses } satisfies StrategicChoiceForm,
+    }), 400);
+    return () => clearTimeout(timer);
   }, [
     acceptedChoice,
     actions,
+    alternatives,
     capabilities,
     choice,
     guidingPolicy,
