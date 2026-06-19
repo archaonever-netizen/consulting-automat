@@ -1,6 +1,7 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import RedirectResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
@@ -43,6 +44,49 @@ async def disconnect(
     db: AsyncSession = Depends(get_db),
 ):
     await tracker_service.disconnect(db, current_user.id)
+
+
+@router.get("/oauth/start")
+async def start_oauth(
+    current_user=Depends(get_current_user_dep),
+):
+    return {"authorization_url": tracker_service.build_oauth_authorization_url(current_user)}
+
+
+@router.get("/oauth/callback", include_in_schema=False)
+async def oauth_callback(
+    code: Optional[str] = Query(default=None),
+    state: Optional[str] = Query(default=None),
+    error: Optional[str] = Query(default=None),
+    error_description: Optional[str] = Query(default=None),
+    db: AsyncSession = Depends(get_db),
+):
+    if error:
+        message = error_description or error
+        return RedirectResponse(
+            tracker_service.profile_redirect_url(connected=False, message=message),
+            status_code=status.HTTP_302_FOUND,
+        )
+    if not code or not state:
+        return RedirectResponse(
+            tracker_service.profile_redirect_url(
+                connected=False,
+                message="Яндекс OAuth не вернул code/state",
+            ),
+            status_code=status.HTTP_302_FOUND,
+        )
+    try:
+        await tracker_service.connect_with_oauth_code(db, code=code, state=state)
+    except Exception as exc:
+        detail = getattr(exc, "detail", None) or "Не удалось подключить Яндекс ID"
+        return RedirectResponse(
+            tracker_service.profile_redirect_url(connected=False, message=str(detail)),
+            status_code=status.HTTP_302_FOUND,
+        )
+    return RedirectResponse(
+        tracker_service.profile_redirect_url(connected=True),
+        status_code=status.HTTP_302_FOUND,
+    )
 
 
 @router.get("/queues")

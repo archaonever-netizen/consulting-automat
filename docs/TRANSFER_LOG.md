@@ -1381,3 +1381,63 @@ npm.cmd run test -- src/pages/tasks/logic.test.ts
 - Full project review и chat требуют RAG-поиска на Postgres/pgvector; на SQLite ожидается 503 с понятным текстом.
 - Автоматическое применение правок в v1 работает только для секционных карточек с повторяющимися окнами; сложные карточки требуют ручного редактирования.
 - Применение proposals сейчас пишет в frontend snapshot/localStorage и затем подхватывается существующей синхронизацией карточек проекта.
+
+---
+
+## Яндекс Трекер / OAuth connector через Яндекс ID
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-19
+- Цель: дать сотрудникам подключать Яндекс Трекер из своего профиля через Яндекс ID/OAuth, без ручного поиска и вставки токена.
+
+### Что реализовано
+
+- Добавлены настройки OAuth-коннектора Яндекс Трекера:
+  - `YANDEX_TRACKER_OAUTH_CLIENT_ID`;
+  - `YANDEX_TRACKER_OAUTH_CLIENT_SECRET`;
+  - `YANDEX_TRACKER_OAUTH_REDIRECT_URI`;
+  - `YANDEX_TRACKER_OAUTH_SCOPE`;
+  - `YANDEX_TRACKER_ORG_ID` или `YANDEX_TRACKER_CLOUD_ORG_ID`;
+  - `YANDEX_TRACKER_DEFAULT_QUEUE`.
+- В `.env.example` дополнительно зафиксирован `FRONTEND_URL=http://127.0.0.1:5174`, потому что OAuth callback возвращает пользователя на frontend через эту настройку.
+- Добавлен OAuth flow:
+  - `GET /api/tracker/oauth/start` возвращает URL авторизации Яндекс OAuth для текущего сотрудника;
+  - `GET /api/tracker/oauth/callback` принимает `code/state`, меняет `code` на OAuth-токен, проверяет токен через `GET /myself` Яндекс Трекера и сохраняет подключение за текущим `user_id`;
+  - `state` подписывается через JWT и живёт 10 минут.
+- Расширено хранение подключения Яндекс Трекера:
+  - `refresh_token_encrypted`;
+  - `token_expires_at`.
+- Добавлено автообновление OAuth-токена через refresh token перед запросами к Яндекс Трекеру.
+- В профиле сотрудника добавлена основная кнопка `Подключить через Яндекс ID`; ручной ввод OAuth/IAM-токена оставлен как fallback.
+- Пустой экран раздела `Трекер` теперь отправляет сотрудника подключить Яндекс ID в профиле.
+- `frontend/dist` пересобран после изменения frontend.
+
+### Изменённые файлы
+
+- `.env.example` - добавлены переменные OAuth-коннектора Яндекс Трекера.
+- `backend/core/config.py` - добавлены настройки `yandex_tracker_*`.
+- `backend/main.py` - добавлены idempotent startup-колонки для lab-БД.
+- `backend/models.py` - модель `YandexTrackerConnection` расширена refresh token и сроком жизни access token.
+- `backend/routes/tracker.py` - добавлены OAuth start/callback endpoints.
+- `backend/services/yandex_tracker.py` - добавлен OAuth flow, обмен/refresh токенов, сохранение подключения текущего сотрудника.
+- `frontend/src/pages/ProfilePage.tsx` - добавлена кнопка подключения через Яндекс ID и обработка результата callback.
+- `frontend/src/pages/TrackerPage.tsx` - обновлён текст empty state.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновлены build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `.\.venv\Scripts\python.exe -B -c "import backend.main as m; print(m.app.title)"` - успешно.
+- `.\.venv\Scripts\python.exe -m ruff check --select F backend\main.py backend\models.py backend\routes\tracker.py backend\schemas\tracker.py backend\services\yandex_tracker.py backend\services\yandex_tracker_client.py` - успешно.
+- `npm.cmd exec eslint -- src/pages/ProfilePage.tsx src/pages/TrackerPage.tsx` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- Live-проверка с настоящим Яндекс OAuth/Трекером не выполнялась: нужны реальные `client_id`, `client_secret`, redirect URI и org id.
+- В Яндекс OAuth-приложении должен быть указан redirect URI, совпадающий с `YANDEX_TRACKER_OAUTH_REDIRECT_URI`; для lab это `http://127.0.0.1:8010/api/tracker/oauth/callback`.
+- У OAuth-приложения должны быть права `tracker:read` и `tracker:write`.
+- Для production-переноса нужна миграция БД вместо startup `ALTER TABLE` для `refresh_token_encrypted` и `token_expires_at`.

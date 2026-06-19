@@ -234,7 +234,7 @@ export default function TrackerPage() {
           <div className="empty-tab" style={{ padding: '64px 16px' }}>
             <div className="ei"><Icon name="grid" size={22} /></div>
             <b>Яндекс Трекер не подключён</b>
-            <span>Подключите организацию и токен в профиле, чтобы работать с задачами.</span>
+            <span>Подключите Яндекс ID в профиле, чтобы работать с задачами.</span>
             <Link to="/profile" className="btn btn-primary btn-sm" style={{ marginTop: 14 }}><Icon name="gear" size={15} />Перейти в профиль</Link>
           </div>
         </div>

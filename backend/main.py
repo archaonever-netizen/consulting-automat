@@ -198,6 +198,10 @@ def _ensure_yandex_tracker_columns(conn):
             "ALTER TABLE yandex_tracker_connections "
             "ADD COLUMN token_type VARCHAR(20) DEFAULT 'oauth' NOT NULL"
         ),
+        'refresh_token_encrypted': (
+            "ALTER TABLE yandex_tracker_connections ADD COLUMN refresh_token_encrypted TEXT"
+        ),
+        'token_expires_at': "ALTER TABLE yandex_tracker_connections ADD COLUMN token_expires_at DATETIME",
         'tracker_user_id': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_user_id VARCHAR(255)",
         'tracker_user_name': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_user_name VARCHAR(255)",
         'tracker_email': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_email VARCHAR(255)",

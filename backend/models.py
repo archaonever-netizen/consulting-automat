@@ -901,6 +901,8 @@ class YandexTrackerConnection(Base):
     cloud_org_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     token_type: Mapped[str] = mapped_column(String(20), default='oauth', nullable=False)
     token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    refresh_token_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     tracker_user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     tracker_user_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     tracker_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)

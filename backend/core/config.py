@@ -89,6 +89,15 @@ class Settings(BaseSettings):
     yandex_client_secret: str = ""
     yandex_redirect_uri: str = "http://localhost:8000/auth/yandex/callback"
 
+    # Yandex Tracker OAuth connector
+    yandex_tracker_oauth_client_id: str = ""
+    yandex_tracker_oauth_client_secret: str = ""
+    yandex_tracker_oauth_redirect_uri: str = "http://127.0.0.1:8010/api/tracker/oauth/callback"
+    yandex_tracker_oauth_scope: str = "tracker:read tracker:write"
+    yandex_tracker_org_id: str = ""
+    yandex_tracker_cloud_org_id: str = ""
+    yandex_tracker_default_queue: str = ""
+
     # Redis
     redis_url: str = "redis://localhost:6379/0"
 

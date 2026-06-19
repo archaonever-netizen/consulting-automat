@@ -1,6 +1,6 @@
 import { useState, useEffect, type FormEvent } from 'react';
 import { AxiosError } from 'axios';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import Icon from '../components/Icon';
@@ -33,9 +33,27 @@ function errorText(err: unknown, fallback: string): string {
   return fallback;
 }
 
+function trackerOauthMessage(search: string): { notice: string | null; error: string | null; clean: boolean } {
+  const params = new URLSearchParams(search);
+  const result = params.get('yandex_tracker');
+  if (result === 'connected') {
+    return { notice: 'Яндекс Трекер подключён через Яндекс ID.', error: null, clean: true };
+  }
+  if (result === 'error') {
+    return {
+      notice: null,
+      error: params.get('message') || 'Не удалось подключить Яндекс ID',
+      clean: true,
+    };
+  }
+  return { notice: null, error: null, clean: false };
+}
+
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
+  const initialOauthMessage = trackerOauthMessage(location.search);
   const [user, setUser] = useState<User | null>(null);
   const [conn, setConn] = useState<TrackerConnection | null>(null);
   const [loading, setLoading] = useState(true);
@@ -46,7 +64,9 @@ export default function ProfilePage() {
   const [defaultQueue, setDefaultQueue] = useState('');
   const [token, setToken] = useState('');
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [oauthLoading, setOauthLoading] = useState(false);
+  const [error, setError] = useState<string | null>(initialOauthMessage.error);
+  const [notice, setNotice] = useState<string | null>(initialOauthMessage.notice);
 
   useEffect(() => {
     Promise.all([
@@ -57,6 +77,25 @@ export default function ProfilePage() {
       .catch(console.error)
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (initialOauthMessage.clean) navigate('/profile', { replace: true });
+  }, [initialOauthMessage.clean, navigate]);
+
+  async function handleYandexIdConnect() {
+    setOauthLoading(true);
+    setError(null);
+    setNotice(null);
+    try {
+      const response = await api.get('/api/tracker/oauth/start');
+      const url = response.data?.authorization_url;
+      if (typeof url !== 'string' || !url) throw new Error('empty authorization_url');
+      window.location.href = url;
+    } catch (err) {
+      setError(errorText(err, 'Не удалось начать подключение через Яндекс ID'));
+      setOauthLoading(false);
+    }
+  }
 
   async function handleConnect(e: FormEvent) {
     e.preventDefault();
@@ -141,6 +180,7 @@ export default function ProfilePage() {
           </span>
         </div>
 
+        {notice && <div className="tracker-notice">{notice}</div>}
         {error && <div className="tracker-error">{error}</div>}
 
         {conn?.connected ? (
@@ -168,10 +208,24 @@ export default function ProfilePage() {
             </button>
           </div>
         ) : (
-          <form className="tracker-form" onSubmit={handleConnect}>
-            <p className="tracker-hint">
-              Укажите OAuth-токен или IAM-токен и id организации. Токен проверяется через API Яндекс Трекера и хранится в зашифрованном виде.
-            </p>
+          <div>
+            <div className="tracker-oauth-box">
+              <p className="tracker-hint">
+                Подключите Яндекс ID: приложение получит токен безопасно, привяжет его к вашему профилю и будет показывать задачи, доступные вашему аккаунту в Яндекс Трекере.
+              </p>
+              <button className="btn btn-primary" type="button" disabled={oauthLoading} onClick={handleYandexIdConnect}>
+                <Icon name="check" size={16} />{oauthLoading ? 'Переход в Яндекс...' : 'Подключить через Яндекс ID'}
+              </button>
+            </div>
+
+            <form className="tracker-form" onSubmit={handleConnect}>
+              <div className="tracker-manual-head">
+                <span>Ручное подключение</span>
+                <small>Fallback для OAuth/IAM-токена</small>
+              </div>
+              <p className="tracker-hint">
+                Если OAuth-приложение ещё не настроено, можно временно указать OAuth-токен или IAM-токен и id организации вручную.
+              </p>
             <label className="field">
               <span>Тип организации</span>
               <select value={orgMode} onChange={e => { setOrgMode(e.target.value as OrgMode); setTokenType('oauth'); }}>
@@ -218,7 +272,8 @@ export default function ProfilePage() {
             <button className="btn btn-primary" type="submit" disabled={saving} style={{ marginTop: 4 }}>
               <Icon name="check" size={16} />{saving ? 'Проверка...' : 'Подключить'}
             </button>
-          </form>
+            </form>
+          </div>
         )}
       </div>
 
@@ -228,14 +283,23 @@ export default function ProfilePage() {
         .profile-logout:hover { color: var(--danger); background: var(--danger-weak); border-color: var(--danger); }
         .prof-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-top: 12px; }
         .tracker-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+        .tracker-oauth-box { display: flex; align-items: center; justify-content: space-between; gap: 14px; max-width: 720px; margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+        .tracker-oauth-box .tracker-hint { margin: 0; max-width: 470px; }
         .tracker-form { display: flex; flex-direction: column; gap: 14px; max-width: 520px; margin-top: 16px; }
+        .tracker-manual-head { display: flex; align-items: baseline; gap: 10px; padding-top: 6px; border-top: 1px solid var(--line); }
+        .tracker-manual-head span { font-size: 13px; font-weight: 800; color: var(--text-primary); }
+        .tracker-manual-head small { font-size: 12px; color: var(--ink-4); }
         .tracker-hint { font-size: 13px; color: var(--ink-4); line-height: 1.55; }
         .field { display: flex; flex-direction: column; gap: 6px; }
         .field span { font-size: 12px; font-weight: 600; color: var(--ink-4); }
         .field input, .field select { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 14px; color: var(--text-primary); transition: var(--transition); }
         .field input:focus, .field select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
         .field select:disabled { color: var(--ink-4); background: var(--surface-2); cursor: not-allowed; }
+        .tracker-notice { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: #f0fdf4; color: #166534; font-size: 13px; border: 1px solid #bbf7d0; }
         .tracker-error { margin-top: 14px; padding: 10px 12px; border-radius: 9px; background: #fff1f0; color: #c0392b; font-size: 13px; border: 1px solid #ffd6d2; }
+        @media (max-width: 760px) {
+          .tracker-oauth-box { align-items: stretch; flex-direction: column; }
+        }
       `}</style>
     </div>
   );
