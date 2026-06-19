@@ -62,6 +62,26 @@ describe('applyProjectEdit (section cards)', () => {
     expect(records('tasks')[0].values.statement).toBe('через подпись поля');
   });
 
+  it('matches an item by label when item_id is not the exact id', () => {
+    applyProjectEdit(PROJECT_ID, { id: 'a', op: 'add_item', card_id: 'tasks', human: 'add', values: { __cardName: 'Настроить CRM' } });
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_item', card_id: 'tasks', item_id: 'Настроить CRM', human: 'x',
+      values: { statement: 'через интеграцию' },
+    });
+    expect(res.ok).toBe(true);
+    expect(records('tasks')[0].values.statement).toBe('через интеграцию');
+  });
+
+  it('falls back to the sole record when item_id does not match', () => {
+    applyProjectEdit(PROJECT_ID, { id: 'a', op: 'add_item', card_id: 'hypotheses', human: 'add', values: { __cardName: 'Гипотеза' } });
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_item', card_id: 'hypotheses', item_id: '999', human: 'x',
+      values: { statement: 'обновлено' },
+    });
+    expect(res.ok).toBe(true);
+    expect(records('hypotheses')[0].values.statement).toBe('обновлено');
+  });
+
   it('deletes a window by item_id', () => {
     applyProjectEdit(PROJECT_ID, { id: 'a', op: 'add_item', card_id: 'decisions', human: 'add', values: { __cardName: 'Решение 1' } });
     applyProjectEdit(PROJECT_ID, { id: 'b', op: 'add_item', card_id: 'decisions', human: 'add', values: { __cardName: 'Решение 2' } });

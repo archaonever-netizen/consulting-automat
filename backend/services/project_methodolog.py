@@ -75,6 +75,12 @@ CHAT_SYSTEM_PROMPT = (
     "  • update_item — изменить поля элемента списка: {card_id, list, item_id, values:{...}} (для разделов list опусти)\n"
     "  • add_item — добавить новый элемент/окно: {card_id, list, values:{...}} (для разделов list опусти)\n"
     "  • delete_item — удалить элемент/окно (в т.ч. дубль): {card_id, list, item_id}\n\n"
+    "ПРАВИЛА ВЫБОРА:\n"
+    "  • item_id бери ТОЧНО из поля id элемента в PROJECT_MODEL (НЕ индекс, НЕ название). Если нужного "
+    "элемента в PROJECT_MODEL нет — используй add_item, а не update_item.\n"
+    "  • Правка элемента раздела (карточки с lists, где list пустой '') — это ВСЕГДА update_item с item_id, "
+    "а не update_field. update_field используй только для скалярных полей карточки (fields).\n"
+    "  • Для сложных карточек указывай list ТОЧНО как в PROJECT_MODEL (поле list у списка).\n\n"
     "В ЖЁСТКОМ правиле ссылок: ссылайся на методики только метками S#. В reply метки S# не упоминай. "
     "Пиши по-русски. Верни ТОЛЬКО валидный JSON по схеме:\n"
     "{\n"
@@ -281,7 +287,7 @@ async def chat_methodolog(
 
     parts = []
     if project_model is not None:
-        parts.append("PROJECT_MODEL (редактируемые цели):\n" + json.dumps(project_model, ensure_ascii=False)[:10000])
+        parts.append("PROJECT_MODEL (редактируемые цели):\n" + json.dumps(project_model, ensure_ascii=False)[:20000])
     if review is not None:
         parts.append("REVIEW (последняя оценка):\n" + json.dumps(
             {"overall": review.get("overall"), "summary": review.get("summary"),

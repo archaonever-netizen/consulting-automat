@@ -21,6 +21,7 @@ import {
   COMPLEX_CARDS,
   deriveProjItem,
   isComplexCard,
+  itemLabel,
   type ComplexCardSpec,
   type ComplexListSpec,
   type FormItem,
@@ -66,6 +67,24 @@ function loadRecords(projectId: number, cardId: string): RecordState[] {
   return Array.isArray(form) ? form.map(r => ({ id: r.id, values: { ...r.values } })) : [];
 }
 
+// Толерантный поиск элемента: модель может прислать точный id, индекс или метку.
+// Совпадение по id → по метке (точно/частично) → единственный элемент.
+function pickIndex<T>(items: T[], rawId: unknown, idOf: (item: T) => string, labelOf: (item: T) => string): number {
+  const raw = (rawId ?? '').toString().trim();
+  if (raw) {
+    let idx = items.findIndex(it => idOf(it) === raw);
+    if (idx !== -1) return idx;
+    const lc = raw.toLowerCase();
+    idx = items.findIndex(it => labelOf(it).trim().toLowerCase() === lc);
+    if (idx !== -1) return idx;
+    if (lc.length >= 3) {
+      idx = items.findIndex(it => labelOf(it).toLowerCase().includes(lc));
+      if (idx !== -1) return idx;
+    }
+  }
+  return items.length === 1 ? 0 : -1;
+}
+
 function applySectionEdit(projectId: number, proposal: Proposal): ApplyResult {
   const { card_id: cardId, op } = proposal;
   const sources = readProjectSources(projectId);
@@ -73,24 +92,23 @@ function applySectionEdit(projectId: number, proposal: Proposal): ApplyResult {
   if (!config) return fail('Не найдена конфигурация раздела.');
   const records = loadRecords(projectId, cardId);
   const nextId = records.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+  const labelOf = (r: RecordState) => r.values[NAME_KEY] || r.values[config.primaryField] || '';
 
   if (op === 'add_item') {
     const record = createRecord(config, sources, nextId);
     Object.assign(record.values, normalizeValues(config, proposal.values));
     records.push(record);
   } else if (op === 'update_item' || op === 'update_field') {
-    const id = Number(proposal.item_id);
-    const idx = records.findIndex(r => r.id === id);
-    if (Number.isNaN(id) || idx === -1) return fail('Не найден элемент для изменения.');
+    const idx = pickIndex(records, proposal.item_id, r => String(r.id), labelOf);
+    if (idx === -1) return fail('Не найден элемент для изменения.');
     const values = op === 'update_field' && proposal.field
       ? normalizeValues(config, { [proposal.field]: proposal.value })
       : normalizeValues(config, proposal.values);
     if (Object.keys(values).length === 0) return fail('Нечего изменять: не указаны поля.');
     records[idx] = { ...records[idx], values: { ...records[idx].values, ...values } };
   } else if (op === 'delete_item') {
-    const id = Number(proposal.item_id);
-    const idx = records.findIndex(r => r.id === id);
-    if (Number.isNaN(id) || idx === -1) return fail('Не найден элемент для удаления.');
+    const idx = pickIndex(records, proposal.item_id, r => String(r.id), labelOf);
+    if (idx === -1) return fail('Не найден элемент для удаления.');
     records.splice(idx, 1);
   } else {
     return fail('Неизвестная операция.');
@@ -155,6 +173,7 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
   const listSpec = findList(spec, proposal.list);
   if (!listSpec) return fail('Не указан или не найден список для изменения.');
   const arr = (Array.isArray(form[listSpec.formKey]) ? [...(form[listSpec.formKey] as FormItem[])] : []) as FormItem[];
+  const labelOf = (it: FormItem, index = 0) => itemLabel(it, listSpec.labelKeys, `${listSpec.title} ${index + 1}`);
 
   if (proposal.op === 'add_item') {
     if (!listSpec.createItem) return fail(`В список «${listSpec.title}» нельзя добавлять элементы автоматически.`);
@@ -162,16 +181,14 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
     mergeItemValues(item, proposal.values);
     arr.push(item);
   } else if (proposal.op === 'update_item') {
-    const id = Number(proposal.item_id);
-    const idx = arr.findIndex(i => Number(i.id) === id);
-    if (Number.isNaN(id) || idx === -1) return fail('Не найден элемент для изменения.');
+    const idx = pickIndex(arr, proposal.item_id, i => String(i.id), it => labelOf(it));
+    if (idx === -1) return fail('Не найден элемент для изменения.');
     const item = { ...arr[idx] };
     mergeItemValues(item, proposal.values ?? (proposal.field ? { [proposal.field]: proposal.value } : undefined));
     arr[idx] = item;
   } else if (proposal.op === 'delete_item') {
-    const id = Number(proposal.item_id);
-    const idx = arr.findIndex(i => Number(i.id) === id);
-    if (Number.isNaN(id) || idx === -1) return fail('Не найден элемент для удаления.');
+    const idx = pickIndex(arr, proposal.item_id, i => String(i.id), it => labelOf(it));
+    if (idx === -1) return fail('Не найден элемент для удаления.');
     arr.splice(idx, 1);
   } else {
     return fail('Неизвестная операция.');
