@@ -21,6 +21,7 @@ Usage:
 from __future__ import annotations
 
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -37,6 +38,14 @@ TARGET_CHARS = 2500
 # A single page longer than this is split further by paragraphs (still tagged
 # with that one page number, so the citation stays exact).
 PAGE_SPLIT_CHARS = int(TARGET_CHARS * 1.6)
+
+# Извлечение таблиц (pdfplumber.extract_tables) — самый тяжёлый по памяти и
+# времени шаг. На очень больших PDF (сотни страниц) оно приводит к OOM, поэтому
+# сверх этого порога таблицы пропускаем: текст извлекаем всегда, таблицы — нет.
+# Порог переопределяется через env (EXTRACT_MAX_TABLE_PAGES) без правок кода:
+# поднять — если памяти достаточно и нужны таблицы на больших PDF; понизить —
+# если на конкретном документе всё ещё ловится OOM.
+MAX_TABLE_PAGES = int(os.getenv("EXTRACT_MAX_TABLE_PAGES", "500"))
 
 
 # Control characters that must never reach the DB. Postgres text columns cannot
@@ -79,25 +88,38 @@ def _render_table(table: list[list]) -> str:
 
 
 def extract_pages(pdf_path: Path) -> list[str]:
-    """Per-page text with table structure preserved and appended."""
+    """Per-page text with table structure preserved and appended.
+
+    Память: pdfplumber кэширует разобранные объекты по каждой странице, и на
+    больших PDF (сотни страниц) это копится до OOM. Поэтому после каждой
+    страницы сбрасываем её кэш (`page.flush_cache()`), а на очень больших
+    документах вдобавок отключаем извлечение таблиц (самый дорогой шаг).
+    """
     page_texts: list[str] = []
     with pdfplumber.open(str(pdf_path)) as pdf:
+        tables_enabled = len(pdf.pages) <= MAX_TABLE_PAGES
         for page in pdf.pages:
             text = (page.extract_text() or "").strip()
-            table_blocks = []
-            try:
-                for table in page.extract_tables():
-                    block = _render_table(table)
-                    if block:
-                        table_blocks.append(block)
-            except Exception:
-                pass  # table detection is best-effort; never lose the page
-            if table_blocks:
-                text = (text + "\n\n" + "\n\n".join(table_blocks)).strip()
+            if tables_enabled:
+                table_blocks = []
+                try:
+                    for table in page.extract_tables():
+                        block = _render_table(table)
+                        if block:
+                            table_blocks.append(block)
+                except Exception:
+                    pass  # table detection is best-effort; never lose the page
+                if table_blocks:
+                    text = (text + "\n\n" + "\n\n".join(table_blocks)).strip()
             # Sanitize here, at the single extraction boundary: this covers the
             # full text, every fragment chunk (derived from these pages) and the
             # committed fulltext.txt — all before they ever reach the DB.
             page_texts.append(sanitize_text(text))
+            # Освобождаем кэш страницы — без этого память течёт до OOM на больших PDF.
+            try:
+                page.flush_cache()
+            except Exception:
+                pass
     return page_texts
 
 

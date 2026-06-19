@@ -108,7 +108,13 @@ async def run_ingest_job(job_id: int, *, _fail_after: str | None = None) -> dict
         # ── 4. generate layers (Russian cards) ───────────────────────────────
         await _update(job_id, stage="layers", progress="Генерация карточек на русском")
         from build_layers import run as layers_run
-        lay_res = await layers_run(key, LAYERS_MODEL, None)
+
+        async def _layers_heartbeat(done: int, total: int, cards: int) -> None:
+            # Живой прогресс по ходу генерации: бампит updated_at, иначе на больших
+            # PDF этот этап молчит дольше порога «зависла» во фронте.
+            await _update(job_id, progress=f"Генерация карточек: {done}/{total} фрагментов ({cards} карточек)")
+
+        lay_res = await layers_run(key, LAYERS_MODEL, None, on_progress=_layers_heartbeat)
         summary["stages"]["layers"] = lay_res
         await _add_tokens(job_id, gen=(lay_res or {}).get("tokens", 0))
         if _fail_after == "layers":

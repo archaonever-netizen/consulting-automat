@@ -4,6 +4,7 @@ The expensive «run» also requires the bots password-lock (X-Edit-Unlock): addi
 a source spends money, so it must be a deliberate, unlocked action.
 """
 import asyncio
+import logging
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,6 +15,7 @@ from ..routes.bots import require_edit_unlock
 from ..services import source_admin as svc
 
 router = APIRouter()
+log = logging.getLogger("sources")
 
 
 async def require_founder(current_user=Depends(get_current_user_dep)):
@@ -52,6 +54,12 @@ async def upload_source(
     except ValueError as exc:
         await db.rollback()
         raise HTTPException(status_code=400, detail=str(exc))
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 — surface the real cause instead of a blank 500
+        await db.rollback()
+        log.exception("upload_source failed")
+        raise HTTPException(status_code=502, detail=f"Не удалось сохранить источник: {type(exc).__name__}: {exc}")
 
 
 @router.post("/sources/jobs/{job_id}/run")

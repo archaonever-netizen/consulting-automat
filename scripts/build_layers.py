@@ -287,7 +287,14 @@ async def _gen_doc_summary(conn, source_id: int, source_key: str, model: str):
         return conn, 0
 
 
-async def run(source_key: str, model: str, limit: int | None) -> None:
+async def run(source_key: str, model: str, limit: int | None, on_progress=None) -> None:
+    """Generate Russian cards for a source.
+
+    on_progress (optional): async callback(done, total, cards) invoked after each
+    batch. The «Add methodology» runner uses it to write a live heartbeat to the
+    ingest_jobs row — otherwise this stage runs silently for a long time on big
+    PDFs and the UI falsely reports the job as «stuck».
+    """
     conn = await _connect()
     try:
         src = await conn.fetchrow("SELECT id FROM knowledge_sources WHERE key=$1", source_key)
@@ -350,7 +357,13 @@ async def run(source_key: str, model: str, limit: int | None) -> None:
                 conn, written = await _exec_with_reconnect(
                     conn, lambda c, f=frag, p=parsed: _write_fragment_cards(c, f, p, model, f["_hash"]))
                 total_cards += written
-            print(f"  processed {min(i + CONCURRENCY, len(todo))}/{len(todo)} fragments, cards so far={total_cards}")
+            done = min(i + CONCURRENCY, len(todo))
+            print(f"  processed {done}/{len(todo)} fragments, cards so far={total_cards}")
+            if on_progress is not None:
+                try:
+                    await on_progress(done, len(todo), total_cards)
+                except Exception:
+                    pass  # heartbeat is best-effort; never break generation on a status write
 
         conn, doc_tokens = await _gen_doc_summary(conn, source_id, source_key, model)
         gen_tokens += doc_tokens
