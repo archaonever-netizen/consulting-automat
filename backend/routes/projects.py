@@ -15,6 +15,7 @@ from ..schemas.projects import (
     ProjectUpdate,
 )
 from ..services import (
+    bots,
     card_validator,
     project_cards,
     project_methodolog,
@@ -117,8 +118,9 @@ async def review_project(
     if not await project_cards.project_exists(db, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     sections = [s.model_dump() for s in data.sections]
+    model = await bots.get_methodolog_model(db)
     try:
-        result = await project_methodolog.review_project(data.full_text, sections)
+        result = await project_methodolog.review_project(data.full_text, sections, model=model)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
 
@@ -149,12 +151,16 @@ async def review_chat(
     if not await project_cards.project_exists(db, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     history = [m.model_dump() for m in data.history]
+    strong_model = await bots.get_methodolog_model(db)
     try:
         result = await project_methodolog.chat_methodolog(
             data.message,
             history=history,
             project_model=data.project_model,
             review=data.review,
+            strong_model=strong_model,
+            focus_card_id=data.focus_card_id,
+            deep=data.deep,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))

@@ -90,8 +90,14 @@ export async function fetchProjectReview(
   };
 }
 
+// Страховочный таймаут на медленные ИИ-вызовы: бэкенд и сам ограничивает время и
+// возвращает мягкий фолбэк, но если соединение «молчит» — клиент не виснет вечно.
+const AI_CALL_TIMEOUT_MS = 240000;
+
 export async function runProjectReview(projectId: number): Promise<ProjectReview> {
-  const { data } = await api.post(`/api/projects/${projectId}/review`, buildReviewPayload(projectId));
+  const { data } = await api.post(
+    `/api/projects/${projectId}/review`, buildReviewPayload(projectId), { timeout: AI_CALL_TIMEOUT_MS },
+  );
   return data as ProjectReview;
 }
 
@@ -101,12 +107,16 @@ export async function sendProjectChat(
   history: ChatMessage[],
   projectModel: unknown,
   review: ProjectReview | null,
+  focusCardId: string | null,
+  deep: boolean,
 ): Promise<ChatResponse> {
   const { data } = await api.post(`/api/projects/${projectId}/review/chat`, {
     message,
     history: history.map(({ role, content }) => ({ role, content })),
     project_model: projectModel,
     review,
-  });
+    focus_card_id: focusCardId,
+    deep,
+  }, { timeout: AI_CALL_TIMEOUT_MS });
   return data as ChatResponse;
 }

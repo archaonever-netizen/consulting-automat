@@ -1319,6 +1319,12 @@ a:hover { color: var(--accent-hover); }
 .project-proposal-result.failed { color: var(--danger); }
 .project-proposal-result.rejected { color: var(--text-secondary); }
 
+.project-chat-deep {
+  display: inline-flex; align-items: center; gap: 6px; align-self: flex-start;
+  font-size: 12px; color: var(--text-secondary); cursor: pointer; user-select: none;
+}
+.project-chat-deep input { cursor: pointer; margin: 0; }
+
 .project-chat-input { display: flex; gap: 8px; align-items: flex-end; }
 .project-chat-input .form-textarea { flex: 1; resize: none; }
 .project-chat-send {

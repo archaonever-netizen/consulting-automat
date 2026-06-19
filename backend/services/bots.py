@@ -87,6 +87,16 @@ async def seed_bots(db: AsyncSession) -> None:
     await db.commit()
 
 
+async def get_methodolog_model(db: AsyncSession) -> str:
+    """Модель, выбранная для сотрудника «Методолог» в UI (фолбэк — METHODOLOG_MODEL).
+
+    Правая панель Методолога в Проектах использует ту же модель, что и бот-сотрудник,
+    чтобы настройка модели в одном месте влияла на оба сценария.
+    """
+    model = await db.scalar(select(Bot.model).where(Bot.key == "methodolog"))
+    return model or METHODOLOG_MODEL
+
+
 # ─────────────────────────── Каталог моделей ────────────────────────────────
 # Выверенный снимок реального каталога провайдера (Promptra /v1/models) на момент
 # Этапа 1 — фолбэк на случай, если live-выгрузка недоступна. В норме список

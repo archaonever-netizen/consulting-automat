@@ -17,8 +17,17 @@ import asyncio
 import json
 import re
 
+import httpx
+
 from ..core.config import get_settings
 from .knowledge_search import search, SearchHit
+
+# Таймауты вызова модели. read — на КАЖДЫЙ чанк стрима, поэтому стрим держит
+# соединение живым и единый «одношаговый» таймаут не срабатывает ложно на медленной
+# сильной модели (Qwen). connect мал, чтобы быстро падать при недоступном провайдере.
+_LLM_TIMEOUT = httpx.Timeout(connect=10.0, read=90.0, write=30.0, pool=10.0)
+# Без этого SDK по умолчанию делает 2 ретрая → при зависании ждём до 3× таймаута.
+_LLM_MAX_RETRIES = 1
 
 METHODOLOG_MODEL = "google/gemini-3.1-flash-lite"
 MAX_EVIDENCE = 8
@@ -60,28 +69,63 @@ def _usage_dict(resp) -> dict:
     }
 
 
-def _chat_json(model: str, system: str, user: str, *, max_tokens: int = 1200) -> tuple[dict, dict]:
-    """Вызвать модель и вернуть (распарсенный JSON, расход токенов).
-
-    max_tokens поднимается для объёмных ответов (например, ревью всего проекта).
-    """
-    from openai import OpenAI
-    settings = get_settings()
-    client = OpenAI(api_key=settings.promptra_api_key, base_url=settings.promptra_base_url, timeout=120)
-    resp = client.chat.completions.create(
+def _stream_text(client, model: str, system: str, user: str, max_tokens: int) -> tuple[str, dict]:
+    """Стриминговый вызов: копим чанки в строку. Стрим держит соединение живым на
+    медленной модели (нет ложных таймаутов/зависаний); usage берём из финального чанка."""
+    stream = client.chat.completions.create(
         model=model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         temperature=0.2,
         max_tokens=max_tokens,
+        stream=True,
+        stream_options={"include_usage": True},
     )
-    raw = resp.choices[0].message.content or ""
+    parts: list[str] = []
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    for chunk in stream:
+        if getattr(chunk, "usage", None):
+            usage = _usage_dict(chunk)
+        for choice in (getattr(chunk, "choices", None) or []):
+            delta = getattr(choice, "delta", None)
+            piece = getattr(delta, "content", None) if delta else None
+            if piece:
+                parts.append(piece)
+    return "".join(parts), usage
+
+
+def _chat_json(model: str, system: str, user: str, *, max_tokens: int = 1200) -> tuple[dict, dict]:
+    """Вызвать модель и вернуть (распарсенный JSON, расход токенов).
+
+    Стриминг включён (защита от зависаний на сильной модели). Если провайдер/модель
+    стрим не поддержали — однократный фолбэк на обычный вызов, поведение не меняется.
+    max_tokens поднимается для объёмных ответов (например, ревью всего проекта).
+    """
+    from openai import OpenAI
+    settings = get_settings()
+    client = OpenAI(
+        api_key=settings.promptra_api_key,
+        base_url=settings.promptra_base_url,
+        timeout=_LLM_TIMEOUT,
+        max_retries=_LLM_MAX_RETRIES,
+    )
+    try:
+        raw, usage = _stream_text(client, model, system, user, max_tokens)
+    except Exception:  # noqa: BLE001 — провайдер мог не принять stream/stream_options
+        resp = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=0.2,
+            max_tokens=max_tokens,
+        )
+        raw = resp.choices[0].message.content or ""
+        usage = _usage_dict(resp)
     m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
     if m:
         raw = m.group(1)
     else:
         i, j = raw.find("{"), raw.rfind("}")
         raw = raw[i:j + 1] if i != -1 and j != -1 else "{}"
-    return json.loads(raw), _usage_dict(resp)
+    return json.loads(raw), usage
 
 
 def _evidence_block(hits: list[SearchHit]) -> tuple[str, dict[str, SearchHit]]:

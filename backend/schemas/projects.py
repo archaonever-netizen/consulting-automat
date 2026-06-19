@@ -87,6 +87,10 @@ class ProjectChatRequest(BaseModel):
     # Машиночитаемая карта редактируемого проекта и последняя оценка — произвольный JSON.
     project_model: Optional[dict] = None
     review: Optional[dict] = None
+    # id открытой карточки-фреймворка (фокус): её шлём модели целиком, прочие — сжато.
+    focus_card_id: Optional[str] = None
+    # «Глубокий разбор»: принудительно сильная модель (без эвристики-роутера).
+    deep: bool = False
 
     @field_validator("message")
     @classmethod

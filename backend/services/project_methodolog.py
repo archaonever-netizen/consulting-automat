@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
 
 from .knowledge_search import search, SearchHit
 from .methodolog import (
@@ -27,6 +28,77 @@ from .methodolog import (
 
 RAG_VALUES = {"green", "amber", "red"}
 VALID_OPS = {"update_field", "update_item", "add_item", "delete_item"}
+
+# ── Роутинг моделей по типу запроса (экономия токенов) ───────────────────────
+# Поиск по базе знаний — это эмбеддинги + Postgres (без чат-модели), поэтому
+# экономить чат-токены можно только на ОДНОМ вызове-анализе. Делаем это так:
+#   • light  — вопрос/уточнение → дешёвая быстрая модель, сжатый контекст;
+#   • heavy  — «заполни/доработай/исправь раздел» → сильная модель + фокус-карточка целиком;
+#   • whole  — «проверь весь проект/в целом» → сильная модель + полный контекст.
+# Классификация — эвристика по ключевым словам (бесплатно, без лишнего вызова).
+# При неоднозначности склоняемся к heavy (сильная модель), чтобы не терять качество.
+_WHOLE_PAT = re.compile(
+    r"вес[ьья]\s+проект|по\s+всем(?:у)?\s+(?:раздел|проект)|все\s+раздел|"
+    r"проект(?:а)?\s+в\s+целом|в\s+целом\s+по\s+проект|всю\s+картин|целостн|связност",
+    re.IGNORECASE,
+)
+_HEAVY_PAT = re.compile(
+    r"заполн|дозаполн|доработ|допиш|дополн|перепиш|переформул|сформулир|распиш|"
+    r"исправ|поправ|улучш|внеси|внест|оформ|проработ|состав|подготов|"
+    r"добав(?:ь|ить|ляй)|приведи\s+в\s+порядок|приведи\s+к",
+    re.IGNORECASE,
+)
+
+
+def classify_intent(message: str) -> str:
+    """light | heavy | whole — по тексту сообщения пользователя (см. комментарий выше)."""
+    text = (message or "").strip().lower()
+    if _WHOLE_PAT.search(text):
+        return "whole"
+    if _HEAVY_PAT.search(text):
+        return "heavy"
+    return "light"
+
+
+def _compact_card(card: dict) -> dict:
+    """Сжать редактируемую карточку: оставить структуру (id/метки), убрать значения.
+
+    Структура (card_id, заголовки, id элементов, ключи полей) дёшева и нужна, чтобы модель
+    могла сослаться на элемент; дорогие именно ЗНАЧЕНИЯ полей — их и выкидываем у не-фокусных
+    карточек. Метку элемента (label) оставляем как краткую сводку.
+    """
+    out: dict = {"card_id": card.get("card_id"), "title": card.get("title")}
+    fields = card.get("fields")
+    if isinstance(fields, list) and fields:
+        out["fields"] = [{"key": f.get("key"), "label": f.get("label")} for f in fields]
+    lists = []
+    for lst in card.get("lists") or []:
+        items = [{"id": it.get("id"), "label": it.get("label")} for it in (lst.get("items") or [])]
+        lists.append({"list": lst.get("list"), "title": lst.get("title"), "items": items})
+    out["lists"] = lists
+    return out
+
+
+def _compact_project_model(model: dict | None, focus_card_id: str | None) -> dict | None:
+    """Фокус-карточка — целиком, остальные редактируемые — сжато; context_cards — короче.
+
+    focus_card_id None / 'whole-project' → возвращаем модель как есть (полный контекст).
+    """
+    if not isinstance(model, dict) or not focus_card_id or focus_card_id == "whole-project":
+        return model
+    editable = model.get("editable_cards")
+    if not isinstance(editable, list):
+        return model
+    new_editable = [
+        c if c.get("card_id") == focus_card_id else _compact_card(c)
+        for c in editable
+    ]
+    context = [
+        {"card_id": c.get("card_id"), "title": c.get("title"),
+         "text": str(c.get("text") or "")[:200]}
+        for c in (model.get("context_cards") or [])
+    ]
+    return {"editable_cards": new_editable, "context_cards": context}
 
 REVIEW_SYSTEM_PROMPT = (
     "Ты — ИИ-Методолог, который проверяет ВЕСЬ проект целиком по методологиям управления. "
@@ -69,7 +141,9 @@ CHAT_SYSTEM_PROMPT = (
     "proposal и ДОЖДЁШЬСЯ подтверждения пользователя. НИКОГДА не пиши, что изменение уже внесено/"
     "сохранено — его применит пользователь кнопкой. Не выдумывай card_id, поля или id элементов — "
     "используй только те, что есть в PROJECT_MODEL.\n\n"
-    "Предлагай правки только когда они обоснованы методологией. Каждая правка — отдельный proposal. "
+    "ОТВЕЧАЙ КОМПЛЕКСНО, А НЕ ОБРЫВОЧНО. Разбирай раздел целиком, а не отдельные строки: дай связный "
+    "разбор всего блока и задай ВСЕ существенные уточняющие вопросы, а не один-два. "
+    "Каждая правка — отдельный proposal; правок может быть много, это нормально. "
     "Виды операций (op):\n"
     "  • update_field — изменить скалярное поле карточки: {card_id, field, value}\n"
     "  • update_item — изменить поля элемента списка: {card_id, list, item_id, values:{...}} (для разделов list опусти)\n"
@@ -81,6 +155,15 @@ CHAT_SYSTEM_PROMPT = (
     "  • Правка элемента раздела (карточки с lists, где list пустой '') — это ВСЕГДА update_item с item_id, "
     "а не update_field. update_field используй только для скалярных полей карточки (fields).\n"
     "  • Для сложных карточек указывай list ТОЧНО как в PROJECT_MODEL (поле list у списка).\n\n"
+    "ПОЛНОТА ПРАВОК (важно):\n"
+    "  • Когда пользователь просит заполнить/доработать/исправить экран, раздел или карточку — пройди по "
+    "ВСЕМ полям (fields) и ВСЕМ элементам (items) этого блока из PROJECT_MODEL и предложи правку для каждого, "
+    "где есть что улучшить: update_field на каждое скалярное поле, update_item на каждый существующий элемент, "
+    "add_item на недостающие по методологии элементы. Не ограничивайся частью полей и не оставляй блок "
+    "наполовину пустым.\n"
+    "  • Заполняй элемент ЦЕЛИКОМ: в values указывай значения для всех ключевых полей элемента (см. item_fields), "
+    "а не для одного.\n"
+    "  • Опирайся на всю карту PROJECT_MODEL и context_cards, чтобы правки были согласованы между разделами.\n\n"
     "В ЖЁСТКОМ правиле ссылок: ссылайся на методики только метками S#. В reply метки S# не упоминай. "
     "Пиши по-русски. Верни ТОЛЬКО валидный JSON по схеме:\n"
     "{\n"
@@ -270,13 +353,33 @@ async def chat_methodolog(
     history: list[dict] | None = None,
     project_model: dict | None = None,
     review: dict | None = None,
-    model: str = METHODOLOG_MODEL,
+    fast_model: str = METHODOLOG_MODEL,
+    strong_model: str = METHODOLOG_MODEL,
+    focus_card_id: str | None = None,
+    deep: bool = False,
     source_keys: list[str] | None = None,
 ) -> dict:
     """Диалог-уточнение с предложениями правок (без самостоятельного применения).
 
-    Возврат: {reply, proposals[], evidence[], raw, usage}.
+    Экономия токенов (поиск чат-модель не тратит — он на эмбеддингах+Postgres):
+      • intent по сообщению (classify_intent) выбирает модель и объём контекста;
+      • light → fast_model, сжатая карта (фокус-карточка целиком, прочие без значений);
+      • heavy → strong_model, та же фокус-сжатая карта;
+      • whole → strong_model, полная карта проекта.
+      • deep=True («глубокий разбор» из UI) форсит сильную модель: light повышается до heavy,
+        явный whole не понижается.
+
+    Возврат: {reply, proposals[], evidence[], intent, model, usage}.
     """
+    intent = classify_intent(message)
+    if deep and intent == "light":
+        intent = "heavy"
+    model = strong_model if intent in ("heavy", "whole") else fast_model
+    max_tokens = 4000 if intent in ("heavy", "whole") else 1500
+    # whole — нужен весь проект; light/heavy — фокус-карточка целиком, прочие сжато.
+    model_for_prompt = project_model if intent == "whole" else _compact_project_model(project_model, focus_card_id)
+    focused = model_for_prompt is not project_model and focus_card_id and focus_card_id != "whole-project"
+
     hits = await search(message, scope="both", source_keys=source_keys, limit=MAX_EVIDENCE)
     evidence, labels = _evidence_block(hits)
 
@@ -286,12 +389,18 @@ async def chat_methodolog(
         history_text += f"{role}: {str(m.get('content') or '').strip()}\n"
 
     parts = []
-    if project_model is not None:
-        parts.append("PROJECT_MODEL (редактируемые цели):\n" + json.dumps(project_model, ensure_ascii=False)[:20000])
+    if model_for_prompt is not None:
+        if focused:
+            parts.append(
+                f"ОТКРЫТЫЙ ЭКРАН (FOCUS): card_id={focus_card_id}. Его содержимое дано ПОЛНОСТЬЮ; "
+                "остальные карточки — сжато (структура и id без значений) для согласованности. "
+                "Разбирай и заполняй прежде всего фокус-карточку."
+            )
+        parts.append("PROJECT_MODEL (редактируемые цели):\n" + json.dumps(model_for_prompt, ensure_ascii=False)[:60000])
     if review is not None:
         parts.append("REVIEW (последняя оценка):\n" + json.dumps(
             {"overall": review.get("overall"), "summary": review.get("summary"),
-             "sections": review.get("sections")}, ensure_ascii=False)[:3000])
+             "sections": review.get("sections")}, ensure_ascii=False)[:6000])
     if history_text:
         parts.append("ИСТОРИЯ ДИАЛОГА:\n" + history_text)
     parts.append("СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ:\n" + (message or "").strip())
@@ -303,7 +412,7 @@ async def chat_methodolog(
 
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     try:
-        raw, usage = await asyncio.to_thread(_chat_json, model, CHAT_SYSTEM_PROMPT, user, max_tokens=1800)
+        raw, usage = await asyncio.to_thread(_chat_json, model, CHAT_SYSTEM_PROMPT, user, max_tokens=max_tokens)
     except Exception as e:  # noqa: BLE001
         raw = {"reply": "Не удалось получить ответ модели. Попробуйте ещё раз.", "proposals": [],
                "_error": f"{type(e).__name__}: {str(e)[:160]}"}
@@ -312,6 +421,8 @@ async def chat_methodolog(
         "reply": str(raw.get("reply") or "").strip() or "—",
         "proposals": _sanitize_proposals(raw.get("proposals")),
         "evidence": _evidence_out(hits),
+        "intent": intent,
+        "model": model,
         "raw": raw,
         "usage": usage,
     }

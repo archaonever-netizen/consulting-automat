@@ -17,6 +17,8 @@ import {
 
 interface ProjectMethodologistProps {
   projectId: number;
+  // id открытой карточки-фреймворка (фокус для чата) или null, если открыта project-секция.
+  focusCardId: string | null;
   // Вызывается после применённой правки, чтобы перемонтировать открытый канвас.
   onProjectMutated: () => void;
 }
@@ -76,7 +78,7 @@ function TextLines({ text }: { text: string }) {
   );
 }
 
-export default function ProjectMethodologist({ projectId, onProjectMutated }: ProjectMethodologistProps) {
+export default function ProjectMethodologist({ projectId, focusCardId, onProjectMutated }: ProjectMethodologistProps) {
   const [review, setReview] = useState<ProjectReview | null>(null);
   const [loadingReview, setLoadingReview] = useState(false);
   const [reviewError, setReviewError] = useState('');
@@ -84,6 +86,8 @@ export default function ProjectMethodologist({ projectId, onProjectMutated }: Pr
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  // «Глубокий разбор»: принудительно сильная модель (Qwen), минуя эвристику-роутер.
+  const [deep, setDeep] = useState(false);
   const [proposalStates, setProposalStates] = useState<Record<string, ProposalState>>({});
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -133,7 +137,7 @@ export default function ProjectMethodologist({ projectId, onProjectMutated }: Pr
     setInput('');
     setSending(true);
     try {
-      const res = await sendProjectChat(projectId, text, history, buildProjectEditModel(projectId), review);
+      const res = await sendProjectChat(projectId, text, history, buildProjectEditModel(projectId), review, focusCardId, deep);
       setMessages(cur => [...cur, { role: 'assistant', content: res.reply, proposals: res.proposals }]);
     } catch (e) {
       setMessages(cur => [...cur, { role: 'assistant', content: errText(e) }]);
@@ -273,6 +277,11 @@ export default function ProjectMethodologist({ projectId, onProjectMutated }: Pr
           )}
           <div ref={chatEndRef} />
         </div>
+
+        <label className="project-chat-deep" title="Принудительно подключить сильную модель для развёрнутого ответа (медленнее и дороже).">
+          <input type="checkbox" checked={deep} onChange={e => setDeep(e.target.checked)} />
+          <span>Глубокий разбор</span>
+        </label>
 
         <div className="project-chat-input">
           <textarea

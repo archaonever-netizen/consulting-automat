@@ -130,7 +130,11 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
             </div>
           </section>
         )}
-        <ProjectRightPanel projectId={project.id} onProjectMutated={() => setReloadNonce(n => n + 1)} />
+        <ProjectRightPanel
+          projectId={project.id}
+          focusCardId={activeSection ? null : activeFrameworkCard.id}
+          onProjectMutated={() => setReloadNonce(n => n + 1)}
+        />
       </div>
     </div>
   );
