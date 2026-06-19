@@ -41,7 +41,7 @@ async def list_app_users(
     current_user=Depends(get_current_user_dep),
     db: AsyncSession = Depends(get_db),
 ):
-    """Сотрудники ШЕФ — для моста с исполнителями Kaiten (сопоставление по email)."""
+    """Сотрудники ШЕФ — для моста с исполнителями внешнего трекера по email."""
     result = await db.execute(
         select(User).where(User.is_active.is_(True)).options(selectinload(User.role))
     )

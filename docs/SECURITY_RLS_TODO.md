@@ -18,7 +18,7 @@
 
 ## Таблицы без RLS (на 2026-06-14)
 
-user_tasks, user_chat_messages, kaiten_connections, task_completions,
+user_tasks, user_chat_messages, yandex_tracker_connections, task_completions,
 user_subchats, ai_tasks, knowledge_categories, ai_agents,
 knowledge_source_texts, knowledge_source_layers, knowledge_articles,
 goal_documents, orchestration_runs, ai_agent_runs, function_analyses,
@@ -44,7 +44,7 @@ user_chat_sessions, knowledge_source_fragments.
 ```sql
 ALTER TABLE public.user_tasks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_chat_messages ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.kaiten_connections ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.yandex_tracker_connections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_completions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_subchats ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.ai_tasks ENABLE ROW LEVEL SECURITY;

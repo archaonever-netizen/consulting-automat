@@ -1,250 +1,240 @@
-import { useState, useEffect, useCallback, Fragment } from 'react';
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react';
+import { AxiosError } from 'axios';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import Icon from '../components/Icon';
 
-interface Space { id: number; title: string; }
-interface Board { id: number; title: string; }
-interface Column { id: number; title: string; sort_order?: number; type?: number; }
-interface Lane { id: number; title: string; sort_order?: number; }
-interface Member { id: number; full_name?: string; username?: string; email?: string; initials?: string; }
-interface KUser { id: number; full_name?: string; username?: string; email?: string; initials?: string; }
-interface AppUser { id: number; email: string; full_name: string; is_founder: boolean; role_name?: string | null; }
-
-// Резолв исполнителя: если email Kaiten-профиля совпал с сотрудником ШЕФ — показываем ШЕФ.
-interface ResolvedMember { name: string; initials: string; sub: string; shef: boolean; }
-function resolveMember(m: { full_name?: string; username?: string; email?: string; initials?: string }, shefByEmail: Map<string, AppUser>): ResolvedMember {
-  const su = m.email ? shefByEmail.get(m.email.toLowerCase()) : undefined;
-  if (su) return { name: su.full_name, initials: initialsOf({ full_name: su.full_name }), sub: su.role_name || (su.is_founder ? 'Основатель' : 'Сотрудник'), shef: true };
-  return { name: m.full_name || m.username || '?', initials: initialsOf(m), sub: 'Kaiten', shef: false };
+interface TrackerConnection {
+  connected: boolean;
+  default_queue?: string | null;
 }
-interface Card {
-  id: number;
-  title: string;
-  column_id: number;
-  lane_id?: number;
+
+interface TrackerRef {
+  id?: string | number;
+  key?: string;
+  name?: string;
+  display?: string;
+  [key: string]: unknown;
+}
+
+interface Queue extends TrackerRef {
   description?: string;
-  due_date?: string | null;
-  sort_order?: number;
-  members?: Member[];
 }
 
-// ── helpers ──
-function initialsOf(m: { initials?: string; full_name?: string; username?: string }): string {
-  if (m.initials) return m.initials.slice(0, 2).toUpperCase();
-  const name = m.full_name || m.username || '?';
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
+interface TrackerUser extends TrackerRef {
+  email?: string;
 }
-function toDateInput(iso?: string | null): string {
-  return iso ? iso.slice(0, 10) : '';
-}
-function dueBadge(iso?: string | null): { text: string; overdue: boolean } | null {
-  if (!iso) return null;
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return null;
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  return { text: d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }), overdue: d.getTime() < today.getTime() };
-}
-const COL_DOT: Record<number, string> = { 1: '#94a3b8', 2: '#2563EB', 3: '#16a34a' };
 
-// Лёгкий кэш в localStorage: мгновенная отрисовка из кэша + фоновое обновление
-// (stale-while-revalidate) и память последнего пространства/доски — для бесшовности.
+interface Issue {
+  id?: string | number;
+  key?: string;
+  summary?: string;
+  description?: string;
+  status?: TrackerRef;
+  queue?: TrackerRef;
+  assignee?: TrackerUser | null;
+  createdAt?: string;
+  updatedAt?: string;
+  deadline?: string | null;
+  dueDate?: string | null;
+  [key: string]: unknown;
+}
+
+interface Transition extends TrackerRef {
+  to?: TrackerRef;
+}
+
 const LS = {
-  get<T>(k: string): T | null { try { const v = localStorage.getItem(k); return v ? (JSON.parse(v) as T) : null; } catch { return null; } },
-  set(k: string, v: unknown) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } },
+  get<T>(key: string): T | null {
+    try {
+      const value = localStorage.getItem(key);
+      return value ? (JSON.parse(value) as T) : null;
+    } catch {
+      return null;
+    }
+  },
+  set(key: string, value: unknown) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch {
+      // ignore storage failures
+    }
+  },
 };
 
+function errorText(err: unknown, fallback: string): string {
+  if (err instanceof AxiosError) {
+    const detail = (err.response?.data as { detail?: unknown } | undefined)?.detail;
+    if (typeof detail === 'string') return detail;
+  }
+  return fallback;
+}
+
+function refTitle(value?: TrackerRef | null): string {
+  return value?.display || value?.name || value?.key || (value?.id != null ? String(value.id) : '');
+}
+
+function queueKey(queue: Queue): string {
+  return queue.key || queue.name || String(queue.id || '');
+}
+
+function issueKey(issue: Issue): string {
+  return issue.key || String(issue.id || '');
+}
+
+function issueTitle(issue: Issue): string {
+  return issue.summary || issueKey(issue) || 'Без названия';
+}
+
+function statusTitle(issue: Issue): string {
+  return refTitle(issue.status) || 'Без статуса';
+}
+
+function formatDate(value?: string | null): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+}
+
+function issueDate(issue: Issue): string {
+  return formatDate(issue.deadline || issue.dueDate || issue.updatedAt || issue.createdAt);
+}
+
+function groupIssues(issues: Issue[]): Array<[string, Issue[]]> {
+  const groups = new Map<string, Issue[]>();
+  for (const issue of issues) {
+    const status = statusTitle(issue);
+    groups.set(status, [...(groups.get(status) || []), issue]);
+  }
+  return Array.from(groups.entries());
+}
+
 export default function TrackerPage() {
-  // Инициализация из кэша → первый кадр без «пустоты» при повторном заходе.
   const [connected, setConnected] = useState<boolean | null>(() => {
-    const c = LS.get<boolean>('trk:connected'); return typeof c === 'boolean' ? c : null;
+    const cached = LS.get<boolean>('trk:connected');
+    return typeof cached === 'boolean' ? cached : null;
   });
-
-  const [spaces, setSpaces] = useState<Space[]>(() => LS.get<Space[]>('trk:spaces') || []);
-  const [spaceId, setSpaceId] = useState<number | null>(() => LS.get<number>('trk:lastSpace'));
-  const [boards, setBoards] = useState<Board[]>([]);
-  const [boardId, setBoardId] = useState<number | null>(() => LS.get<number>('trk:lastBoard'));
-
-  const [columns, setColumns] = useState<Column[]>([]);
-  const [lanes, setLanes] = useState<Lane[]>([]);
-  const [cards, setCards] = useState<Card[]>([]);
-  const [users, setUsers] = useState<KUser[]>(() => LS.get<KUser[]>('trk:users') || []);
-  const [appUsers, setAppUsers] = useState<AppUser[]>(() => LS.get<AppUser[]>('trk:appUsers') || []);
-  const [loadingBoard, setLoadingBoard] = useState(false);
+  const [queues, setQueues] = useState<Queue[]>(() => LS.get<Queue[]>('trk:yandex:queues') || []);
+  const [selectedQueue, setSelectedQueue] = useState<string>(() => LS.get<string>('trk:yandex:queue') || '');
+  const [issues, setIssues] = useState<Issue[]>(() => LS.get<Issue[]>('trk:yandex:issues') || []);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [newSummary, setNewSummary] = useState('');
+  const [newDescription, setNewDescription] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [selectedIssueKey, setSelectedIssueKey] = useState<string | null>(null);
 
-  const [dragId, setDragId] = useState<number | null>(null);
-  const [addingCell, setAddingCell] = useState<string | null>(null); // `${laneId}:${colId}`
-  const [newTitle, setNewTitle] = useState('');
+  const selectedIssue = useMemo(
+    () => issues.find(issue => issueKey(issue) === selectedIssueKey) || null,
+    [issues, selectedIssueKey],
+  );
+  const grouped = useMemo(() => groupIssues(issues), [issues]);
 
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-
-  // 1. Подключение + пространства + пользователи (с персистом и авто-выбором)
-  useEffect(() => {
-    api.get('/api/kaiten/connection')
-      .then(r => {
-        setConnected(r.data.connected);
-        LS.set('trk:connected', r.data.connected);
-        if (r.data.connected) {
-          api.get('/api/kaiten/users').then(u => { setUsers(u.data || []); LS.set('trk:users', u.data || []); }).catch(() => {});
-          api.get('/api/users').then(u => { setAppUsers(u.data || []); LS.set('trk:appUsers', u.data || []); }).catch(() => {});
-          return api.get('/api/kaiten/spaces');
-        }
-      })
-      .then(r => {
-        if (!r) return;
-        const sp: Space[] = r.data || [];
-        setSpaces(sp); LS.set('trk:spaces', sp);
-        // сохранённое валидно → оставляем; одно пространство → авто; иначе сброс
-        setSpaceId(prev => (prev && sp.some(s => s.id === prev)) ? prev : (sp.length === 1 ? sp[0].id : null));
-      })
-      .catch(() => { setConnected(false); LS.set('trk:connected', false); });
-  }, []);
-
-  // 2. Доски пространства (с персистом и авто-выбором доски)
-  useEffect(() => {
-    if (spaceId == null) { setBoards([]); setBoardId(null); return; }
-    LS.set('trk:lastSpace', spaceId);
-    const cachedBoards = LS.get<Board[]>(`trk:boards:${spaceId}`);
-    if (cachedBoards) setBoards(cachedBoards);
-    api.get('/api/kaiten/boards', { params: { space_id: spaceId } })
-      .then(r => {
-        const bd: Board[] = r.data || [];
-        setBoards(bd); LS.set(`trk:boards:${spaceId}`, bd);
-        setBoardId(prev => (prev && bd.some(b => b.id === prev)) ? prev : (bd.length === 1 ? bd[0].id : null));
-      })
-      .catch(e => setError(e?.response?.data?.detail || 'Не удалось загрузить доски'));
-  }, [spaceId]);
-
-  // 3. Колонки + дорожки + карточки доски
-  const loadBoard = useCallback(async (id: number) => {
+  const loadIssues = useCallback(async () => {
+    if (connected !== true) return;
+    setLoading(true);
     setError(null);
-    // 1) Мгновенная отрисовка из кэша (если есть) — спиннер только при «холодной» доске.
-    const cached = LS.get<{ columns: Column[]; lanes: Lane[]; cards: Card[] }>(`trk:board:${id}`);
-    if (cached) {
-      setColumns(cached.columns || []);
-      setLanes(cached.lanes?.length ? cached.lanes : [{ id: 0, title: '' }]);
-      setCards(cached.cards || []);
-      setLoadingBoard(false);
-    } else {
-      setLoadingBoard(true);
-    }
-    // 2) Фоновое обновление.
     try {
-      const [boardRes, cardsRes] = await Promise.all([
-        api.get(`/api/kaiten/boards/${id}`),
-        api.get(`/api/kaiten/boards/${id}/cards`),
-      ]);
-      const cols: Column[] = (boardRes.data?.columns || []).slice()
-        .sort((a: Column, b: Column) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-      const lns: Lane[] = (boardRes.data?.lanes || []).slice()
-        .sort((a: Lane, b: Lane) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-      const finalLanes = lns.length ? lns : [{ id: 0, title: '' }];
-      const cardsData: Card[] = cardsRes.data || [];
-      setColumns(cols);
-      setLanes(finalLanes);
-      setCards(cardsData);
-      LS.set(`trk:board:${id}`, { columns: cols, lanes: finalLanes, cards: cardsData });
-    } catch (e: any) {
-      if (!cached) { setColumns([]); setLanes([]); setCards([]); }
-      setError(e?.response?.data?.detail || 'Не удалось загрузить доску');
+      const trimmedSearch = search.trim();
+      const params = trimmedSearch
+        ? { query: trimmedSearch }
+        : (selectedQueue ? { queue: selectedQueue } : {});
+      const response = await api.get('/api/tracker/issues', { params });
+      const data: Issue[] = response.data || [];
+      setIssues(data);
+      LS.set('trk:yandex:issues', data);
+    } catch (err) {
+      setError(errorText(err, 'Не удалось загрузить задачи из Яндекс Трекера'));
     } finally {
-      setLoadingBoard(false);
+      setLoading(false);
     }
+  }, [connected, search, selectedQueue]);
+
+  useEffect(() => {
+    async function init() {
+      try {
+        const connectionResponse = await api.get('/api/tracker/connection');
+        const connection: TrackerConnection = connectionResponse.data;
+        setConnected(connection.connected);
+        LS.set('trk:connected', connection.connected);
+        if (!connection.connected) return;
+
+        const queuesResponse = await api.get('/api/tracker/queues');
+        const nextQueues: Queue[] = queuesResponse.data || [];
+        setQueues(nextQueues);
+        LS.set('trk:yandex:queues', nextQueues);
+
+        const cachedQueue = LS.get<string>('trk:yandex:queue') || '';
+        const availableKeys = new Set(nextQueues.map(queueKey).filter(Boolean));
+        const defaultQueue = connection.default_queue || '';
+        const nextQueue = availableKeys.has(cachedQueue)
+          ? cachedQueue
+          : (defaultQueue && availableKeys.has(defaultQueue) ? defaultQueue : (nextQueues[0] ? queueKey(nextQueues[0]) : ''));
+        setSelectedQueue(nextQueue);
+      } catch (err) {
+        setConnected(false);
+        LS.set('trk:connected', false);
+        setError(errorText(err, 'Не удалось проверить подключение Яндекс Трекера'));
+      }
+    }
+    init();
   }, []);
 
   useEffect(() => {
-    if (boardId != null) { loadBoard(boardId); LS.set('trk:lastBoard', boardId); }
-  }, [boardId, loadBoard]);
-
-  const multiLane = lanes.length > 1;
-  const laneIds = new Set(lanes.map(l => l.id));
-  const shefByEmail = new Map(appUsers.map(u => [u.email.toLowerCase(), u]));
-
-  // Карточки ячейки (lane × column). Карточки с неизвестной дорожкой падают в первую.
-  function cellCards(laneId: number, colId: number, isFirstLane: boolean): Card[] {
-    return cards
-      .filter(c => c.column_id === colId &&
-        (c.lane_id != null && laneIds.has(c.lane_id) ? c.lane_id === laneId : isFirstLane))
-      .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
-  }
-  const columnTotal = (colId: number) => cards.filter(c => c.column_id === colId).length;
-
-  // ── Перемещение (колонка + дорожка + позиция) ──
-  async function moveCard(cardId: number, columnId: number, laneId: number, sortOrder: number) {
-    const prev = cards;
-    setCards(cs => cs.map(c => c.id === cardId ? { ...c, column_id: columnId, lane_id: laneId, sort_order: sortOrder } : c));
-    try {
-      await api.patch(`/api/kaiten/cards/${cardId}`, { column_id: columnId, lane_id: laneId, sort_order: sortOrder });
-    } catch (e: any) {
-      setCards(prev);
-      setError(e?.response?.data?.detail || 'Не удалось переместить карточку');
+    if (connected === true) {
+      LS.set('trk:yandex:queue', selectedQueue);
+      const timer = window.setTimeout(() => {
+        void loadIssues();
+      }, 0);
+      return () => window.clearTimeout(timer);
     }
+  }, [connected, loadIssues, selectedQueue]);
+
+  async function handleSearch(e: FormEvent) {
+    e.preventDefault();
+    await loadIssues();
   }
 
-  function dropToCellEnd(colId: number, laneId: number, isFirstLane: boolean) {
-    if (dragId == null) return;
-    const inCell = cellCards(laneId, colId, isFirstLane).filter(c => c.id !== dragId);
-    const maxSort = inCell.length ? (inCell[inCell.length - 1].sort_order ?? 0) : 0;
-    moveCard(dragId, colId, laneId, maxSort + 1);
-    setDragId(null);
-  }
-
-  function dropBeforeCard(target: Card, isFirstLane: boolean) {
-    if (dragId == null || dragId === target.id) { setDragId(null); return; }
-    const laneId = target.lane_id != null && laneIds.has(target.lane_id) ? target.lane_id : lanes[0].id;
-    const inCell = cellCards(laneId, target.column_id, isFirstLane).filter(c => c.id !== dragId);
-    const idx = inCell.findIndex(c => c.id === target.id);
-    const before = idx > 0 ? (inCell[idx - 1].sort_order ?? 0) : (target.sort_order ?? 0) - 1;
-    moveCard(dragId, target.column_id, laneId, (before + (target.sort_order ?? 0)) / 2);
-    setDragId(null);
-  }
-
-  // ── Создание / удаление ──
-  async function handleCreate(colId: number, laneId: number) {
-    const title = newTitle.trim();
-    if (!title || boardId == null) { setAddingCell(null); setNewTitle(''); return; }
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    const summary = newSummary.trim();
+    if (!summary || !selectedQueue) return;
+    setCreating(true);
+    setError(null);
     try {
-      const payload: any = { board_id: boardId, column_id: colId, title };
-      if (laneId) payload.lane_id = laneId;
-      const r = await api.post('/api/kaiten/cards', payload);
-      setCards(cs => [...cs, r.data]);
-    } catch (e: any) {
-      setError(e?.response?.data?.detail || 'Не удалось создать карточку');
+      const payload = {
+        queue: selectedQueue,
+        summary,
+        description: newDescription.trim() || undefined,
+      };
+      const response = await api.post('/api/tracker/issues', payload);
+      const issue: Issue = response.data;
+      setIssues(current => [issue, ...current]);
+      setSelectedIssueKey(issueKey(issue));
+      setNewSummary('');
+      setNewDescription('');
+    } catch (err) {
+      setError(errorText(err, 'Не удалось создать задачу в Яндекс Трекере'));
     } finally {
-      setAddingCell(null); setNewTitle('');
+      setCreating(false);
     }
   }
 
-  async function handleDelete(card: Card) {
-    const prev = cards;
-    setCards(cs => cs.filter(c => c.id !== card.id));
-    if (selectedId === card.id) setSelectedId(null);
-    try {
-      await api.delete(`/api/kaiten/cards/${card.id}`);
-    } catch (e: any) {
-      setCards(prev);
-      setError(e?.response?.data?.detail || 'Не удалось удалить карточку');
-    }
-  }
+  const patchIssueLocal = useCallback((key: string, patch: Partial<Issue>) => {
+    setIssues(current => current.map(issue => issueKey(issue) === key ? { ...issue, ...patch } : issue));
+  }, []);
 
-  function patchLocal(cardId: number, patch: Partial<Card>) {
-    setCards(cs => cs.map(c => c.id === cardId ? { ...c, ...patch } : c));
-  }
-  const selectedCard = cards.find(c => c.id === selectedId) || null;
-
-  // ── Не подключён ──
   if (connected === false) {
     return (
       <div className="page">
-        <div className="page-head rise"><div><h1>Трекер</h1><p>Канбан-доска задач на базе Kaiten.</p></div></div>
+        <div className="page-head rise"><div><h1>Трекер</h1><p>Задачи из Яндекс Трекера.</p></div></div>
         <div className="card">
           <div className="empty-tab" style={{ padding: '64px 16px' }}>
             <div className="ei"><Icon name="grid" size={22} /></div>
-            <b>Kaiten не подключён</b>
-            <span>Подключите своё пространство Kaiten в профиле, чтобы работать с трекером.</span>
+            <b>Яндекс Трекер не подключён</b>
+            <span>Подключите организацию и токен в профиле, чтобы работать с задачами.</span>
             <Link to="/profile" className="btn btn-primary btn-sm" style={{ marginTop: 14 }}><Icon name="gear" size={15} />Перейти в профиль</Link>
           </div>
         </div>
@@ -253,300 +243,267 @@ export default function TrackerPage() {
   }
   if (connected === null) return <div className="page"><div className="loading-bar"></div></div>;
 
-  // Рендер одной ячейки (lane × column)
-  const renderCell = (col: Column, lane: Lane, isFirstLane: boolean) => {
-    const cc = cellCards(lane.id, col.id, isFirstLane);
-    const cellKey = `${lane.id}:${col.id}`;
-    return (
-      <div key={cellKey} className="cell" onDragOver={e => e.preventDefault()} onDrop={() => dropToCellEnd(col.id, lane.id, isFirstLane)}>
-        {cc.map(card => {
-          const due = dueBadge(card.due_date);
-          const mem = card.members || [];
-          return (
-            <div
-              key={card.id} className="kanban-card" draggable
-              onDragStart={() => setDragId(card.id)}
-              onDragEnd={() => setDragId(null)}
-              onDragOver={e => { e.preventDefault(); e.stopPropagation(); }}
-              onDrop={e => { e.stopPropagation(); dropBeforeCard(card, isFirstLane); }}
-              onClick={() => setSelectedId(card.id)}
-            >
-              <div className="kanban-card-title">{card.title}</div>
-              {card.description && <div className="kanban-card-desc">{card.description}</div>}
-              {(due || mem.length > 0) && (
-                <div className="kanban-card-foot">
-                  {due ? <span className={`due-pill${due.overdue ? ' overdue' : ''}`}><Icon name="clock" size={12} />{due.text}</span> : <span />}
-                  <span className="card-avatars">
-                    {mem.slice(0, 3).map(m => {
-                      const rm = resolveMember(m, shefByEmail);
-                      return <span key={m.id} className={`avatar-sm${rm.shef ? ' shef' : ''}`} title={`${rm.name}${rm.shef ? ' · ' + rm.sub : ''}`}>{rm.initials}</span>;
-                    })}
-                    {mem.length > 3 && <span className="avatar-sm more">+{mem.length - 3}</span>}
-                  </span>
-                </div>
-              )}
-              <button className="kanban-card-del" title="Удалить" onClick={e => { e.stopPropagation(); handleDelete(card); }}><Icon name="trash" size={13} /></button>
-            </div>
-          );
-        })}
-
-        {addingCell === cellKey ? (
-          <div className="kanban-add">
-            <input
-              autoFocus value={newTitle} placeholder="Название карточки"
-              onChange={e => setNewTitle(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') handleCreate(col.id, lane.id); if (e.key === 'Escape') { setAddingCell(null); setNewTitle(''); } }}
-              onBlur={() => handleCreate(col.id, lane.id)}
-            />
-          </div>
-        ) : (
-          <button className="kanban-addbtn" onClick={() => { setAddingCell(cellKey); setNewTitle(''); }}><Icon name="plus" size={14} />Карточка</button>
-        )}
-      </div>
-    );
-  };
-
   return (
     <div className="page">
       <div className="page-head rise">
-        <div><h1>Трекер</h1><p>Канбан-доска задач на базе Kaiten.</p></div>
-        <div className="head-actions trk-selectors">
-          <select value={spaceId ?? ''} onChange={e => { setSpaceId(e.target.value ? Number(e.target.value) : null); setBoardId(null); setColumns([]); setLanes([]); setCards([]); }}>
-            <option value="">Пространство…</option>
-            {spaces.map(s => <option key={s.id} value={s.id}>{s.title}</option>)}
+        <div><h1>Трекер</h1><p>Задачи из Яндекс Трекера по очередям и статусам.</p></div>
+        <div className="head-actions tracker-toolbar">
+          <select value={selectedQueue} onChange={e => { setSelectedQueue(e.target.value); setSearch(''); }}>
+            <option value="">Все недавние</option>
+            {queues.map(queue => {
+              const key = queueKey(queue);
+              return <option key={key} value={key}>{key} {refTitle(queue) && `· ${refTitle(queue)}`}</option>;
+            })}
           </select>
-          <select value={boardId ?? ''} onChange={e => setBoardId(e.target.value ? Number(e.target.value) : null)} disabled={!boards.length}>
-            <option value="">Доска…</option>
-            {boards.map(b => <option key={b.id} value={b.id}>{b.title}</option>)}
-          </select>
-          <button className="btn btn-ghost btn-sm" disabled={boardId == null || loadingBoard} onClick={() => boardId != null && loadBoard(boardId)} title="Обновить"><Icon name="share" size={15} />Обновить</button>
+          <button className="btn btn-ghost btn-sm" disabled={loading} onClick={loadIssues} title="Обновить">
+            <Icon name="share" size={15} />Обновить
+          </button>
         </div>
       </div>
 
-      {error && <div className="trk-error">{error}<button onClick={() => setError(null)}><Icon name="close" size={14} /></button></div>}
+      {error && <div className="tracker-error">{error}<button onClick={() => setError(null)}><Icon name="close" size={14} /></button></div>}
 
-      {loadingBoard ? (
-        <div className="loading-bar"></div>
-      ) : boardId == null ? (
-        <div className="card">
-          <div className="empty-tab" style={{ padding: '64px 16px' }}>
-            <div className="ei"><Icon name="grid" size={22} /></div>
-            <b>Выберите доску</b><span>Выберите пространство и доску Kaiten вверху справа.</span>
-          </div>
-        </div>
-      ) : columns.length === 0 ? (
-        <div className="card"><div className="empty-tab" style={{ padding: '48px 16px' }}><span>На этой доске нет колонок.</span></div></div>
-      ) : (
-        <div className="board-scroll">
-          <div className="board-grid" style={{ gridTemplateColumns: `repeat(${columns.length}, 288px)` }}>
-            {/* Заголовки колонок */}
-            {columns.map(col => (
-              <div key={`h-${col.id}`} className="col-head">
-                <span className="kanban-col-title"><span className="col-dot" style={{ background: COL_DOT[col.type ?? 0] || '#cbd5e1' }} />{col.title}</span>
-                <span className="kanban-count">{columnTotal(col.id)}</span>
+      <div className="tracker-layout">
+        <section className="tracker-main">
+          <form className="tracker-search" onSubmit={handleSearch}>
+            <Icon name="search" size={16} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Поиск запросом Яндекс Трекера, например: Assignee: me()"
+            />
+            <button className="btn btn-ghost btn-sm" type="submit" disabled={loading}>Найти</button>
+          </form>
+
+          {loading ? (
+            <div className="loading-bar"></div>
+          ) : issues.length === 0 ? (
+            <div className="card">
+              <div className="empty-tab" style={{ padding: '52px 16px' }}>
+                <div className="ei"><Icon name="list" size={22} /></div>
+                <b>Задач не найдено</b>
+                <span>Выберите другую очередь или измените поисковый запрос.</span>
               </div>
-            ))}
-
-            {/* Дорожки */}
-            {lanes.map((lane, li) => (
-              <Fragment key={`lane-${lane.id}`}>
-                {multiLane && (
-                  <div className="lane-band" style={{ gridColumn: '1 / -1' }}>
-                    <Icon name="list" size={14} />{lane.title || 'Без названия'}
+            </div>
+          ) : (
+            <div className="tracker-board">
+              {grouped.map(([status, statusIssues]) => (
+                <div key={status} className="tracker-column">
+                  <div className="tracker-column-head">
+                    <span>{status}</span>
+                    <b>{statusIssues.length}</b>
                   </div>
-                )}
-                {columns.map(col => renderCell(col, lane, li === 0))}
-              </Fragment>
-            ))}
-          </div>
-        </div>
-      )}
+                  <div className="tracker-cards">
+                    {statusIssues.map(issue => {
+                      const key = issueKey(issue);
+                      const active = selectedIssueKey === key;
+                      return (
+                        <button key={key} className={`tracker-card ${active ? 'active' : ''}`} onClick={() => setSelectedIssueKey(key)}>
+                          <span className="tracker-card-key">{key}</span>
+                          <span className="tracker-card-title">{issueTitle(issue)}</span>
+                          <span className="tracker-card-meta">
+                            {refTitle(issue.assignee) || 'Без исполнителя'}
+                            {issueDate(issue) && <span>{issueDate(issue)}</span>}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
-      {selectedCard && (
-        <CardDrawer card={selectedCard} users={users} appUsers={appUsers} onClose={() => setSelectedId(null)} onPatchLocal={patchLocal} onError={setError} onDelete={handleDelete} />
+        <aside className="tracker-side">
+          <form className="tracker-create" onSubmit={handleCreate}>
+            <div className="eyebrow">Новая задача</div>
+            <label className="field">
+              <span>Очередь</span>
+              <input value={selectedQueue} onChange={e => setSelectedQueue(e.target.value.toUpperCase())} placeholder="KEY" required />
+            </label>
+            <label className="field">
+              <span>Заголовок</span>
+              <input value={newSummary} onChange={e => setNewSummary(e.target.value)} placeholder="Что нужно сделать" required />
+            </label>
+            <label className="field">
+              <span>Описание</span>
+              <textarea rows={5} value={newDescription} onChange={e => setNewDescription(e.target.value)} placeholder="Контекст задачи" />
+            </label>
+            <button className="btn btn-primary" type="submit" disabled={creating || !selectedQueue || !newSummary.trim()}>
+              <Icon name="plus" size={15} />{creating ? 'Создание...' : 'Создать'}
+            </button>
+          </form>
+        </aside>
+      </div>
+
+      {selectedIssue && (
+        <IssueDrawer
+          key={selectedIssueKey}
+          issue={selectedIssue}
+          onClose={() => setSelectedIssueKey(null)}
+          onPatchLocal={patchIssueLocal}
+          onReload={loadIssues}
+          onError={setError}
+        />
       )}
 
       <style>{`
-        .trk-selectors { display: flex; gap: 10px; align-items: center; }
-        .trk-selectors select { padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 13.5px; color: var(--text-primary); cursor: pointer; }
-        .trk-selectors select:focus { outline: none; border-color: var(--accent); }
-        .trk-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 14px; padding: 10px 14px; border-radius: 9px; background: #fff1f0; color: #c0392b; font-size: 13px; border: 1px solid #ffd6d2; }
-        .trk-error button { border: none; background: none; color: inherit; cursor: pointer; display: flex; }
-
-        .board-scroll { overflow-x: auto; padding: 6px 2px 16px; }
-        .board-grid { display: grid; gap: 12px; align-items: start; min-width: min-content; }
-        .col-head { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; padding: 10px 6px; background: var(--surface); border-bottom: 2px solid var(--line); }
-        .kanban-col-title { display: flex; align-items: center; gap: 8px; font-size: 13.5px; font-weight: 700; color: var(--text-primary); }
-        .col-dot { width: 8px; height: 8px; border-radius: 999px; flex: 0 0 auto; }
-        .kanban-count { font-size: 12px; font-weight: 600; color: var(--ink-4); background: var(--surface-2); border-radius: 20px; padding: 1px 9px; }
-        .lane-band { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--ink-4); padding: 12px 4px 2px; position: sticky; left: 0; }
-        .cell { background: var(--surface-2); border: 1px solid var(--line); border-radius: 12px; padding: 10px; min-height: 70px; display: flex; flex-direction: column; gap: 9px; }
-
-        .kanban-card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 11px 30px 11px 12px; cursor: pointer; transition: var(--transition); }
-        .kanban-card:hover { box-shadow: var(--shadow-1, 0 2px 8px rgba(0,0,0,.06)); border-color: var(--accent); }
-        .kanban-card-title { font-size: 13.5px; font-weight: 600; color: var(--text-primary); line-height: 1.4; }
-        .kanban-card-desc { font-size: 12px; color: var(--ink-4); margin-top: 5px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-        .kanban-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 9px; }
-        .due-pill { display: inline-flex; align-items: center; gap: 4px; font-size: 11.5px; font-weight: 600; color: var(--ink-4); background: var(--surface-2); border-radius: 20px; padding: 2px 8px; }
-        .due-pill.overdue { color: #c0392b; background: #fff1f0; }
-        .card-avatars { display: flex; }
-        .avatar-sm { width: 22px; height: 22px; border-radius: 999px; display: grid; place-items: center; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #2563EB, #1D4ED8); border: 1.5px solid var(--surface); margin-left: -6px; }
-        .avatar-sm:first-child { margin-left: 0; }
-        .avatar-sm.more { background: var(--ink-4); }
-        .avatar-sm.shef { background: linear-gradient(135deg, #0d9488, #0f766e); }
-        .kanban-card-del { position: absolute; top: 8px; right: 8px; border: none; background: none; color: var(--ink-4); cursor: pointer; opacity: 0; transition: var(--transition); display: flex; }
-        .kanban-card:hover .kanban-card-del { opacity: 1; }
-        .kanban-card-del:hover { color: #c0392b; }
-        .kanban-addbtn { display: flex; align-items: center; gap: 6px; border: 1px dashed var(--line); background: none; color: var(--ink-4); font-size: 13px; font-weight: 600; padding: 9px; border-radius: 9px; cursor: pointer; transition: var(--transition); }
-        .kanban-addbtn:hover { color: var(--accent); border-color: var(--accent); }
-        .kanban-add input { width: 100%; padding: 9px 11px; border: 1px solid var(--accent); border-radius: 9px; font-size: 13.5px; color: var(--text-primary); background: var(--surface); }
-        .kanban-add input:focus { outline: none; box-shadow: 0 0 0 3px var(--accent-weak); }
+        .tracker-toolbar { display: flex; align-items: center; gap: 10px; }
+        .tracker-toolbar select { min-width: 220px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 13.5px; color: var(--text-primary); }
+        .tracker-toolbar select:focus { outline: none; border-color: var(--accent); }
+        .tracker-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 14px; padding: 10px 14px; border-radius: 9px; background: #fff1f0; color: #c0392b; font-size: 13px; border: 1px solid #ffd6d2; }
+        .tracker-error button { border: none; background: none; color: inherit; cursor: pointer; display: flex; }
+        .tracker-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
+        .tracker-main { min-width: 0; }
+        .tracker-search { display: flex; align-items: center; gap: 9px; margin-bottom: 14px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+        .tracker-search input { flex: 1; min-width: 0; border: none; background: transparent; color: var(--text-primary); font-size: 14px; }
+        .tracker-search input:focus { outline: none; }
+        .tracker-board { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 12px; align-items: start; }
+        .tracker-column { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 10px; min-height: 120px; }
+        .tracker-column-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 2px 2px 10px; font-size: 13px; font-weight: 800; color: var(--text-primary); }
+        .tracker-column-head b { font-size: 12px; color: var(--ink-4); background: var(--surface); border-radius: 20px; padding: 1px 8px; }
+        .tracker-cards { display: flex; flex-direction: column; gap: 8px; }
+        .tracker-card { display: flex; flex-direction: column; align-items: flex-start; gap: 5px; width: 100%; padding: 11px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); color: var(--text-primary); text-align: left; cursor: pointer; transition: var(--transition); }
+        .tracker-card:hover, .tracker-card.active { border-color: var(--accent); box-shadow: 0 2px 9px rgba(15,23,42,.06); }
+        .tracker-card-key { font-size: 11px; font-weight: 800; color: var(--accent); letter-spacing: .03em; }
+        .tracker-card-title { font-size: 13.5px; font-weight: 650; line-height: 1.35; }
+        .tracker-card-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 12px; color: var(--ink-4); }
+        .tracker-side { position: sticky; top: 16px; }
+        .tracker-create { display: flex; flex-direction: column; gap: 13px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+        .field { display: flex; flex-direction: column; gap: 6px; }
+        .field > span { font-size: 12px; font-weight: 600; color: var(--ink-4); }
+        .field input, .field textarea { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 14px; color: var(--text-primary); font-family: inherit; resize: vertical; }
+        .field input:focus, .field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
+        @media (max-width: 980px) {
+          .tracker-layout { grid-template-columns: 1fr; }
+          .tracker-side { position: static; }
+          .tracker-toolbar { width: 100%; justify-content: stretch; }
+          .tracker-toolbar select { flex: 1; min-width: 0; }
+        }
       `}</style>
     </div>
   );
 }
 
-// ── Панель деталей карточки ──
-function CardDrawer({ card, users, appUsers, onClose, onPatchLocal, onError, onDelete }: {
-  card: Card; users: KUser[]; appUsers: AppUser[]; onClose: () => void;
-  onPatchLocal: (cardId: number, patch: Partial<Card>) => void;
-  onError: (msg: string) => void; onDelete: (card: Card) => void;
+function IssueDrawer({ issue, onClose, onPatchLocal, onReload, onError }: {
+  issue: Issue;
+  onClose: () => void;
+  onPatchLocal: (key: string, patch: Partial<Issue>) => void;
+  onReload: () => Promise<void>;
+  onError: (message: string) => void;
 }) {
-  const [title, setTitle] = useState(card.title);
-  const [desc, setDesc] = useState('');
-  const [due, setDue] = useState(toDateInput(card.due_date));
-  const [saving, setSaving] = useState(false);
-  const [memBusy, setMemBusy] = useState(false);
-  const [showPicker, setShowPicker] = useState(false);
+  const [title, setTitle] = useState(issueTitle(issue));
+  const [description, setDescription] = useState(issue.description || '');
+  const [transitions, setTransitions] = useState<Transition[]>([]);
+  const [busy, setBusy] = useState(false);
+  const key = issueKey(issue);
 
   useEffect(() => {
-    setTitle(card.title);
-    setDue(toDateInput(card.due_date));
-    api.get(`/api/kaiten/cards/${card.id}`).then(r => setDesc(r.data?.description || '')).catch(() => setDesc(card.description || ''));
-  }, [card.id]);
+    async function loadDetails() {
+      try {
+        const [issueResponse, transitionsResponse] = await Promise.all([
+          api.get(`/api/tracker/issues/${encodeURIComponent(key)}`),
+          api.get(`/api/tracker/issues/${encodeURIComponent(key)}/transitions`),
+        ]);
+        const fullIssue: Issue = issueResponse.data;
+        setTitle(issueTitle(fullIssue));
+        setDescription(fullIssue.description || '');
+        onPatchLocal(key, fullIssue);
+        setTransitions(transitionsResponse.data || []);
+      } catch (err) {
+        onError(errorText(err, 'Не удалось загрузить детали задачи'));
+      }
+    }
+    loadDetails();
+  }, [key, onError, onPatchLocal]);
 
-  const members = card.members || [];
-  const dirty = title !== card.title || desc !== (card.description || '') || due !== toDateInput(card.due_date);
-
-  // Мост по email: пикер из сотрудников ШЕФ (резолв в Kaiten-аккаунт) + Kaiten-only «хвост».
-  const shefByEmail = new Map(appUsers.map(u => [u.email.toLowerCase(), u]));
-  const kaitenByEmail = new Map(users.filter(u => u.email).map(u => [u.email!.toLowerCase(), u]));
-  const assignedEmails = new Set(members.map(m => (m.email || '').toLowerCase()).filter(Boolean));
-  const assignedIds = new Set(members.map(m => m.id));
-  const shefItems = appUsers
-    .filter(su => !assignedEmails.has(su.email.toLowerCase()))
-    .map(su => ({ su, ku: kaitenByEmail.get(su.email.toLowerCase()) }));
-  const kaitenOnly = users.filter(u => !assignedIds.has(u.id) && !(u.email && shefByEmail.has(u.email.toLowerCase())));
-  const hasPickable = shefItems.length > 0 || kaitenOnly.length > 0;
+  const dirty = title !== issueTitle(issue) || description !== (issue.description || '');
 
   async function save() {
-    setSaving(true);
+    setBusy(true);
     try {
-      const payload: any = { title, description: desc, due_date: due ? `${due}T00:00:00.000Z` : null };
-      await api.patch(`/api/kaiten/cards/${card.id}`, payload);
-      onPatchLocal(card.id, { title, description: desc, due_date: payload.due_date });
-    } catch (e: any) {
-      onError(e?.response?.data?.detail || 'Не удалось сохранить карточку');
-    } finally { setSaving(false); }
+      await api.patch(`/api/tracker/issues/${encodeURIComponent(key)}`, {
+        summary: title,
+        description,
+      });
+      onPatchLocal(key, { summary: title, description });
+    } catch (err) {
+      onError(errorText(err, 'Не удалось сохранить задачу'));
+    } finally {
+      setBusy(false);
+    }
   }
 
-  async function addMember(u: KUser) {
-    setMemBusy(true); setShowPicker(false);
+  async function executeTransition(transition: Transition) {
+    const transitionId = transition.id != null ? String(transition.id) : '';
+    if (!transitionId) return;
+    setBusy(true);
     try {
-      await api.post(`/api/kaiten/cards/${card.id}/members`, { user_id: u.id });
-      onPatchLocal(card.id, { members: [...members, { id: u.id, full_name: u.full_name, username: u.username, email: u.email, initials: u.initials }] });
-    } catch (e: any) {
-      onError(e?.response?.data?.detail || 'Не удалось назначить исполнителя');
-    } finally { setMemBusy(false); }
-  }
-
-  async function removeMember(m: Member) {
-    setMemBusy(true);
-    try {
-      await api.delete(`/api/kaiten/cards/${card.id}/members/${m.id}`);
-      onPatchLocal(card.id, { members: members.filter(x => x.id !== m.id) });
-    } catch (e: any) {
-      onError(e?.response?.data?.detail || 'Не удалось снять исполнителя');
-    } finally { setMemBusy(false); }
+      await api.post(`/api/tracker/issues/${encodeURIComponent(key)}/transitions/${encodeURIComponent(transitionId)}`, {});
+      await onReload();
+    } catch (err) {
+      onError(errorText(err, 'Не удалось изменить статус задачи'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
     <div className="drawer-overlay" onClick={onClose}>
       <aside className="drawer" onClick={e => e.stopPropagation()}>
         <div className="drawer-head">
-          <span className="eyebrow">Карточка #{card.id}</span>
+          <div>
+            <span className="eyebrow">Задача {key}</span>
+            <h2>{statusTitle(issue)}</h2>
+          </div>
           <button className="drawer-x" onClick={onClose}><Icon name="close" size={18} /></button>
         </div>
 
         <label className="field"><span>Заголовок</span><input value={title} onChange={e => setTitle(e.target.value)} /></label>
-        <label className="field"><span>Описание</span><textarea rows={6} value={desc} onChange={e => setDesc(e.target.value)} placeholder="Описание задачи…" /></label>
-        <label className="field"><span>Срок</span><input type="date" value={due} onChange={e => setDue(e.target.value)} /></label>
+        <label className="field"><span>Описание</span><textarea rows={8} value={description} onChange={e => setDescription(e.target.value)} placeholder="Описание задачи" /></label>
 
-        <div className="field">
-          <span>Исполнители</span>
-          <div className="mem-list">
-            {members.map(m => {
-              const rm = resolveMember(m, shefByEmail);
-              return (
-                <span key={m.id} className="mem-chip" title={rm.shef ? rm.sub : 'Профиль Kaiten'}>
-                  <span className={`avatar-sm${rm.shef ? ' shef' : ''}`} style={{ margin: 0 }}>{rm.initials}</span>
-                  {rm.name}
-                  <button disabled={memBusy} onClick={() => removeMember(m)}><Icon name="close" size={12} /></button>
-                </span>
-              );
-            })}
-            <div className="mem-add">
-              <button className="btn btn-ghost btn-sm" disabled={memBusy || !hasPickable} onClick={() => setShowPicker(v => !v)}><Icon name="plus" size={14} />Добавить</button>
-              {showPicker && (
-                <div className="mem-picker">
-                  {shefItems.map(({ su, ku }) => (
-                    <button key={`s${su.id}`} disabled={!ku} onClick={() => ku && addMember(ku)}>
-                      <span className="avatar-sm shef" style={{ margin: 0 }}>{initialsOf({ full_name: su.full_name })}</span>
-                      <span className="pick-name">{su.full_name}<span className="pick-sub">{su.role_name || (su.is_founder ? 'Основатель' : 'Сотрудник')}{!ku && ' · нет в Kaiten'}</span></span>
-                    </button>
-                  ))}
-                  {kaitenOnly.length > 0 && <div className="pick-divider">Только в Kaiten</div>}
-                  {kaitenOnly.map(u => (
-                    <button key={`k${u.id}`} onClick={() => addMember(u)}>
-                      <span className="avatar-sm" style={{ margin: 0 }}>{initialsOf(u)}</span>
-                      <span className="pick-name">{u.full_name || u.username || u.email}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
+        <div className="issue-meta">
+          <div><span>Очередь</span><b>{refTitle(issue.queue) || 'Не указана'}</b></div>
+          <div><span>Исполнитель</span><b>{refTitle(issue.assignee) || 'Без исполнителя'}</b></div>
+          <div><span>Обновлено</span><b>{formatDate(issue.updatedAt) || 'Нет даты'}</b></div>
         </div>
 
+        {transitions.length > 0 && (
+          <div className="transition-block">
+            <span className="transition-title">Сменить статус</span>
+            <div className="transition-list">
+              {transitions.map(transition => (
+                <button key={String(transition.id)} className="btn btn-ghost btn-sm" disabled={busy} onClick={() => executeTransition(transition)}>
+                  <Icon name="arrowRight" size={14} />{refTitle(transition.to) || refTitle(transition) || 'Переход'}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="drawer-actions">
-          <button className="btn btn-primary btn-sm" disabled={!dirty || saving} onClick={save}><Icon name="check" size={15} />{saving ? 'Сохранение…' : 'Сохранить'}</button>
-          <button className="btn btn-soft btn-sm" onClick={() => onDelete(card)}><Icon name="trash" size={15} />Удалить</button>
+          <button className="btn btn-primary btn-sm" disabled={!dirty || busy || !title.trim()} onClick={save}>
+            <Icon name="check" size={15} />{busy ? 'Сохранение...' : 'Сохранить'}
+          </button>
         </div>
       </aside>
 
       <style>{`
         .drawer-overlay { position: fixed; inset: 0; background: rgba(15,23,42,.28); z-index: 50; display: flex; justify-content: flex-end; }
-        .drawer { width: 420px; max-width: 92vw; height: 100%; background: var(--surface); border-left: 1px solid var(--line); padding: 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; box-shadow: -8px 0 30px rgba(0,0,0,.12); animation: drawerIn .18s ease; }
+        .drawer { width: 440px; max-width: 92vw; height: 100%; background: var(--surface); border-left: 1px solid var(--line); padding: 22px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; box-shadow: -8px 0 30px rgba(0,0,0,.12); animation: drawerIn .18s ease; }
         @keyframes drawerIn { from { transform: translateX(20px); opacity: .4; } to { transform: none; opacity: 1; } }
-        .drawer-head { display: flex; align-items: center; justify-content: space-between; }
+        .drawer-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+        .drawer-head h2 { margin: 4px 0 0; font-size: 18px; font-family: var(--font-display); }
         .drawer-x { border: none; background: none; color: var(--ink-4); cursor: pointer; display: flex; }
         .drawer-x:hover { color: var(--text-primary); }
-        .field { display: flex; flex-direction: column; gap: 6px; }
-        .field > span { font-size: 12px; font-weight: 600; color: var(--ink-4); }
-        .field input, .field textarea { padding: 10px 12px; border: 1px solid var(--line); border-radius: 9px; background: var(--surface); font-size: 14px; color: var(--text-primary); font-family: inherit; resize: vertical; }
-        .field input:focus, .field textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-weak); }
-        .mem-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
-        .mem-chip { display: inline-flex; align-items: center; gap: 7px; padding: 4px 8px 4px 4px; border: 1px solid var(--line); border-radius: 20px; font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
-        .mem-chip button { border: none; background: none; color: var(--ink-4); cursor: pointer; display: flex; }
-        .mem-chip button:hover { color: #c0392b; }
-        .mem-add { position: relative; }
-        .mem-picker { position: absolute; top: 100%; left: 0; margin-top: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 6px; z-index: 5; min-width: 200px; max-height: 240px; overflow-y: auto; }
-        .mem-picker button { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; border: none; background: none; padding: 8px; border-radius: 7px; cursor: pointer; font-size: 13px; color: var(--text-primary); }
-        .mem-picker button:hover:not(:disabled) { background: var(--surface-2); }
-        .mem-picker button:disabled { opacity: .5; cursor: not-allowed; }
-        .pick-name { display: flex; flex-direction: column; line-height: 1.2; text-align: left; }
-        .pick-sub { font-size: 11px; color: var(--ink-4); font-weight: 500; }
-        .pick-divider { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-4); padding: 8px 8px 4px; }
+        .issue-meta { display: grid; grid-template-columns: 1fr; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+        .issue-meta div { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 13px; }
+        .issue-meta span { color: var(--ink-4); }
+        .issue-meta b { font-weight: 650; text-align: right; }
+        .transition-block { display: flex; flex-direction: column; gap: 9px; }
+        .transition-title { font-size: 12px; font-weight: 700; color: var(--ink-4); }
+        .transition-list { display: flex; flex-wrap: wrap; gap: 8px; }
         .drawer-actions { display: flex; gap: 10px; margin-top: auto; padding-top: 14px; border-top: 1px solid var(--line); }
       `}</style>
     </div>

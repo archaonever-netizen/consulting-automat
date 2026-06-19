@@ -53,8 +53,8 @@ class User(Base):
         cascade='all, delete-orphan',
         uselist=False
     )
-    kaiten_connection: Mapped[Optional['KaitenConnection']] = relationship(
-        'KaitenConnection',
+    yandex_tracker_connection: Mapped[Optional['YandexTrackerConnection']] = relationship(
+        'YandexTrackerConnection',
         back_populates='user',
         cascade='all, delete-orphan',
         uselist=False
@@ -852,28 +852,32 @@ class IngestJob(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
-class KaitenConnection(Base):
-    """Подключение пользователя к его рабочему пространству Kaiten.
+class YandexTrackerConnection(Base):
+    """Per-user connection settings for Yandex Tracker.
 
-    Одна связь на пользователя. Токен хранится зашифрованным (Fernet), в
-    открытом виде в БД не лежит. Приложение работает как сквозной прокси к
-    Kaiten REST API под этим токеном — карточки локально не хранятся.
+    The access token is stored encrypted with Fernet; issue data remains in
+    Yandex Tracker and is not duplicated locally.
     """
-    __tablename__ = 'kaiten_connections'
+    __tablename__ = 'yandex_tracker_connections'
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey('users.id'), nullable=False, unique=True
     )
-    domain: Mapped[str] = mapped_column(String(255), nullable=False)
+    org_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    cloud_org_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    token_type: Mapped[str] = mapped_column(String(20), default='oauth', nullable=False)
     token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
-    kaiten_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
-    kaiten_user_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    kaiten_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tracker_user_id: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tracker_user_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    tracker_email: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    default_queue: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
 
-    user: Mapped['User'] = relationship('User', back_populates='kaiten_connection')
+    user: Mapped['User'] = relationship('User', back_populates='yandex_tracker_connection')
 
 
 class FunctionAnalysis(Base):

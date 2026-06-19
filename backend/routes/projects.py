@@ -2,11 +2,30 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
+from ..routes._ratelimit import rate_limit
 from ..routes.auth import get_current_user_dep
-from ..schemas.projects import ProjectCreate, ProjectUpdate
-from ..services import projects as project_service
+from ..schemas.projects import CardValidateRequest, ProjectCreate, ProjectUpdate
+from ..services import card_validator, projects as project_service
 
 router = APIRouter()
+
+
+@router.post("/cards/validate", dependencies=[Depends(rate_limit("card_validate", 15))])
+async def validate_card(
+    data: CardValidateRequest,
+    current_user=Depends(get_current_user_dep),
+):
+    """Проверить заполнение карточки фреймворка проекта строго по методологиям из RAG.
+
+    Платный ИИ-вызов (гибридный поиск + модель), поэтому per-user rate limit.
+    Гибридный поиск требует Postgres/pgvector → на dev SQLite ожидаемый 503.
+    """
+    if not data.content:
+        raise HTTPException(status_code=400, detail="Карточка не заполнена")
+    try:
+        return await card_validator.validate_card(data.card_title, data.content)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
 
 
 @router.get("")

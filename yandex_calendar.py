@@ -5,7 +5,7 @@ TODO: интеграция запланирована, требует перен
 Что уже готово к переносу: поля токенов в backend/models.py (User), настройки
 в backend/core/config.py (yandex_*), инструкции в docs/archive/YANDEX_CALENDAR_SETUP.md.
 При переносе: переписать на async (httpx вместо requests), подключить к
-backend/services/tasks.py, шифровать токены как у Kaiten (backend/core/crypto.py).
+backend/services/tasks.py, шифровать токены через backend/core/crypto.py.
 """
 
 import os
@@ -15,7 +15,6 @@ from urllib.parse import urlencode
 
 try:
     import caldav
-    from caldav.elements import dav
     CALDAV_AVAILABLE = True
 except ImportError:
     print("[CALENDAR] Warning: caldav not installed, calendar integration disabled")
@@ -215,7 +214,7 @@ def create_event(user, task):
 
     # Сохранить событие
     ics_data = cal.to_ical()
-    new_event = calendar.add_event(ics_data)
+    calendar.add_event(ics_data)
 
     return event['uid']
 
@@ -252,8 +251,6 @@ def delete_event(user, event_uid):
         calendar = calendars[0]
 
         # Поиск события по UID
-        from icalendar import Calendar
-
         search_result = calendar.search(event_uid, expand=False)
         if search_result:
             search_result[0].delete()

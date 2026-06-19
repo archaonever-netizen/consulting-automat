@@ -1649,6 +1649,58 @@ a:hover { color: var(--accent-hover); }
 .project-theory-add-card:hover {
   border-color: var(--accent); background: var(--accent-weak);
 }
+
+/* === ИИ-валидатор карточки (строго по RAG-методологиям) === */
+.project-card-validator {
+  margin-top: 18px; padding: 18px; border: 1px solid var(--accent-weak-2);
+  border-radius: var(--radius-lg); background: var(--accent-weak); box-shadow: var(--sh-sm);
+  display: flex; flex-direction: column; gap: 14px;
+}
+.project-card-validator-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.project-card-validator-head p {
+  margin: 0; color: var(--accent-ink); font-size: 13px; line-height: 1.5; max-width: 60ch;
+}
+.project-card-validator-btn {
+  display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; white-space: nowrap;
+  border: 1px solid transparent; border-radius: var(--radius-md); background: var(--accent);
+  color: #fff; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; transition: var(--transition);
+}
+.project-card-validator-btn:hover:not(:disabled) { background: var(--accent-ink); transform: translateY(-1px); }
+.project-card-validator-btn:disabled { opacity: .65; cursor: progress; }
+.project-card-validator-hint {
+  padding: 10px 12px; border-radius: var(--radius-md); background: var(--amber-weak);
+  color: var(--amber); font-size: 13px; font-weight: 600;
+}
+.project-card-validator-error {
+  padding: 10px 12px; border-radius: var(--radius-md); background: var(--danger-weak);
+  color: var(--danger); font-size: 13px; font-weight: 600;
+}
+.project-card-validator-result {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--border-2);
+  border-radius: var(--radius-md); background: var(--card-bg);
+}
+.project-card-validator-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.project-card-validator-badge {
+  display: inline-flex; align-items: center; padding: 5px 12px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; letter-spacing: .02em;
+}
+.project-card-validator-badge.ok { color: var(--success); background: var(--success-weak); }
+.project-card-validator-badge.warn { color: var(--amber); background: var(--amber-weak); }
+.project-card-validator-badge.bad { color: var(--danger); background: var(--danger-weak); }
+.project-card-validator-badge.muted { color: var(--text-secondary); background: var(--surface-2); }
+.project-card-validator-stale { color: var(--amber); font-size: 12.5px; font-weight: 700; }
+.project-card-validator-answer { font-size: 13.5px; line-height: 1.55; color: var(--text-primary); }
+.project-card-validator-answer p { margin: 0 0 4px; }
+.project-card-validator-answer p:empty { margin: 0 0 8px; }
+.project-card-validator-evidence { font-size: 12.5px; color: var(--text-secondary); }
+.project-card-validator-evidence ul { margin: 6px 0 0; padding-left: 18px; }
+.project-card-validator-evidence li { margin-bottom: 3px; }
+.project-card-validator-btn .spinner {
+  border-color: rgba(255,255,255,.4); border-top-color: #fff;
+}
+
 .project-theory-validation {
   display: grid; grid-template-columns: minmax(230px, .7fr) minmax(0, 1.5fr) minmax(220px, .7fr);
   gap: 18px; align-items: start; padding: 18px; border: 1px solid var(--accent-weak-2);

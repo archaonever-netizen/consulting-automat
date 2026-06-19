@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import DraftCard from './DraftCard';
 import Icon from '../Icon';
 import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot, writeProjectTheorySnapshot, type ProjectTheorySnapshotItem } from './projectTheorySnapshot';
 
@@ -2046,13 +2047,6 @@ function getCriterionMethodProgress(criterion: ResultCriterion) {
   return { done, total: methodologyCheckOptions.length };
 }
 
-function getCriterionMethodStatus(criterion: ResultCriterion) {
-  const progress = getCriterionMethodProgress(criterion);
-  if (progress.done === 0) return 'проверка не начата';
-  if (progress.done === progress.total) return 'проверка пройдена';
-  return `${progress.done}/${progress.total} проверок`;
-}
-
 type TheoryForm = {
   mission: MissionCard;
   stakeholders: StakeholderCard[];
@@ -2110,6 +2104,9 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     () => [...preserveElementNames, ...constraintNames],
     [preserveElementNames, constraintNames],
   );
+  // Singleton-карточка миссии как объект с id для DraftCard. Мемоизируем, чтобы ссылка
+  // менялась только при изменении mission (иначе DraftCard сбрасывал бы черновик каждый рендер).
+  const missionCard = useMemo(() => ({ ...mission, id: 0 }), [mission]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -2209,69 +2206,9 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     stakeholders,
   ]);
 
-  function updateMission(patch: Partial<MissionCard>) {
-    setMission(current => {
-      const next = { ...current, ...patch };
-      if (patch.value && patch.value !== 'Другое') {
-        next.valueOther = '';
-      }
-      if (patch.externalChanges && !patch.externalChanges.includes('Другое')) {
-        next.externalChangeOther = '';
-      }
-      if (patch.notMission && !patch.notMission.includes('Другое')) {
-        next.notMissionOther = '';
-      }
-      return next;
-    });
-  }
-
-  function toggleMissionMultiValue(field: MissionMultiField, value: string) {
-    setMission(current => {
-      const values = current[field].includes(value)
-        ? current[field].filter(item => item !== value)
-        : [...current[field], value];
-      const next = { ...current, [field]: values };
-      if (field === 'externalChanges' && !values.includes('Другое')) {
-        next.externalChangeOther = '';
-      }
-      if (field === 'notMission' && !values.includes('Другое')) {
-        next.notMissionOther = '';
-      }
-      return next;
-    });
-  }
-
-  function generateMissionStatement() {
-    setMission(current => ({ ...current, finalStatement: buildMissionStatement(current) }));
-  }
-
   function addStakeholder() {
     setStakeholders(current => [...current, createStakeholderCard(nextStakeholderId)]);
     setNextStakeholderId(current => current + 1);
-  }
-
-  function updateStakeholder(id: number, patch: Partial<StakeholderCard>) {
-    setStakeholders(current => current.map(stakeholder => {
-      if (stakeholder.id !== id) return stakeholder;
-      const next = { ...stakeholder, ...patch };
-
-      if (patch.role !== undefined) {
-        const typeOptions = getStakeholderTypeOptions(patch.role);
-        next.type = typeOptions.includes(next.type) ? next.type : '';
-        next.segment = shouldShowStakeholderSegment(patch.role) ? next.segment : '';
-        next.segmentOther = shouldShowStakeholderSegment(patch.role) ? next.segmentOther : '';
-        next.relationMetric = shouldShowStakeholderRelationMetric(patch.role) ? next.relationMetric : '';
-      }
-      if (patch.type !== undefined) {
-        const valueOptions = getStakeholderValueOptions(patch.type);
-        next.value = valueOptions.includes(next.value) ? next.value : '';
-      }
-      if (patch.segment && patch.segment !== 'Другое') {
-        next.segmentOther = '';
-      }
-
-      return next;
-    }));
   }
 
   function addCompetency() {
@@ -2279,40 +2216,9 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     setNextCompetencyId(current => current + 1);
   }
 
-  function updateCompetency(id: number, patch: Partial<CompetencyCard>) {
-    setCompetencies(current => current.map(competency => (
-      competency.id === id ? { ...competency, ...patch } : competency
-    )));
-  }
-
-  function toggleCompetencySupportSystem(id: number, supportSystem: string) {
-    setCompetencies(current => current.map(competency => {
-      if (competency.id !== id) return competency;
-      const supportSystems = competency.supportSystems.includes(supportSystem)
-        ? competency.supportSystems.filter(item => item !== supportSystem)
-        : [...competency.supportSystems, supportSystem];
-      return { ...competency, supportSystems };
-    }));
-  }
-
   function addConstraint() {
     setConstraints(current => [...current, createConstraintCard(nextConstraintId)]);
     setNextConstraintId(current => current + 1);
-  }
-
-  function updateConstraint(id: number, patch: Partial<ConstraintCard>) {
-    setConstraints(current => current.map(constraint => {
-      if (constraint.id !== id) return constraint;
-      const next = { ...constraint, ...patch };
-      if (patch.type !== undefined) {
-        const subtypeOptions = getConstraintSubtypeOptions(patch.type);
-        next.subtype = subtypeOptions.includes(next.subtype) ? next.subtype : '';
-      }
-      if (patch.rigidity !== undefined && patch.rigidity !== 'Гипотетическое: требует проверки') {
-        next.hypothesis = '';
-      }
-      return next;
-    }));
   }
 
   function addQualityIndicator() {
@@ -2320,102 +2226,9 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     setNextQualityIndicatorId(current => current + 1);
   }
 
-  function updateQualityIndicator(id: number, patch: Partial<QualityIndicatorCard>) {
-    setQualityIndicators(current => current.map(indicator => {
-      if (indicator.id !== id) return indicator;
-      const next = { ...indicator, ...patch };
-      if (patch.object !== undefined) {
-        next.defects = [];
-        next.metric = '';
-        next.formula = '';
-        next.controlSource = '';
-      }
-      if (patch.metric !== undefined) {
-        next.formula = getQualityFormula(qualityDependencies[next.object], patch.metric, next.defects);
-      }
-      return next;
-    }));
-  }
-
-  function toggleQualityIndicatorDefect(id: number, defectType: string) {
-    setQualityIndicators(current => current.map(indicator => {
-      if (indicator.id !== id) return indicator;
-      const defects = indicator.defects.includes(defectType)
-        ? indicator.defects.filter(item => item !== defectType)
-        : [...indicator.defects, defectType];
-      const metricOptions = getQualityMetricOptions(indicator.object, defects);
-      const metric = metricOptions.includes(indicator.metric) ? indicator.metric : '';
-      return {
-        ...indicator,
-        defects,
-        metric,
-        formula: metric ? getQualityFormula(qualityDependencies[indicator.object], metric, defects) : '',
-      };
-    }));
-  }
-
   function addPreserveElement() {
     setPreserveElements(current => [...current, createPreserveElementCard(nextPreserveElementId)]);
     setNextPreserveElementId(current => current + 1);
-  }
-
-  function updatePreserveElement(id: number, patch: Partial<PreserveElementCard>) {
-    setPreserveElements(current => current.map(element => {
-      if (element.id !== id) return element;
-      const next = { ...element, ...patch };
-      if (patch.type !== undefined) {
-        const indicatorOptions = getPreserveIndicatorOptions(patch.type);
-        next.preservationIndicator = indicatorOptions.includes(next.preservationIndicator) ? next.preservationIndicator : '';
-      }
-      if (patch.forbiddenActions && !patch.forbiddenActions.includes('Другое')) {
-        next.forbiddenActionOther = '';
-      }
-      return next;
-    }));
-  }
-
-  function togglePreserveMultiValue(id: number, field: 'changeableItems' | 'forbiddenActions', value: string) {
-    setPreserveElements(current => current.map(element => {
-      if (element.id !== id) return element;
-      const values = element[field].includes(value)
-        ? element[field].filter(item => item !== value)
-        : [...element[field], value];
-      const next = { ...element, [field]: values };
-      if (field === 'forbiddenActions' && !values.includes('Другое')) {
-        next.forbiddenActionOther = '';
-      }
-      return next;
-    }));
-  }
-
-  function updateCriterion(id: number, patch: Partial<ResultCriterion>) {
-    setCriteria(current => current.map(criterion => {
-      if (criterion.id !== id) return criterion;
-      const next = { ...criterion, ...patch };
-      if (patch.perspective !== undefined) {
-        next.metric = '';
-        next.isCustomMetric = false;
-        next.formula = '';
-        next.unit = '';
-        next.normDirection = '';
-        next.controlSource = '';
-      }
-      if (patch.beneficiary && patch.beneficiary !== 'Другое') {
-        next.beneficiaryOther = '';
-      }
-      if (patch.metric !== undefined) {
-        const customMetricMode = patch.isCustomMetric ?? next.isCustomMetric;
-        next.isCustomMetric = customMetricMode;
-        if (!customMetricMode) {
-          const metric = getResultMetricOptions(next.perspective).find(item => item.name === patch.metric);
-          next.formula = metric?.formula || '';
-          next.unit = metric?.unit || '';
-          next.normDirection = metric?.normDirection || '';
-          next.controlSource = metric?.sources[0] || '';
-        }
-      }
-      return next;
-    }));
   }
 
   function addCriterion() {
@@ -2423,39 +2236,130 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     setNextCriterionId(current => current + 1);
   }
 
-  function addCustomMetric(criterionId: number) {
-    setCriteria(current => current.map(criterion => {
-      if (criterion.id !== criterionId) return criterion;
-      return {
-        ...criterion,
-        metric: 'Новая пользовательская метрика',
-        isCustomMetric: true,
-        formula: '',
-        unit: '',
-        normDirection: '',
-        controlSource: '',
-      };
-    }));
+  // Чистые helper-функции производных полей карточек: используются в черновике DraftCard
+  // (patch(applyX(draft, ...))), чтобы поведение совпадало с прежними update/toggle.
+  function applyMissionPatch(current: MissionCard, patch: Partial<MissionCard>): MissionCard {
+    const next = { ...current, ...patch };
+    if (patch.value && patch.value !== 'Другое') next.valueOther = '';
+    if (patch.externalChanges && !patch.externalChanges.includes('Другое')) next.externalChangeOther = '';
+    if (patch.notMission && !patch.notMission.includes('Другое')) next.notMissionOther = '';
+    return next;
   }
 
-  function toggleCriterionCompetency(criterionId: number, competencyName: string) {
-    setCriteria(current => current.map(criterion => {
-      if (criterion.id !== criterionId) return criterion;
-      const requiredCompetencies = criterion.requiredCompetencies.includes(competencyName)
-        ? criterion.requiredCompetencies.filter(item => item !== competencyName)
-        : [...criterion.requiredCompetencies, competencyName];
-      return { ...criterion, requiredCompetencies };
-    }));
+  function toggleMissionMulti(current: MissionCard, field: MissionMultiField, value: string): MissionCard {
+    const values = current[field].includes(value)
+      ? current[field].filter(item => item !== value)
+      : [...current[field], value];
+    return applyMissionPatch(current, { [field]: values } as Partial<MissionCard>);
   }
 
-  function toggleMethodologyCheck(criterionId: number, check: string) {
-    setCriteria(current => current.map(criterion => {
-      if (criterion.id !== criterionId || !isManualMethodologyCheck(check)) return criterion;
-      const methodologyChecks = criterion.methodologyChecks.includes(check)
-        ? criterion.methodologyChecks.filter(item => item !== check)
-        : [...criterion.methodologyChecks, check];
-      return { ...criterion, methodologyChecks };
-    }));
+  function applyStakeholderPatch(current: StakeholderCard, patch: Partial<StakeholderCard>): StakeholderCard {
+    const next = { ...current, ...patch };
+    if (patch.role !== undefined) {
+      const typeOptions = getStakeholderTypeOptions(patch.role);
+      next.type = typeOptions.includes(next.type) ? next.type : '';
+      next.segment = shouldShowStakeholderSegment(patch.role) ? next.segment : '';
+      next.segmentOther = shouldShowStakeholderSegment(patch.role) ? next.segmentOther : '';
+      next.relationMetric = shouldShowStakeholderRelationMetric(patch.role) ? next.relationMetric : '';
+    }
+    if (patch.type !== undefined) {
+      const valueOptions = getStakeholderValueOptions(patch.type);
+      next.value = valueOptions.includes(next.value) ? next.value : '';
+    }
+    if (patch.segment && patch.segment !== 'Другое') next.segmentOther = '';
+    return next;
+  }
+
+  function applyConstraintPatch(current: ConstraintCard, patch: Partial<ConstraintCard>): ConstraintCard {
+    const next = { ...current, ...patch };
+    if (patch.type !== undefined) {
+      const subtypeOptions = getConstraintSubtypeOptions(patch.type);
+      next.subtype = subtypeOptions.includes(next.subtype) ? next.subtype : '';
+    }
+    if (patch.rigidity !== undefined && patch.rigidity !== 'Гипотетическое: требует проверки') next.hypothesis = '';
+    return next;
+  }
+
+  function applyQualityIndicatorPatch(current: QualityIndicatorCard, patch: Partial<QualityIndicatorCard>): QualityIndicatorCard {
+    const next = { ...current, ...patch };
+    if (patch.object !== undefined) {
+      next.defects = [];
+      next.metric = '';
+      next.formula = '';
+      next.controlSource = '';
+    }
+    if (patch.metric !== undefined) {
+      next.formula = getQualityFormula(qualityDependencies[next.object], patch.metric, next.defects);
+    }
+    return next;
+  }
+
+  function toggleQualityDefect(current: QualityIndicatorCard, defectType: string): QualityIndicatorCard {
+    const defects = current.defects.includes(defectType)
+      ? current.defects.filter(item => item !== defectType)
+      : [...current.defects, defectType];
+    const metricOptions = getQualityMetricOptions(current.object, defects);
+    const metric = metricOptions.includes(current.metric) ? current.metric : '';
+    return {
+      ...current,
+      defects,
+      metric,
+      formula: metric ? getQualityFormula(qualityDependencies[current.object], metric, defects) : '',
+    };
+  }
+
+  function applyPreserveElementPatch(current: PreserveElementCard, patch: Partial<PreserveElementCard>): PreserveElementCard {
+    const next = { ...current, ...patch };
+    if (patch.type !== undefined) {
+      const indicatorOptions = getPreserveIndicatorOptions(patch.type);
+      next.preservationIndicator = indicatorOptions.includes(next.preservationIndicator) ? next.preservationIndicator : '';
+    }
+    if (patch.forbiddenActions && !patch.forbiddenActions.includes('Другое')) next.forbiddenActionOther = '';
+    return next;
+  }
+
+  function togglePreserveMulti(current: PreserveElementCard, field: 'changeableItems' | 'forbiddenActions', value: string): PreserveElementCard {
+    const values = current[field].includes(value)
+      ? current[field].filter(item => item !== value)
+      : [...current[field], value];
+    return applyPreserveElementPatch(current, { [field]: values } as Partial<PreserveElementCard>);
+  }
+
+  function applyCriterionPatch(current: ResultCriterion, patch: Partial<ResultCriterion>): ResultCriterion {
+    const next = { ...current, ...patch };
+    if (patch.perspective !== undefined) {
+      next.metric = '';
+      next.isCustomMetric = false;
+      next.formula = '';
+      next.unit = '';
+      next.normDirection = '';
+      next.controlSource = '';
+    }
+    if (patch.beneficiary && patch.beneficiary !== 'Другое') next.beneficiaryOther = '';
+    if (patch.metric !== undefined) {
+      const customMetricMode = patch.isCustomMetric ?? next.isCustomMetric;
+      next.isCustomMetric = customMetricMode;
+      if (!customMetricMode) {
+        const metric = getResultMetricOptions(next.perspective).find(item => item.name === patch.metric);
+        next.formula = metric?.formula || '';
+        next.unit = metric?.unit || '';
+        next.normDirection = metric?.normDirection || '';
+        next.controlSource = metric?.sources[0] || '';
+      }
+    }
+    return next;
+  }
+
+  function applyCriterionCustomMetric(current: ResultCriterion): ResultCriterion {
+    return {
+      ...current,
+      metric: 'Новая пользовательская метрика',
+      isCustomMetric: true,
+      formula: '',
+      unit: '',
+      normDirection: '',
+      controlSource: '',
+    };
   }
 
   return (
@@ -2491,12 +2395,13 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
         title="Миссия проекта"
         note="Фиксирует ценность и выгодоприобретателя. Деньги могут быть результатом, но не единственным смыслом проекта."
       >
-        <div className="project-theory-card">
-          <div className="project-theory-card-head">
-            <div className="project-theory-card-title">Миссия</div>
-            <span className="project-theory-status-badge">{getMissionMethodStatus(mission)}</span>
-          </div>
-
+        <DraftCard
+          card={missionCard}
+          title="Миссия"
+          onApply={next => { const rest = { ...next } as Partial<typeof next>; delete rest.id; setMission(rest as MissionCard); }}
+        >
+          {(draft, patch) => (
+            <>
           <div className="project-theory-flow" aria-label="Последовательность заполнения миссии">
             {[
               'Уровень',
@@ -2525,61 +2430,61 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <SelectField
               label="1. Уровень миссии"
               options={missionLevelOptions}
-              value={mission.level}
-              onChange={value => updateMission({ level: value })}
+              value={draft.level}
+              onChange={value => patch(applyMissionPatch(draft, { level: value }))}
             />
             <SelectField
               label="2. Главный выгодоприобретатель"
               options={stakeholderNames.length ? stakeholderNames : ['Сначала заполните блок Клиент / выгодоприобретатель']}
-              value={mission.mainBeneficiary}
-              onChange={value => updateMission({ mainBeneficiary: value })}
+              value={draft.mainBeneficiary}
+              onChange={value => patch(applyMissionPatch(draft, { mainBeneficiary: value }))}
             />
             <SelectField
               label="3. Для кого создается ценность"
               options={missionValueForOptions}
-              value={mission.valueFor}
-              onChange={value => updateMission({ valueFor: value })}
+              value={draft.valueFor}
+              onChange={value => patch(applyMissionPatch(draft, { valueFor: value }))}
             />
             <SelectField
               label="5. Ценность, которую проект должен создать"
               options={missionValueOptions}
-              value={mission.value}
-              onChange={value => updateMission({ value })}
+              value={draft.value}
+              onChange={value => patch(applyMissionPatch(draft, { value }))}
             />
-            {mission.value === 'Другое' && (
+            {draft.value === 'Другое' && (
               <TextField
                 label="5. Ценность: другое"
-                value={mission.valueOther}
-                onChange={value => updateMission({ valueOther: value })}
+                value={draft.valueOther}
+                onChange={value => patch(applyMissionPatch(draft, { valueOther: value }))}
               />
             )}
             <SelectField
               label="6. Тип миссии"
               options={missionTypeOptions}
-              value={mission.missionType}
-              onChange={value => updateMission({ missionType: value })}
+              value={draft.missionType}
+              onChange={value => patch(applyMissionPatch(draft, { missionType: value }))}
             />
           </div>
 
           <TextAreaField
             label="4. Проблема / потребность, ради которой существует проект"
             placeholder="Какую потребность, проблему или возможность должен закрыть проект?"
-            value={mission.problem}
-            onChange={value => updateMission({ problem: value })}
+            value={draft.problem}
+            onChange={value => patch(applyMissionPatch(draft, { problem: value }))}
           />
 
           <div className="project-theory-grid two">
             <TextAreaField
               label="7. Причина существования глубже, чем деньги"
               placeholder="Почему этот проект должен существовать, кроме получения финансового результата?"
-              value={mission.deeperReason}
-              onChange={value => updateMission({ deeperReason: value })}
+              value={draft.deeperReason}
+              onChange={value => patch(applyMissionPatch(draft, { deeperReason: value }))}
             />
             <TextAreaField
               label="8. Что будет считаться победой для проекта"
               placeholder="Как должно выглядеть выигрышное состояние для клиента / организации?"
-              value={mission.victoryState}
-              onChange={value => updateMission({ victoryState: value })}
+              value={draft.victoryState}
+              onChange={value => patch(applyMissionPatch(draft, { victoryState: value }))}
             />
           </div>
 
@@ -2593,18 +2498,18 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                 <label className="project-theory-check-option" key={option}>
                   <input
                     type="checkbox"
-                    checked={mission.externalChanges.includes(option)}
-                    onChange={() => toggleMissionMultiValue('externalChanges', option)}
+                    checked={draft.externalChanges.includes(option)}
+                    onChange={() => patch(toggleMissionMulti(draft, 'externalChanges', option))}
                   />
                   <span>{option}</span>
                 </label>
               ))}
             </div>
-            {mission.externalChanges.includes('Другое') && (
+            {draft.externalChanges.includes('Другое') && (
               <TextField
                 label="9. Внешнее изменение: другое"
-                value={mission.externalChangeOther}
-                onChange={value => updateMission({ externalChangeOther: value })}
+                value={draft.externalChangeOther}
+                onChange={value => patch(applyMissionPatch(draft, { externalChangeOther: value }))}
               />
             )}
           </div>
@@ -2612,8 +2517,8 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
           <TextAreaField
             label="10. Предположение миссии"
             placeholder="На каком ключевом предположении держится миссия проекта?"
-            value={mission.assumption}
-            onChange={value => updateMission({ assumption: value })}
+            value={draft.assumption}
+            onChange={value => patch(applyMissionPatch(draft, { assumption: value }))}
           />
 
           <div className="project-theory-grid two">
@@ -2624,9 +2529,9 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                   <label className="project-theory-check-option" key={option}>
                     <input
                       type="checkbox"
-                      checked={mission.relatedCompetencies.includes(option)}
+                      checked={draft.relatedCompetencies.includes(option)}
                       disabled={!competencyNames.length}
-                      onChange={() => toggleMissionMultiValue('relatedCompetencies', option)}
+                      onChange={() => patch(toggleMissionMulti(draft, 'relatedCompetencies', option))}
                     />
                     <span>{option}</span>
                   </label>
@@ -2640,9 +2545,9 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                   <label className="project-theory-check-option" key={option}>
                     <input
                       type="checkbox"
-                      checked={mission.relatedResults.includes(option)}
+                      checked={draft.relatedResults.includes(option)}
                       disabled={!resultNames.length}
-                      onChange={() => toggleMissionMultiValue('relatedResults', option)}
+                      onChange={() => patch(toggleMissionMulti(draft, 'relatedResults', option))}
                     />
                     <span>{option}</span>
                   </label>
@@ -2661,18 +2566,18 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                 <label className="project-theory-check-option" key={option}>
                   <input
                     type="checkbox"
-                    checked={mission.notMission.includes(option)}
-                    onChange={() => toggleMissionMultiValue('notMission', option)}
+                    checked={draft.notMission.includes(option)}
+                    onChange={() => patch(toggleMissionMulti(draft, 'notMission', option))}
                   />
                   <span>{option}</span>
                 </label>
               ))}
             </div>
-            {mission.notMission.includes('Другое') && (
+            {draft.notMission.includes('Другое') && (
               <TextField
                 label="13. Не является миссией: другое"
-                value={mission.notMissionOther}
-                onChange={value => updateMission({ notMissionOther: value })}
+                value={draft.notMissionOther}
+                onChange={value => patch(applyMissionPatch(draft, { notMissionOther: value }))}
               />
             )}
           </div>
@@ -2684,9 +2589,9 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                 <label className="project-theory-check-option" key={option}>
                   <input
                     type="checkbox"
-                    checked={mission.protectRelations.includes(option)}
+                    checked={draft.protectRelations.includes(option)}
                     disabled={!missionProtectionOptions.length}
-                    onChange={() => toggleMissionMultiValue('protectRelations', option)}
+                    onChange={() => patch(toggleMissionMulti(draft, 'protectRelations', option))}
                   />
                   <span>{option}</span>
                 </label>
@@ -2698,12 +2603,12 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <SelectField
               label="15. Срок пересмотра миссии"
               options={missionReviewOptions}
-              value={mission.reviewRule}
-              onChange={value => updateMission({ reviewRule: value })}
+              value={draft.reviewRule}
+              onChange={value => patch(applyMissionPatch(draft, { reviewRule: value }))}
             />
             <div className="project-theory-field">
               <span>16. Итоговая формулировка миссии</span>
-              <button className="btn btn-ghost btn-sm" type="button" onClick={generateMissionStatement}>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => patch({ finalStatement: buildMissionStatement(draft) })}>
                 <Icon name="sparkle" size={14} />
                 Собрать по шаблону
               </button>
@@ -2712,27 +2617,27 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
           <TextAreaField
             label="16. Итоговая формулировка"
             placeholder="Проект существует для того, чтобы [выгодоприобретатель] получил [ценность], решив [проблема / потребность], за счет [ключевое изменение / способность], без нарушения [сохраняемое ядро / ограничение]."
-            value={mission.finalStatement}
-            onChange={value => updateMission({ finalStatement: value })}
+            value={draft.finalStatement}
+            onChange={value => patch(applyMissionPatch(draft, { finalStatement: value }))}
           />
 
           <div className="project-theory-method-status compact">
             <div>
               <b>17. Методологическая проверка</b>
-              <p>{getMissionMethodStatus(mission)}</p>
+              <p>{getMissionMethodStatus(draft)}</p>
             </div>
             <div className="project-theory-check-list dense">
               {[
-                ['указан выгодоприобретатель', mission.mainBeneficiary],
-                ['указана проблема / потребность', mission.problem],
-                ['указана создаваемая ценность', getMissionValue(mission)],
-                ['миссия не сведена только к деньгам', hasFinancialOnlyMissionReason(mission.deeperReason) ? '' : mission.deeperReason],
-                ['миссия не сведена к задаче или артефакту', hasTaskOnlyMissionProblem(mission.problem) ? '' : mission.problem],
-                ['указано внешнее изменение или контекст', mission.externalChanges.length ? 'yes' : ''],
-                ['есть связанный критерий результата', mission.relatedResults.length ? 'yes' : ''],
-                ['есть связанные ключевые компетенции', mission.relatedCompetencies.length ? 'yes' : ''],
-                ['указано, что миссия не должна разрушить', mission.protectRelations.length ? 'yes' : ''],
-                ['есть правило пересмотра миссии', mission.reviewRule],
+                ['указан выгодоприобретатель', draft.mainBeneficiary],
+                ['указана проблема / потребность', draft.problem],
+                ['указана создаваемая ценность', getMissionValue(draft)],
+                ['миссия не сведена только к деньгам', hasFinancialOnlyMissionReason(draft.deeperReason) ? '' : draft.deeperReason],
+                ['миссия не сведена к задаче или артефакту', hasTaskOnlyMissionProblem(draft.problem) ? '' : draft.problem],
+                ['указано внешнее изменение или контекст', draft.externalChanges.length ? 'yes' : ''],
+                ['есть связанный критерий результата', draft.relatedResults.length ? 'yes' : ''],
+                ['есть связанные ключевые компетенции', draft.relatedCompetencies.length ? 'yes' : ''],
+                ['указано, что миссия не должна разрушить', draft.protectRelations.length ? 'yes' : ''],
+                ['есть правило пересмотра миссии', draft.reviewRule],
               ].map(([label, value]) => (
                 <label className="project-theory-check-option locked" key={label}>
                   <input type="checkbox" checked={String(value).trim().length > 0} disabled />
@@ -2741,7 +2646,9 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
               ))}
             </div>
           </div>
-        </div>
+            </>
+          )}
+        </DraftCard>
       </ProjectTheorySection>
 
       <ProjectTheorySection
@@ -2750,173 +2657,177 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
         note="Фиксирует ключевых стейкхолдеров проекта: роль, тип пользы, потребность, ценность, связь с критерием результата и способ проверки."
       >
         <div className="project-theory-repeater">
-          {stakeholders.map((stakeholder, index) => {
-            const typeOptions = getStakeholderTypeOptions(stakeholder.role);
-            const valueOptions = getStakeholderValueOptions(stakeholder.type);
-            const showSegment = shouldShowStakeholderSegment(stakeholder.role);
-            const showRelationMetric = shouldShowStakeholderRelationMetric(stakeholder.role);
-            const methodStatus = getStakeholderMethodStatus(stakeholder);
+          {stakeholders.map((stakeholder, index) => (
+            <DraftCard
+              key={stakeholder.id}
+              card={stakeholder}
+              title={`Стейкхолдер ${index + 1}`}
+              onApply={next => setStakeholders(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => {
+                const typeOptions = getStakeholderTypeOptions(draft.role);
+                const valueOptions = getStakeholderValueOptions(draft.type);
+                const showSegment = shouldShowStakeholderSegment(draft.role);
+                const showRelationMetric = shouldShowStakeholderRelationMetric(draft.role);
+                const methodStatus = getStakeholderMethodStatus(draft);
 
-            return (
-              <div className="project-theory-card" key={stakeholder.id}>
-                <div className="project-theory-card-head">
-                  <div className="project-theory-card-title">Стейкхолдер {index + 1}</div>
-                  <span className="project-theory-status-badge">{methodStatus}</span>
-                </div>
+                return (
+                  <>
+                    <div className="project-theory-flow" aria-label="Последовательность заполнения стейкхолдера">
+                      {[
+                        'Роль',
+                        'Тип',
+                        'Конкретизация',
+                        'Сегмент',
+                        'Потребность',
+                        'Ценность',
+                        'Ценностное предложение',
+                        'Критерий пользы',
+                        'Метрика отношения',
+                        'Влияние',
+                        'Приоритет',
+                        'Риск',
+                        'Проверка',
+                        'Источник',
+                        'Методология',
+                      ].map((step, stepIndex) => (
+                        <span key={step}>{stepIndex + 1}. {step}</span>
+                      ))}
+                    </div>
 
-                <div className="project-theory-flow" aria-label="Последовательность заполнения стейкхолдера">
-                  {[
-                    'Роль',
-                    'Тип',
-                    'Конкретизация',
-                    'Сегмент',
-                    'Потребность',
-                    'Ценность',
-                    'Ценностное предложение',
-                    'Критерий пользы',
-                    'Метрика отношения',
-                    'Влияние',
-                    'Приоритет',
-                    'Риск',
-                    'Проверка',
-                    'Источник',
-                    'Методология',
-                  ].map((step, stepIndex) => (
-                    <span key={step}>{stepIndex + 1}. {step}</span>
-                  ))}
-                </div>
-
-                <div className="project-theory-grid three">
-                  <SelectField
-                    label="1. Роль стейкхолдера в проекте"
-                    options={stakeholderRoleOptions}
-                    value={stakeholder.role}
-                    onChange={value => updateStakeholder(stakeholder.id, { role: value })}
-                  />
-                  <SelectField
-                    label="2. Тип клиента / выгодоприобретателя"
-                    options={typeOptions}
-                    value={stakeholder.type}
-                    onChange={value => updateStakeholder(stakeholder.id, { type: value })}
-                  />
-                  <TextField
-                    label="3. Конкретизация стейкхолдера"
-                    placeholder="Роль / сегмент / подразделение / группа"
-                    value={stakeholder.details}
-                    onChange={value => updateStakeholder(stakeholder.id, { details: value })}
-                  />
-                </div>
-
-                {showSegment && (
-                  <div className="project-theory-grid two">
-                    <SelectField
-                      label="4. Сегмент"
-                      options={stakeholderSegmentOptions}
-                      value={stakeholder.segment}
-                      onChange={value => updateStakeholder(stakeholder.id, { segment: value })}
-                    />
-                    {stakeholder.segment === 'Другое' && (
-                      <TextField
-                        label="4. Уточнение сегмента"
-                        value={stakeholder.segmentOther}
-                        onChange={value => updateStakeholder(stakeholder.id, { segmentOther: value })}
+                    <div className="project-theory-grid three">
+                      <SelectField
+                        label="1. Роль стейкхолдера в проекте"
+                        options={stakeholderRoleOptions}
+                        value={draft.role}
+                        onChange={value => patch(applyStakeholderPatch(draft, { role: value }))}
                       />
+                      <SelectField
+                        label="2. Тип клиента / выгодоприобретателя"
+                        options={typeOptions}
+                        value={draft.type}
+                        onChange={value => patch(applyStakeholderPatch(draft, { type: value }))}
+                      />
+                      <TextField
+                        label="3. Конкретизация стейкхолдера"
+                        placeholder="Роль / сегмент / подразделение / группа"
+                        value={draft.details}
+                        onChange={value => patch(applyStakeholderPatch(draft, { details: value }))}
+                      />
+                    </div>
+
+                    {showSegment && (
+                      <div className="project-theory-grid two">
+                        <SelectField
+                          label="4. Сегмент"
+                          options={stakeholderSegmentOptions}
+                          value={draft.segment}
+                          onChange={value => patch(applyStakeholderPatch(draft, { segment: value }))}
+                        />
+                        {draft.segment === 'Другое' && (
+                          <TextField
+                            label="4. Уточнение сегмента"
+                            value={draft.segmentOther}
+                            onChange={value => patch(applyStakeholderPatch(draft, { segmentOther: value }))}
+                          />
+                        )}
+                      </div>
                     )}
-                  </div>
-                )}
 
-                <TextAreaField
-                  label="5. Потребность / проблема стейкхолдера"
-                  placeholder="Какая потребность, проблема или ожидание этого стейкхолдера должна быть закрыта проектом?"
-                  value={stakeholder.need}
-                  onChange={value => updateStakeholder(stakeholder.id, { need: value })}
-                />
-
-                <div className="project-theory-grid three">
-                  <SelectField
-                    label="6. Ценность, которую должен получить стейкхолдер"
-                    options={valueOptions}
-                    value={stakeholder.value}
-                    onChange={value => updateStakeholder(stakeholder.id, { value })}
-                  />
-                  <SelectField
-                    label="7. Тип ценностного предложения"
-                    options={stakeholderValuePropositionOptions}
-                    value={stakeholder.valueProposition}
-                    onChange={value => updateStakeholder(stakeholder.id, { valueProposition: value })}
-                  />
-                  <LinkedResultSelect
-                    label="8. Критерий подтверждения пользы"
-                    resultNames={resultNames}
-                    value={stakeholder.resultCriterion}
-                    onChange={value => updateStakeholder(stakeholder.id, { resultCriterion: value })}
-                  />
-                  {showRelationMetric && (
-                    <SelectField
-                      label="9. Метрика отношения / клиентского результата"
-                      options={stakeholderRelationMetricOptions}
-                      value={stakeholder.relationMetric}
-                      onChange={value => updateStakeholder(stakeholder.id, { relationMetric: value })}
+                    <TextAreaField
+                      label="5. Потребность / проблема стейкхолдера"
+                      placeholder="Какая потребность, проблема или ожидание этого стейкхолдера должна быть закрыта проектом?"
+                      value={draft.need}
+                      onChange={value => patch(applyStakeholderPatch(draft, { need: value }))}
                     />
-                  )}
-                  <SelectField
-                    label="10. Влияние стейкхолдера на проект"
-                    options={stakeholderInfluenceOptions}
-                    value={stakeholder.influence}
-                    onChange={value => updateStakeholder(stakeholder.id, { influence: value })}
-                  />
-                  <SelectField
-                    label="11. Приоритет стейкхолдера"
-                    options={stakeholderPriorityOptions}
-                    value={stakeholder.priority}
-                    onChange={value => updateStakeholder(stakeholder.id, { priority: value })}
-                  />
-                  <SelectField
-                    label="12. Риск неверного определения стейкхолдера"
-                    options={stakeholderRiskOptions}
-                    value={stakeholder.definitionRisk}
-                    onChange={value => updateStakeholder(stakeholder.id, { definitionRisk: value })}
-                  />
-                  <SelectField
-                    label="13. Как проверяем, что это действительно клиент / выгодоприобретатель"
-                    options={stakeholderVerificationOptions}
-                    value={stakeholder.verificationMethod}
-                    onChange={value => updateStakeholder(stakeholder.id, { verificationMethod: value })}
-                  />
-                  <SelectField
-                    label="14. Источник данных о стейкхолдере"
-                    options={stakeholderDataSourceOptions}
-                    value={stakeholder.dataSource}
-                    onChange={value => updateStakeholder(stakeholder.id, { dataSource: value })}
-                  />
-                </div>
 
-                <div className="project-theory-method-status compact">
-                  <div>
-                    <b>15. Методологическая проверка</b>
-                    <p>{methodStatus}</p>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {[
-                      ['указана роль стейкхолдера', stakeholder.role],
-                      ['указан тип клиента / выгодоприобретателя', stakeholder.type],
-                      ['стейкхолдер описан как роль / сегмент', stakeholder.details],
-                      ['указана потребность / проблема', stakeholder.need],
-                      ['указана ценность', stakeholder.value],
-                      ['есть связь с критерием результата', stakeholder.resultCriterion],
-                      ['указан способ проверки', stakeholder.verificationMethod],
-                      ['указан источник данных', stakeholder.dataSource],
-                    ].map(([label, value]) => (
-                      <label className="project-theory-check-option locked" key={label}>
-                        <input type="checkbox" checked={String(value).trim().length > 0} disabled />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    <div className="project-theory-grid three">
+                      <SelectField
+                        label="6. Ценность, которую должен получить стейкхолдер"
+                        options={valueOptions}
+                        value={draft.value}
+                        onChange={value => patch(applyStakeholderPatch(draft, { value }))}
+                      />
+                      <SelectField
+                        label="7. Тип ценностного предложения"
+                        options={stakeholderValuePropositionOptions}
+                        value={draft.valueProposition}
+                        onChange={value => patch(applyStakeholderPatch(draft, { valueProposition: value }))}
+                      />
+                      <LinkedResultSelect
+                        label="8. Критерий подтверждения пользы"
+                        resultNames={resultNames}
+                        value={draft.resultCriterion}
+                        onChange={value => patch(applyStakeholderPatch(draft, { resultCriterion: value }))}
+                      />
+                      {showRelationMetric && (
+                        <SelectField
+                          label="9. Метрика отношения / клиентского результата"
+                          options={stakeholderRelationMetricOptions}
+                          value={draft.relationMetric}
+                          onChange={value => patch(applyStakeholderPatch(draft, { relationMetric: value }))}
+                        />
+                      )}
+                      <SelectField
+                        label="10. Влияние стейкхолдера на проект"
+                        options={stakeholderInfluenceOptions}
+                        value={draft.influence}
+                        onChange={value => patch(applyStakeholderPatch(draft, { influence: value }))}
+                      />
+                      <SelectField
+                        label="11. Приоритет стейкхолдера"
+                        options={stakeholderPriorityOptions}
+                        value={draft.priority}
+                        onChange={value => patch(applyStakeholderPatch(draft, { priority: value }))}
+                      />
+                      <SelectField
+                        label="12. Риск неверного определения стейкхолдера"
+                        options={stakeholderRiskOptions}
+                        value={draft.definitionRisk}
+                        onChange={value => patch(applyStakeholderPatch(draft, { definitionRisk: value }))}
+                      />
+                      <SelectField
+                        label="13. Как проверяем, что это действительно клиент / выгодоприобретатель"
+                        options={stakeholderVerificationOptions}
+                        value={draft.verificationMethod}
+                        onChange={value => patch(applyStakeholderPatch(draft, { verificationMethod: value }))}
+                      />
+                      <SelectField
+                        label="14. Источник данных о стейкхолдере"
+                        options={stakeholderDataSourceOptions}
+                        value={draft.dataSource}
+                        onChange={value => patch(applyStakeholderPatch(draft, { dataSource: value }))}
+                      />
+                    </div>
+
+                    <div className="project-theory-method-status compact">
+                      <div>
+                        <b>15. Методологическая проверка</b>
+                        <p>{methodStatus}</p>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {[
+                          ['указана роль стейкхолдера', draft.role],
+                          ['указан тип клиента / выгодоприобретателя', draft.type],
+                          ['стейкхолдер описан как роль / сегмент', draft.details],
+                          ['указана потребность / проблема', draft.need],
+                          ['указана ценность', draft.value],
+                          ['есть связь с критерием результата', draft.resultCriterion],
+                          ['указан способ проверки', draft.verificationMethod],
+                          ['указан источник данных', draft.dataSource],
+                        ].map(([label, value]) => (
+                          <label className="project-theory-check-option locked" key={label}>
+                            <input type="checkbox" checked={String(value).trim().length > 0} disabled />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              }}
+            </DraftCard>
+          ))}
           <button className="project-theory-add-card" type="button" onClick={addStakeholder}>
             <Icon name="plus" size={16} />
             Добавить стейкхолдера
@@ -2930,222 +2841,223 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
         note="Фиксирует, что должно быть истинно после проекта, как это измеряется, кто получает пользу и кто подтверждает факт достижения."
       >
         <div className="project-theory-repeater">
-          {criteria.map((criterion, index) => {
-            const metric = getSelectedResultMetric(criterion);
-            const metricOptions = getResultMetricOptions(criterion.perspective);
-            const sourceOptionsForMetric = metric?.sources || resultControlSourceFallback;
-            const methodStatus = getCriterionMethodStatus(criterion);
-            const methodProgress = getCriterionMethodProgress(criterion);
+          {criteria.map((criterion, index) => (
+            <DraftCard
+              key={criterion.id}
+              card={criterion}
+              title={`Критерий результата ${index + 1}`}
+              onApply={next => setCriteria(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => {
+                const metric = getSelectedResultMetric(draft);
+                const metricOptions = getResultMetricOptions(draft.perspective);
+                const sourceOptionsForMetric = metric?.sources || resultControlSourceFallback;
+                const methodProgress = getCriterionMethodProgress(draft);
 
-            return (
-              <div className="project-theory-card" key={criterion.id}>
-                <div className="project-theory-card-head">
-                  <div className="project-theory-card-title">Критерий результата {index + 1}</div>
-                  <span className="project-theory-status-badge">
-                    {methodStatus}
-                  </span>
-                </div>
+                return (
+                  <>
+                    <div className="project-theory-flow" aria-label="Последовательность заполнения критерия">
+                      {[
+                        'Формулировка',
+                        'Перспектива',
+                        'Стратегическая цель',
+                        'Роль',
+                        'Выгодоприобретатель',
+                        'Метрика',
+                        'Формула',
+                        'База',
+                        'Цель',
+                        'Единица',
+                        'Норма',
+                        'Срок',
+                        'Частота',
+                        'Источник',
+                        'Владелец',
+                        'Принимает',
+                        'Компетенции',
+                        'Проверка',
+                      ].map((step, stepIndex) => (
+                        <span key={step}>{stepIndex + 1}. {step}</span>
+                      ))}
+                    </div>
 
-                <div className="project-theory-flow" aria-label="Последовательность заполнения критерия">
-                  {[
-                    'Формулировка',
-                    'Перспектива',
-                    'Стратегическая цель',
-                    'Роль',
-                    'Выгодоприобретатель',
-                    'Метрика',
-                    'Формула',
-                    'База',
-                    'Цель',
-                    'Единица',
-                    'Норма',
-                    'Срок',
-                    'Частота',
-                    'Источник',
-                    'Владелец',
-                    'Принимает',
-                    'Компетенции',
-                    'Проверка',
-                  ].map((step, stepIndex) => (
-                    <span key={step}>{stepIndex + 1}. {step}</span>
-                  ))}
-                </div>
-
-                <TextAreaField
-                  label="1. Формулировка результата"
-                  placeholder="Что должно быть истинно после завершения проекта?"
-                  value={criterion.statement}
-                  onChange={value => updateCriterion(criterion.id, { statement: value })}
-                />
-
-                <div className="project-theory-grid three">
-                  <SelectField
-                    label="2. Перспектива результата"
-                    options={resultPerspectiveOptions}
-                    value={criterion.perspective}
-                    onChange={value => updateCriterion(criterion.id, { perspective: value })}
-                  />
-                  <SelectField
-                    label="3. Связанная стратегическая цель"
-                    options={strategicGoalOptions}
-                    value={criterion.strategicGoal}
-                    onChange={value => updateCriterion(criterion.id, { strategicGoal: value })}
-                  />
-                  <SelectField
-                    label="4. Роль показателя"
-                    options={resultRoleOptions}
-                    value={criterion.role}
-                    onChange={value => updateCriterion(criterion.id, { role: value })}
-                  />
-                  <SelectField
-                    label="5. Выгодоприобретатель результата"
-                    options={resultBeneficiaryOptions}
-                    value={criterion.beneficiary}
-                    onChange={value => updateCriterion(criterion.id, { beneficiary: value })}
-                  />
-                  {criterion.beneficiary === 'Другое' && (
-                    <TextField
-                      label="5. Уточнение выгодоприобретателя"
-                      value={criterion.beneficiaryOther}
-                      onChange={value => updateCriterion(criterion.id, { beneficiaryOther: value })}
-                    />
-                  )}
-                </div>
-
-                <div className="project-theory-subblock">
-                  <div className="project-theory-subhead">
-                    <b>Метрика и расчет</b>
-                    <button className="btn btn-ghost btn-sm" type="button" onClick={() => addCustomMetric(criterion.id)}>
-                      <Icon name="plus" size={14} />
-                      Добавить метрику
-                    </button>
-                  </div>
-                  <div className="project-theory-grid three">
-                    {criterion.isCustomMetric ? (
-                      <TextField
-                        label="6. Метрика результата"
-                        value={criterion.metric}
-                        onChange={value => updateCriterion(criterion.id, { metric: value, isCustomMetric: true })}
-                      />
-                    ) : (
-                      <SelectField
-                        label="6. Метрика результата"
-                        options={metricOptions.length ? metricOptions.map(option => option.name) : ['Сначала выберите перспективу']}
-                        value={criterion.metric}
-                        onChange={value => updateCriterion(criterion.id, { metric: value })}
-                      />
-                    )}
                     <TextAreaField
-                      label="7. Формула расчета"
-                      placeholder="Подставляется после выбора метрики"
-                      value={criterion.formula}
-                      onChange={value => updateCriterion(criterion.id, { formula: value })}
-                      readOnly={!criterion.isCustomMetric}
+                      label="1. Формулировка результата"
+                      placeholder="Что должно быть истинно после завершения проекта?"
+                      value={draft.statement}
+                      onChange={value => patch(applyCriterionPatch(draft, { statement: value }))}
                     />
-                    <TextField
-                      label="8. Базовое значение"
-                      placeholder="Какое значение сейчас?"
-                      value={criterion.currentValue}
-                      onChange={value => updateCriterion(criterion.id, { currentValue: value })}
-                    />
-                    <TextField
-                      label="9. Целевое значение"
-                      placeholder="Какое значение должно быть достигнуто?"
-                      value={criterion.targetValue}
-                      onChange={value => updateCriterion(criterion.id, { targetValue: value })}
-                    />
-                    <SelectField
-                      label="10. Единица измерения"
-                      options={resultUnitOptions}
-                      value={criterion.unit}
-                      onChange={value => updateCriterion(criterion.id, { unit: value })}
-                    />
-                    <SelectField
-                      label="11. Направление нормы"
-                      options={normDirectionOptions}
-                      value={criterion.normDirection}
-                      onChange={value => updateCriterion(criterion.id, { normDirection: value })}
-                    />
-                  </div>
-                </div>
 
-                <div className="project-theory-grid three">
-                  <DateField
-                    label="12. Срок достижения"
-                    value={criterion.deadline}
-                    onChange={value => updateCriterion(criterion.id, { deadline: value })}
-                  />
-                  <SelectField
-                    label="13. Частота измерения"
-                    options={measurementFrequencyOptions}
-                    value={criterion.measurementFrequency}
-                    onChange={value => updateCriterion(criterion.id, { measurementFrequency: value })}
-                  />
-                  <SelectField
-                    label="14. Источник контроля"
-                    options={sourceOptionsForMetric}
-                    value={criterion.controlSource}
-                    onChange={value => updateCriterion(criterion.id, { controlSource: value })}
-                  />
-                  <TextField
-                    label="15. Владелец результата"
-                    placeholder="Кто отвечает за достижение показателя?"
-                    value={criterion.owner}
-                    onChange={value => updateCriterion(criterion.id, { owner: value })}
-                  />
-                  <TextField
-                    label="16. Кто принимает результат"
-                    placeholder="Кто подтверждает, что критерий достигнут?"
-                    value={criterion.acceptor}
-                    onChange={value => updateCriterion(criterion.id, { acceptor: value })}
-                  />
-                </div>
-
-                <div className="project-theory-subblock">
-                  <div className="project-theory-subhead">
-                    <b>17. Требуемые ключевые компетенции</b>
-                    <span>Какие способности нужны, чтобы этот критерий результата был достигнут.</span>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {(competencyNames.length ? competencyNames : ['Сначала заполните блок Ключевые компетенции']).map(option => (
-                      <label className="project-theory-check-option" key={option}>
-                        <input
-                          type="checkbox"
-                          checked={criterion.requiredCompetencies.includes(option)}
-                          disabled={!competencyNames.length}
-                          onChange={() => toggleCriterionCompetency(criterion.id, option)}
+                    <div className="project-theory-grid three">
+                      <SelectField
+                        label="2. Перспектива результата"
+                        options={resultPerspectiveOptions}
+                        value={draft.perspective}
+                        onChange={value => patch(applyCriterionPatch(draft, { perspective: value }))}
+                      />
+                      <SelectField
+                        label="3. Связанная стратегическая цель"
+                        options={strategicGoalOptions}
+                        value={draft.strategicGoal}
+                        onChange={value => patch(applyCriterionPatch(draft, { strategicGoal: value }))}
+                      />
+                      <SelectField
+                        label="4. Роль показателя"
+                        options={resultRoleOptions}
+                        value={draft.role}
+                        onChange={value => patch(applyCriterionPatch(draft, { role: value }))}
+                      />
+                      <SelectField
+                        label="5. Выгодоприобретатель результата"
+                        options={resultBeneficiaryOptions}
+                        value={draft.beneficiary}
+                        onChange={value => patch(applyCriterionPatch(draft, { beneficiary: value }))}
+                      />
+                      {draft.beneficiary === 'Другое' && (
+                        <TextField
+                          label="5. Уточнение выгодоприобретателя"
+                          value={draft.beneficiaryOther}
+                          onChange={value => patch(applyCriterionPatch(draft, { beneficiaryOther: value }))}
                         />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                      )}
+                    </div>
 
-                <div className="project-theory-method-status">
-                  <div>
-                    <b>18. Методологическая проверка</b>
-                    <p>{methodProgress.done} из {methodProgress.total} пунктов закрыто</p>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {methodologyCheckOptions.map(check => {
-                      const isManual = isManualMethodologyCheck(check);
-                      return (
-                        <label className={`project-theory-check-option ${isManual ? '' : 'locked'}`} key={check}>
-                          <input
-                            type="checkbox"
-                            checked={getCriterionMethodCheckValue(criterion, check)}
-                            disabled={!isManual}
-                            onChange={() => toggleMethodologyCheck(criterion.id, check)}
+                    <div className="project-theory-subblock">
+                      <div className="project-theory-subhead">
+                        <b>Метрика и расчет</b>
+                        <button className="btn btn-ghost btn-sm" type="button" onClick={() => patch(applyCriterionCustomMetric(draft))}>
+                          <Icon name="plus" size={14} />
+                          Добавить метрику
+                        </button>
+                      </div>
+                      <div className="project-theory-grid three">
+                        {draft.isCustomMetric ? (
+                          <TextField
+                            label="6. Метрика результата"
+                            value={draft.metric}
+                            onChange={value => patch(applyCriterionPatch(draft, { metric: value, isCustomMetric: true }))}
                           />
-                          <span>{check}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                        ) : (
+                          <SelectField
+                            label="6. Метрика результата"
+                            options={metricOptions.length ? metricOptions.map(option => option.name) : ['Сначала выберите перспективу']}
+                            value={draft.metric}
+                            onChange={value => patch(applyCriterionPatch(draft, { metric: value }))}
+                          />
+                        )}
+                        <TextAreaField
+                          label="7. Формула расчета"
+                          placeholder="Подставляется после выбора метрики"
+                          value={draft.formula}
+                          onChange={value => patch(applyCriterionPatch(draft, { formula: value }))}
+                          readOnly={!draft.isCustomMetric}
+                        />
+                        <TextField
+                          label="8. Базовое значение"
+                          placeholder="Какое значение сейчас?"
+                          value={draft.currentValue}
+                          onChange={value => patch(applyCriterionPatch(draft, { currentValue: value }))}
+                        />
+                        <TextField
+                          label="9. Целевое значение"
+                          placeholder="Какое значение должно быть достигнуто?"
+                          value={draft.targetValue}
+                          onChange={value => patch(applyCriterionPatch(draft, { targetValue: value }))}
+                        />
+                        <SelectField
+                          label="10. Единица измерения"
+                          options={resultUnitOptions}
+                          value={draft.unit}
+                          onChange={value => patch(applyCriterionPatch(draft, { unit: value }))}
+                        />
+                        <SelectField
+                          label="11. Направление нормы"
+                          options={normDirectionOptions}
+                          value={draft.normDirection}
+                          onChange={value => patch(applyCriterionPatch(draft, { normDirection: value }))}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="project-theory-grid three">
+                      <DateField
+                        label="12. Срок достижения"
+                        value={draft.deadline}
+                        onChange={value => patch(applyCriterionPatch(draft, { deadline: value }))}
+                      />
+                      <SelectField
+                        label="13. Частота измерения"
+                        options={measurementFrequencyOptions}
+                        value={draft.measurementFrequency}
+                        onChange={value => patch(applyCriterionPatch(draft, { measurementFrequency: value }))}
+                      />
+                      <SelectField
+                        label="14. Источник контроля"
+                        options={sourceOptionsForMetric}
+                        value={draft.controlSource}
+                        onChange={value => patch(applyCriterionPatch(draft, { controlSource: value }))}
+                      />
+                      <TextField
+                        label="15. Владелец результата"
+                        placeholder="Кто отвечает за достижение показателя?"
+                        value={draft.owner}
+                        onChange={value => patch(applyCriterionPatch(draft, { owner: value }))}
+                      />
+                      <TextField
+                        label="16. Кто принимает результат"
+                        placeholder="Кто подтверждает, что критерий достигнут?"
+                        value={draft.acceptor}
+                        onChange={value => patch(applyCriterionPatch(draft, { acceptor: value }))}
+                      />
+                    </div>
+
+                    <div className="project-theory-subblock">
+                      <div className="project-theory-subhead">
+                        <b>17. Требуемые ключевые компетенции</b>
+                        <span>Какие способности нужны, чтобы этот критерий результата был достигнут.</span>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {(competencyNames.length ? competencyNames : ['Сначала заполните блок Ключевые компетенции']).map(option => (
+                          <label className="project-theory-check-option" key={option}>
+                            <input
+                              type="checkbox"
+                              checked={draft.requiredCompetencies.includes(option)}
+                              disabled={!competencyNames.length}
+                              onChange={() => patch({ requiredCompetencies: draft.requiredCompetencies.includes(option) ? draft.requiredCompetencies.filter(item => item !== option) : [...draft.requiredCompetencies, option] })}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="project-theory-method-status">
+                      <div>
+                        <b>18. Методологическая проверка</b>
+                        <p>{methodProgress.done} из {methodProgress.total} пунктов закрыто</p>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {methodologyCheckOptions.map(check => {
+                          const isManual = isManualMethodologyCheck(check);
+                          return (
+                            <label className={`project-theory-check-option ${isManual ? '' : 'locked'}`} key={check}>
+                              <input
+                                type="checkbox"
+                                checked={getCriterionMethodCheckValue(draft, check)}
+                                disabled={!isManual}
+                                onChange={() => { if (isManual) patch({ methodologyChecks: draft.methodologyChecks.includes(check) ? draft.methodologyChecks.filter(item => item !== check) : [...draft.methodologyChecks, check] }); }}
+                              />
+                              <span>{check}</span>
+                            </label>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </>
+                );
+              }}
+            </DraftCard>
+          ))}
           <button className="project-theory-add-card" type="button" onClick={addCriterion}>
             <Icon name="plus" size={16} />
             Добавить критерий результата
@@ -3159,197 +3071,201 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
         note="Компетенция описывает способность, без которой проект не сможет дать заявленный результат."
       >
         <div className="project-theory-repeater">
-          {competencies.map((competency, index) => {
-            const methodStatus = getCompetencyMethodStatus(competency);
-            const gap = getCompetencyGap(competency);
+          {competencies.map((competency, index) => (
+            <DraftCard
+              key={competency.id}
+              card={competency}
+              title={`Компетенция ${index + 1}`}
+              onApply={next => setCompetencies(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => {
+                const methodStatus = getCompetencyMethodStatus(draft);
+                const gap = getCompetencyGap(draft);
 
-            return (
-              <div className="project-theory-card" key={competency.id}>
-                <div className="project-theory-card-head">
-                  <div className="project-theory-card-title">Компетенция {index + 1}</div>
-                  <span className="project-theory-status-badge">{methodStatus}</span>
-                </div>
+                return (
+                  <>
+                    <div className="project-theory-flow" aria-label="Последовательность заполнения компетенции">
+                      {[
+                        'Название',
+                        'Тип',
+                        'Область',
+                        'Стратегический выбор',
+                        'Роль',
+                        'Носитель',
+                        'Результат',
+                        'Процесс',
+                        'Текущий уровень',
+                        'Требуемый уровень',
+                        'Разрыв',
+                        'Проверка',
+                        'Метрика',
+                        'Источник',
+                        'Действие',
+                        'Поддержка',
+                        'Владелец',
+                        'Срок',
+                        'Методология',
+                      ].map((step, stepIndex) => (
+                        <span key={step}>{stepIndex + 1}. {step}</span>
+                      ))}
+                    </div>
 
-                <div className="project-theory-flow" aria-label="Последовательность заполнения компетенции">
-                  {[
-                    'Название',
-                    'Тип',
-                    'Область',
-                    'Стратегический выбор',
-                    'Роль',
-                    'Носитель',
-                    'Результат',
-                    'Процесс',
-                    'Текущий уровень',
-                    'Требуемый уровень',
-                    'Разрыв',
-                    'Проверка',
-                    'Метрика',
-                    'Источник',
-                    'Действие',
-                    'Поддержка',
-                    'Владелец',
-                    'Срок',
-                    'Методология',
-                  ].map((step, stepIndex) => (
-                    <span key={step}>{stepIndex + 1}. {step}</span>
-                  ))}
-                </div>
-
-                <div className="project-theory-grid three">
-                  <TextField
-                    label="1. Название компетенции"
-                    placeholder="Какая способность необходима проекту для достижения результата?"
-                    value={competency.name}
-                    onChange={value => updateCompetency(competency.id, { name: value })}
-                  />
-                  <SelectField
-                    label="2. Тип компетенции"
-                    options={competencyTypeOptions}
-                    value={competency.type}
-                    onChange={value => updateCompetency(competency.id, { type: value })}
-                  />
-                  <SelectField
-                    label="3. Область компетенции"
-                    options={competencyAreaOptions}
-                    value={competency.area}
-                    onChange={value => updateCompetency(competency.id, { area: value })}
-                  />
-                  <SelectField
-                    label="4. Связь со стратегическим выбором"
-                    options={competencyStrategicChoiceOptions}
-                    value={competency.strategicChoice}
-                    onChange={value => updateCompetency(competency.id, { strategicChoice: value })}
-                  />
-                  <SelectField
-                    label="5. Роль компетенции"
-                    options={competencyRoleOptions}
-                    value={competency.role}
-                    onChange={value => updateCompetency(competency.id, { role: value })}
-                  />
-                  <SelectField
-                    label="6. Носитель компетенции"
-                    options={competencyHolderOptions}
-                    value={competency.holder}
-                    onChange={value => updateCompetency(competency.id, { holder: value })}
-                  />
-                  <TextField
-                    label="6. Конкретизация носителя"
-                    placeholder="Роль, команда, система или партнер"
-                    value={competency.holderDetails}
-                    onChange={value => updateCompetency(competency.id, { holderDetails: value })}
-                  />
-                  <LinkedResultSelect
-                    label="7. Для какого результата нужна"
-                    resultNames={resultNames}
-                    value={competency.resultCriterion}
-                    onChange={value => updateCompetency(competency.id, { resultCriterion: value })}
-                  />
-                  <SelectField
-                    label="8. Какой процесс / активность поддерживает"
-                    options={competencyProcessActivityOptions}
-                    value={competency.processActivity}
-                    onChange={value => updateCompetency(competency.id, { processActivity: value })}
-                  />
-                  <SelectField
-                    label="9. Текущий уровень компетенции"
-                    options={competencyCurrentLevelOptions}
-                    value={competency.currentLevel}
-                    onChange={value => updateCompetency(competency.id, { currentLevel: value })}
-                  />
-                  <SelectField
-                    label="10. Требуемый уровень компетенции"
-                    options={competencyRequiredLevelOptions}
-                    value={competency.requiredLevel}
-                    onChange={value => updateCompetency(competency.id, { requiredLevel: value })}
-                  />
-                  <label className="project-theory-field">
-                    <span>11. Разрыв компетенции</span>
-                    <input className="form-input" value={gap} readOnly />
-                  </label>
-                  <SelectField
-                    label="12. Способ проверки компетенции"
-                    options={competencyVerificationOptions}
-                    value={competency.verificationMethod}
-                    onChange={value => updateCompetency(competency.id, { verificationMethod: value })}
-                  />
-                  <TextField
-                    label="13. Метрика подтверждения"
-                    placeholder="Каким фактом подтверждается, что компетенция есть?"
-                    value={competency.confirmationMetric}
-                    onChange={value => updateCompetency(competency.id, { confirmationMetric: value })}
-                  />
-                  <SelectField
-                    label="14. Источник данных"
-                    options={competencyDataSourceOptions}
-                    value={competency.dataSource}
-                    onChange={value => updateCompetency(competency.id, { dataSource: value })}
-                  />
-                  <SelectField
-                    label="15. Что делаем с компетенцией"
-                    options={competencyActionOptions}
-                    value={competency.action}
-                    onChange={value => updateCompetency(competency.id, { action: value })}
-                  />
-                  <TextField
-                    label="17. Владелец компетенции"
-                    placeholder="Кто отвечает за наличие и развитие этой компетенции?"
-                    value={competency.owner}
-                    onChange={value => updateCompetency(competency.id, { owner: value })}
-                  />
-                  <DateField
-                    label="18. Срок достижения требуемого уровня"
-                    value={competency.targetDate}
-                    onChange={value => updateCompetency(competency.id, { targetDate: value })}
-                  />
-                </div>
-
-                <div className="project-theory-subblock">
-                  <div className="project-theory-subhead">
-                    <b>16. Система поддержки компетенции</b>
-                    <span>Что должно поддерживать наличие и развитие этой способности.</span>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {competencySupportSystemOptions.map(option => (
-                      <label className="project-theory-check-option" key={option}>
-                        <input
-                          type="checkbox"
-                          checked={competency.supportSystems.includes(option)}
-                          onChange={() => toggleCompetencySupportSystem(competency.id, option)}
-                        />
-                        <span>{option}</span>
+                    <div className="project-theory-grid three">
+                      <TextField
+                        label="1. Название компетенции"
+                        placeholder="Какая способность необходима проекту для достижения результата?"
+                        value={draft.name}
+                        onChange={value => patch({ name: value })}
+                      />
+                      <SelectField
+                        label="2. Тип компетенции"
+                        options={competencyTypeOptions}
+                        value={draft.type}
+                        onChange={value => patch({ type: value })}
+                      />
+                      <SelectField
+                        label="3. Область компетенции"
+                        options={competencyAreaOptions}
+                        value={draft.area}
+                        onChange={value => patch({ area: value })}
+                      />
+                      <SelectField
+                        label="4. Связь со стратегическим выбором"
+                        options={competencyStrategicChoiceOptions}
+                        value={draft.strategicChoice}
+                        onChange={value => patch({ strategicChoice: value })}
+                      />
+                      <SelectField
+                        label="5. Роль компетенции"
+                        options={competencyRoleOptions}
+                        value={draft.role}
+                        onChange={value => patch({ role: value })}
+                      />
+                      <SelectField
+                        label="6. Носитель компетенции"
+                        options={competencyHolderOptions}
+                        value={draft.holder}
+                        onChange={value => patch({ holder: value })}
+                      />
+                      <TextField
+                        label="6. Конкретизация носителя"
+                        placeholder="Роль, команда, система или партнер"
+                        value={draft.holderDetails}
+                        onChange={value => patch({ holderDetails: value })}
+                      />
+                      <LinkedResultSelect
+                        label="7. Для какого результата нужна"
+                        resultNames={resultNames}
+                        value={draft.resultCriterion}
+                        onChange={value => patch({ resultCriterion: value })}
+                      />
+                      <SelectField
+                        label="8. Какой процесс / активность поддерживает"
+                        options={competencyProcessActivityOptions}
+                        value={draft.processActivity}
+                        onChange={value => patch({ processActivity: value })}
+                      />
+                      <SelectField
+                        label="9. Текущий уровень компетенции"
+                        options={competencyCurrentLevelOptions}
+                        value={draft.currentLevel}
+                        onChange={value => patch({ currentLevel: value })}
+                      />
+                      <SelectField
+                        label="10. Требуемый уровень компетенции"
+                        options={competencyRequiredLevelOptions}
+                        value={draft.requiredLevel}
+                        onChange={value => patch({ requiredLevel: value })}
+                      />
+                      <label className="project-theory-field">
+                        <span>11. Разрыв компетенции</span>
+                        <input className="form-input" value={gap} readOnly />
                       </label>
-                    ))}
-                  </div>
-                </div>
+                      <SelectField
+                        label="12. Способ проверки компетенции"
+                        options={competencyVerificationOptions}
+                        value={draft.verificationMethod}
+                        onChange={value => patch({ verificationMethod: value })}
+                      />
+                      <TextField
+                        label="13. Метрика подтверждения"
+                        placeholder="Каким фактом подтверждается, что компетенция есть?"
+                        value={draft.confirmationMetric}
+                        onChange={value => patch({ confirmationMetric: value })}
+                      />
+                      <SelectField
+                        label="14. Источник данных"
+                        options={competencyDataSourceOptions}
+                        value={draft.dataSource}
+                        onChange={value => patch({ dataSource: value })}
+                      />
+                      <SelectField
+                        label="15. Что делаем с компетенцией"
+                        options={competencyActionOptions}
+                        value={draft.action}
+                        onChange={value => patch({ action: value })}
+                      />
+                      <TextField
+                        label="17. Владелец компетенции"
+                        placeholder="Кто отвечает за наличие и развитие этой компетенции?"
+                        value={draft.owner}
+                        onChange={value => patch({ owner: value })}
+                      />
+                      <DateField
+                        label="18. Срок достижения требуемого уровня"
+                        value={draft.targetDate}
+                        onChange={value => patch({ targetDate: value })}
+                      />
+                    </div>
 
-                <div className="project-theory-method-status compact">
-                  <div>
-                    <b>19. Методологическая проверка</b>
-                    <p>{methodStatus}</p>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {[
-                      ['компетенция связана со стратегическим выбором', competency.strategicChoice],
-                      ['компетенция связана с критерием результата', competency.resultCriterion],
-                      ['указан носитель компетенции', competency.holder],
-                      ['указан текущий уровень', competency.currentLevel],
-                      ['указан требуемый уровень', competency.requiredLevel],
-                      ['есть способ проверки', competency.verificationMethod],
-                      ['есть источник данных', competency.dataSource],
-                      ['есть владелец', competency.owner],
-                      ['определено действие', competency.action],
-                    ].map(([label, value]) => (
-                      <label className="project-theory-check-option locked" key={label}>
-                        <input type="checkbox" checked={String(value).trim().length > 0} disabled />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    <div className="project-theory-subblock">
+                      <div className="project-theory-subhead">
+                        <b>16. Система поддержки компетенции</b>
+                        <span>Что должно поддерживать наличие и развитие этой способности.</span>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {competencySupportSystemOptions.map(option => (
+                          <label className="project-theory-check-option" key={option}>
+                            <input
+                              type="checkbox"
+                              checked={draft.supportSystems.includes(option)}
+                              onChange={() => patch({ supportSystems: draft.supportSystems.includes(option) ? draft.supportSystems.filter(item => item !== option) : [...draft.supportSystems, option] })}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="project-theory-method-status compact">
+                      <div>
+                        <b>19. Методологическая проверка</b>
+                        <p>{methodStatus}</p>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {[
+                          ['компетенция связана со стратегическим выбором', draft.strategicChoice],
+                          ['компетенция связана с критерием результата', draft.resultCriterion],
+                          ['указан носитель компетенции', draft.holder],
+                          ['указан текущий уровень', draft.currentLevel],
+                          ['указан требуемый уровень', draft.requiredLevel],
+                          ['есть способ проверки', draft.verificationMethod],
+                          ['есть источник данных', draft.dataSource],
+                          ['есть владелец', draft.owner],
+                          ['определено действие', draft.action],
+                        ].map(([label, value]) => (
+                          <label className="project-theory-check-option locked" key={label}>
+                            <input type="checkbox" checked={String(value).trim().length > 0} disabled />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              }}
+            </DraftCard>
+          ))}
           <button className="project-theory-add-card" type="button" onClick={addCompetency}>
             <Icon name="plus" size={16} />
             Добавить компетенцию
@@ -3363,169 +3279,173 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
         note="Задает границы, внутри которых результат должен быть достигнут. Не только сроки."
       >
         <div className="project-theory-repeater">
-          {constraints.map((constraint, index) => {
-            const subtypeOptions = getConstraintSubtypeOptions(constraint.type);
-            const showHypothesis = isHypotheticalConstraint(constraint);
-            const methodStatus = getConstraintMethodStatus(constraint);
+          {constraints.map((constraint, index) => (
+            <DraftCard
+              key={constraint.id}
+              card={constraint}
+              title={`Ограничение ${index + 1}`}
+              onApply={next => setConstraints(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => {
+                const subtypeOptions = getConstraintSubtypeOptions(draft.type);
+                const showHypothesis = isHypotheticalConstraint(draft);
+                const methodStatus = getConstraintMethodStatus(draft);
 
-            return (
-              <div className="project-theory-card" key={constraint.id}>
-                <div className="project-theory-card-head">
-                  <div className="project-theory-card-title">Ограничение {index + 1}</div>
-                  <span className="project-theory-status-badge">{methodStatus}</span>
-                </div>
+                return (
+                  <>
+                    <div className="project-theory-flow" aria-label="Последовательность заполнения ограничения">
+                      {[
+                        'Тип',
+                        'Подтип',
+                        'Формулировка',
+                        'Жесткость',
+                        'Лимит',
+                        'Единица',
+                        'Направление',
+                        'Зона',
+                        'Критерий',
+                        'Гипотеза',
+                        'Нарушение',
+                        'Владелец',
+                        'Право изменения',
+                        'Источник',
+                        'Частота',
+                        'Методология',
+                      ].map((step, stepIndex) => (
+                        <span key={step}>{stepIndex + 1}. {step}</span>
+                      ))}
+                    </div>
 
-                <div className="project-theory-flow" aria-label="Последовательность заполнения ограничения">
-                  {[
-                    'Тип',
-                    'Подтип',
-                    'Формулировка',
-                    'Жесткость',
-                    'Лимит',
-                    'Единица',
-                    'Направление',
-                    'Зона',
-                    'Критерий',
-                    'Гипотеза',
-                    'Нарушение',
-                    'Владелец',
-                    'Право изменения',
-                    'Источник',
-                    'Частота',
-                    'Методология',
-                  ].map((step, stepIndex) => (
-                    <span key={step}>{stepIndex + 1}. {step}</span>
-                  ))}
-                </div>
+                    <div className="project-theory-grid three">
+                      <SelectField
+                        label="1. Тип ограничения"
+                        options={constraintTypeOptions}
+                        value={draft.type}
+                        onChange={value => patch(applyConstraintPatch(draft, { type: value }))}
+                      />
+                      <SelectField
+                        label="2. Подтип ограничения"
+                        options={subtypeOptions.length ? subtypeOptions : ['Сначала выберите тип ограничения']}
+                        value={draft.subtype}
+                        onChange={value => patch(applyConstraintPatch(draft, { subtype: value }))}
+                      />
+                      <SelectField
+                        label="4. Жесткость ограничения"
+                        options={constraintRigidityOptions}
+                        value={draft.rigidity}
+                        onChange={value => patch(applyConstraintPatch(draft, { rigidity: value }))}
+                      />
+                    </div>
 
-                <div className="project-theory-grid three">
-                  <SelectField
-                    label="1. Тип ограничения"
-                    options={constraintTypeOptions}
-                    value={constraint.type}
-                    onChange={value => updateConstraint(constraint.id, { type: value })}
-                  />
-                  <SelectField
-                    label="2. Подтип ограничения"
-                    options={subtypeOptions.length ? subtypeOptions : ['Сначала выберите тип ограничения']}
-                    value={constraint.subtype}
-                    onChange={value => updateConstraint(constraint.id, { subtype: value })}
-                  />
-                  <SelectField
-                    label="4. Жесткость ограничения"
-                    options={constraintRigidityOptions}
-                    value={constraint.rigidity}
-                    onChange={value => updateConstraint(constraint.id, { rigidity: value })}
-                  />
-                </div>
-
-                <TextAreaField
-                  label="3. Формулировка ограничения"
-                  placeholder="Какое условие должно быть соблюдено, чтобы проект считался допустимым?"
-                  value={constraint.statement}
-                  onChange={value => updateConstraint(constraint.id, { statement: value })}
-                />
-
-                <div className="project-theory-grid three">
-                  <TextField
-                    label="5. Порог / лимит / запрет"
-                    placeholder="Порог, дата, число, допуск или текстовое правило"
-                    value={constraint.limit}
-                    onChange={value => updateConstraint(constraint.id, { limit: value })}
-                  />
-                  <SelectField
-                    label="6. Единица измерения"
-                    options={constraintUnitOptions}
-                    value={constraint.unit}
-                    onChange={value => updateConstraint(constraint.id, { unit: value })}
-                  />
-                  <SelectField
-                    label="7. Направление ограничения"
-                    options={constraintDirectionOptions}
-                    value={constraint.direction}
-                    onChange={value => updateConstraint(constraint.id, { direction: value })}
-                  />
-                  <SelectField
-                    label="8. Зона действия ограничения"
-                    options={constraintScopeOptions}
-                    value={constraint.scope}
-                    onChange={value => updateConstraint(constraint.id, { scope: value })}
-                  />
-                  <LinkedResultSelect
-                    label="9. Связанный критерий результата"
-                    resultNames={resultNames}
-                    value={constraint.resultCriterion}
-                    onChange={value => updateConstraint(constraint.id, { resultCriterion: value })}
-                  />
-                  {showHypothesis && (
-                    <TextField
-                      label="10. Связанная гипотеза"
-                      placeholder="Гипотеза, которую нужно проверить"
-                      value={constraint.hypothesis}
-                      onChange={value => updateConstraint(constraint.id, { hypothesis: value })}
+                    <TextAreaField
+                      label="3. Формулировка ограничения"
+                      placeholder="Какое условие должно быть соблюдено, чтобы проект считался допустимым?"
+                      value={draft.statement}
+                      onChange={value => patch(applyConstraintPatch(draft, { statement: value }))}
                     />
-                  )}
-                  <SelectField
-                    label="11. Что произойдет при нарушении"
-                    options={constraintViolationOptions}
-                    value={constraint.violationConsequence}
-                    onChange={value => updateConstraint(constraint.id, { violationConsequence: value })}
-                  />
-                  <TextField
-                    label="12. Владелец ограничения"
-                    placeholder="Кто отвечает за соблюдение ограничения?"
-                    value={constraint.owner}
-                    onChange={value => updateConstraint(constraint.id, { owner: value })}
-                  />
-                  <TextField
-                    label="13. Кто может изменить ограничение"
-                    placeholder="Кто имеет право изменить это ограничение?"
-                    value={constraint.changeAuthority}
-                    onChange={value => updateConstraint(constraint.id, { changeAuthority: value })}
-                  />
-                  <SelectField
-                    label="14. Источник контроля"
-                    options={constraintControlSourceOptions}
-                    value={constraint.controlSource}
-                    onChange={value => updateConstraint(constraint.id, { controlSource: value })}
-                  />
-                  <SelectField
-                    label="15. Частота контроля"
-                    options={constraintControlFrequencyOptions}
-                    value={constraint.controlFrequency}
-                    onChange={value => updateConstraint(constraint.id, { controlFrequency: value })}
-                  />
-                </div>
 
-                <div className="project-theory-method-status compact">
-                  <div>
-                    <b>16. Методологическая проверка</b>
-                    <p>{methodStatus}</p>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {[
-                      ['указан тип ограничения', constraint.type],
-                      ['указан подтип', constraint.subtype],
-                      ['есть формулировка ограничения', constraint.statement],
-                      ['задана жесткость', constraint.rigidity],
-                      ['есть порог / лимит / запрет', constraint.limit],
-                      ['указано направление нормы', constraint.direction],
-                      ['определена зона действия', constraint.scope],
-                      ['есть владелец ограничения', constraint.owner],
-                      ['есть источник контроля', constraint.controlSource],
-                      ['есть правило при нарушении', constraint.violationConsequence],
-                      ['есть связь с результатом, гипотезой, процессом или инициативой', constraint.resultCriterion || constraint.hypothesis || constraint.scope],
-                    ].map(([label, value]) => (
-                      <label className="project-theory-check-option locked" key={label}>
-                        <input type="checkbox" checked={String(value).trim().length > 0} disabled />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    <div className="project-theory-grid three">
+                      <TextField
+                        label="5. Порог / лимит / запрет"
+                        placeholder="Порог, дата, число, допуск или текстовое правило"
+                        value={draft.limit}
+                        onChange={value => patch(applyConstraintPatch(draft, { limit: value }))}
+                      />
+                      <SelectField
+                        label="6. Единица измерения"
+                        options={constraintUnitOptions}
+                        value={draft.unit}
+                        onChange={value => patch(applyConstraintPatch(draft, { unit: value }))}
+                      />
+                      <SelectField
+                        label="7. Направление ограничения"
+                        options={constraintDirectionOptions}
+                        value={draft.direction}
+                        onChange={value => patch(applyConstraintPatch(draft, { direction: value }))}
+                      />
+                      <SelectField
+                        label="8. Зона действия ограничения"
+                        options={constraintScopeOptions}
+                        value={draft.scope}
+                        onChange={value => patch(applyConstraintPatch(draft, { scope: value }))}
+                      />
+                      <LinkedResultSelect
+                        label="9. Связанный критерий результата"
+                        resultNames={resultNames}
+                        value={draft.resultCriterion}
+                        onChange={value => patch(applyConstraintPatch(draft, { resultCriterion: value }))}
+                      />
+                      {showHypothesis && (
+                        <TextField
+                          label="10. Связанная гипотеза"
+                          placeholder="Гипотеза, которую нужно проверить"
+                          value={draft.hypothesis}
+                          onChange={value => patch(applyConstraintPatch(draft, { hypothesis: value }))}
+                        />
+                      )}
+                      <SelectField
+                        label="11. Что произойдет при нарушении"
+                        options={constraintViolationOptions}
+                        value={draft.violationConsequence}
+                        onChange={value => patch(applyConstraintPatch(draft, { violationConsequence: value }))}
+                      />
+                      <TextField
+                        label="12. Владелец ограничения"
+                        placeholder="Кто отвечает за соблюдение ограничения?"
+                        value={draft.owner}
+                        onChange={value => patch(applyConstraintPatch(draft, { owner: value }))}
+                      />
+                      <TextField
+                        label="13. Кто может изменить ограничение"
+                        placeholder="Кто имеет право изменить это ограничение?"
+                        value={draft.changeAuthority}
+                        onChange={value => patch(applyConstraintPatch(draft, { changeAuthority: value }))}
+                      />
+                      <SelectField
+                        label="14. Источник контроля"
+                        options={constraintControlSourceOptions}
+                        value={draft.controlSource}
+                        onChange={value => patch(applyConstraintPatch(draft, { controlSource: value }))}
+                      />
+                      <SelectField
+                        label="15. Частота контроля"
+                        options={constraintControlFrequencyOptions}
+                        value={draft.controlFrequency}
+                        onChange={value => patch(applyConstraintPatch(draft, { controlFrequency: value }))}
+                      />
+                    </div>
+
+                    <div className="project-theory-method-status compact">
+                      <div>
+                        <b>16. Методологическая проверка</b>
+                        <p>{methodStatus}</p>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {[
+                          ['указан тип ограничения', draft.type],
+                          ['указан подтип', draft.subtype],
+                          ['есть формулировка ограничения', draft.statement],
+                          ['задана жесткость', draft.rigidity],
+                          ['есть порог / лимит / запрет', draft.limit],
+                          ['указано направление нормы', draft.direction],
+                          ['определена зона действия', draft.scope],
+                          ['есть владелец ограничения', draft.owner],
+                          ['есть источник контроля', draft.controlSource],
+                          ['есть правило при нарушении', draft.violationConsequence],
+                          ['есть связь с результатом, гипотезой, процессом или инициативой', draft.resultCriterion || draft.hypothesis || draft.scope],
+                        ].map(([label, value]) => (
+                          <label className="project-theory-check-option locked" key={label}>
+                            <input type="checkbox" checked={String(value).trim().length > 0} disabled />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              }}
+            </DraftCard>
+          ))}
           <button className="project-theory-add-card" type="button" onClick={addConstraint}>
             <Icon name="plus" size={16} />
             Добавить ограничение
@@ -3539,211 +3459,215 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
         note="Качество измеряется через дефекты, допуск, источник факта и владельца контроля."
       >
         <div className="project-theory-repeater">
-          {qualityIndicators.map((indicator, index) => {
-            const defectOptions = getQualityDefectOptions(indicator.object);
-            const metricOptions = getQualityMetricOptions(indicator.object, indicator.defects);
-            const sourceOptions = getQualityControlSourceOptions(indicator.object);
-            const methodStatus = getQualityMethodStatus(indicator);
+          {qualityIndicators.map((indicator, index) => (
+            <DraftCard
+              key={indicator.id}
+              card={indicator}
+              title={`Показатель качества ${index + 1}`}
+              onApply={next => setQualityIndicators(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => {
+                const defectOptions = getQualityDefectOptions(draft.object);
+                const metricOptions = getQualityMetricOptions(draft.object, draft.defects);
+                const sourceOptions = getQualityControlSourceOptions(draft.object);
+                const methodStatus = getQualityMethodStatus(draft);
 
-            return (
-              <div className="project-theory-card" key={indicator.id}>
-                <div className="project-theory-card-head">
-                  <div className="project-theory-card-title">Показатель качества {index + 1}</div>
-                  <span className="project-theory-status-badge">{methodStatus}</span>
-                </div>
+                return (
+                  <>
+                    <div className="project-theory-flow" aria-label="Последовательность заполнения качества">
+                      {[
+                        'Роль',
+                        'Объект',
+                        'Требование',
+                        'Дефект',
+                        'Метрика',
+                        'Формула',
+                        'База',
+                        'Минимум',
+                        'Цель',
+                        'Единица',
+                        'Норма',
+                        'Источник',
+                        'Частота',
+                        'Владелец',
+                        'Принимает',
+                        'Результат',
+                        'Клиент',
+                        'Процесс',
+                        'Действие',
+                        'Методология',
+                      ].map((step, stepIndex) => (
+                        <span key={step}>{stepIndex + 1}. {step}</span>
+                      ))}
+                    </div>
 
-                <div className="project-theory-flow" aria-label="Последовательность заполнения качества">
-                  {[
-                    'Роль',
-                    'Объект',
-                    'Требование',
-                    'Дефект',
-                    'Метрика',
-                    'Формула',
-                    'База',
-                    'Минимум',
-                    'Цель',
-                    'Единица',
-                    'Норма',
-                    'Источник',
-                    'Частота',
-                    'Владелец',
-                    'Принимает',
-                    'Результат',
-                    'Клиент',
-                    'Процесс',
-                    'Действие',
-                    'Методология',
-                  ].map((step, stepIndex) => (
-                    <span key={step}>{stepIndex + 1}. {step}</span>
-                  ))}
-                </div>
+                    <div className="project-theory-grid three">
+                      <SelectField
+                        label="1. Роль качества в проекте"
+                        options={qualityRoleOptions}
+                        value={draft.role}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { role: value }))}
+                      />
+                      <SelectField
+                        label="2. Объект качества"
+                        options={qualityObjectOptions}
+                        value={draft.object}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { object: value }))}
+                      />
+                      <SelectField
+                        label="5. Метрика качества"
+                        options={metricOptions.length ? metricOptions : ['Сначала выберите объект и тип дефекта']}
+                        value={draft.metric}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { metric: value }))}
+                      />
+                    </div>
 
-                <div className="project-theory-grid three">
-                  <SelectField
-                    label="1. Роль качества в проекте"
-                    options={qualityRoleOptions}
-                    value={indicator.role}
-                    onChange={value => updateQualityIndicator(indicator.id, { role: value })}
-                  />
-                  <SelectField
-                    label="2. Объект качества"
-                    options={qualityObjectOptions}
-                    value={indicator.object}
-                    onChange={value => updateQualityIndicator(indicator.id, { object: value })}
-                  />
-                  <SelectField
-                    label="5. Метрика качества"
-                    options={metricOptions.length ? metricOptions : ['Сначала выберите объект и тип дефекта']}
-                    value={indicator.metric}
-                    onChange={value => updateQualityIndicator(indicator.id, { metric: value })}
-                  />
-                </div>
+                    <TextAreaField
+                      label="3. Требование качества"
+                      placeholder="Какое конкретное требование клиента, стандарта, процесса или приемки должно быть выполнено?"
+                      value={draft.requirement}
+                      onChange={value => patch(applyQualityIndicatorPatch(draft, { requirement: value }))}
+                    />
 
-                <TextAreaField
-                  label="3. Требование качества"
-                  placeholder="Какое конкретное требование клиента, стандарта, процесса или приемки должно быть выполнено?"
-                  value={indicator.requirement}
-                  onChange={value => updateQualityIndicator(indicator.id, { requirement: value })}
-                />
+                    <div className="project-theory-field full">
+                      <span>4. Тип отклонения / дефекта</span>
+                      <div className="project-theory-check-list dense">
+                        {(defectOptions.length ? defectOptions : ['Сначала выберите объект качества']).map(option => (
+                          <label className="project-theory-check-option" key={option}>
+                            <input
+                              type="checkbox"
+                              checked={draft.defects.includes(option)}
+                              disabled={!defectOptions.length}
+                              onChange={() => patch(toggleQualityDefect(draft, option))}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
 
-                <div className="project-theory-field full">
-                  <span>4. Тип отклонения / дефекта</span>
-                  <div className="project-theory-check-list dense">
-                    {(defectOptions.length ? defectOptions : ['Сначала выберите объект качества']).map(option => (
-                      <label className="project-theory-check-option" key={option}>
-                        <input
-                          type="checkbox"
-                          checked={indicator.defects.includes(option)}
-                          disabled={!defectOptions.length}
-                          onChange={() => toggleQualityIndicatorDefect(indicator.id, option)}
-                        />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                    <div className="project-theory-grid three">
+                      <TextAreaField
+                        label="6. Формула расчета"
+                        placeholder="Подставляется после выбора метрики качества"
+                        value={draft.formula}
+                        readOnly
+                      />
+                      <TextField
+                        label="7. Базовое значение"
+                        placeholder="Какой уровень качества сейчас?"
+                        value={draft.currentValue}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { currentValue: value }))}
+                      />
+                      <TextField
+                        label="8. Минимально допустимый уровень"
+                        placeholder="Ниже какого уровня качество неприемлемо?"
+                        value={draft.minimumValue}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { minimumValue: value }))}
+                      />
+                      <TextField
+                        label="9. Целевое значение"
+                        placeholder="Какой уровень качества должен быть достигнут?"
+                        value={draft.targetValue}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { targetValue: value }))}
+                      />
+                      <SelectField
+                        label="10. Единица измерения"
+                        options={qualityUnits}
+                        value={draft.unit}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { unit: value }))}
+                      />
+                      <SelectField
+                        label="11. Направление нормы"
+                        options={qualityDirections}
+                        value={draft.normDirection}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { normDirection: value }))}
+                      />
+                      <SelectField
+                        label="12. Источник контроля"
+                        options={sourceOptions.length ? sourceOptions : ['Сначала выберите объект качества']}
+                        value={draft.controlSource}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { controlSource: value }))}
+                      />
+                      <SelectField
+                        label="13. Частота контроля"
+                        options={qualityFrequencies}
+                        value={draft.controlFrequency}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { controlFrequency: value }))}
+                      />
+                      <TextField
+                        label="14. Владелец качества"
+                        placeholder="Кто отвечает за контроль и исправление отклонений?"
+                        value={draft.owner}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { owner: value }))}
+                      />
+                      <TextField
+                        label="15. Кто принимает качество"
+                        placeholder="Кто подтверждает, что качество соответствует требованию?"
+                        value={draft.acceptor}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { acceptor: value }))}
+                      />
+                      <LinkedResultSelect
+                        label="16. Связанный критерий результата"
+                        resultNames={resultNames}
+                        value={draft.resultCriterion}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { resultCriterion: value }))}
+                      />
+                      <SelectField
+                        label="17. Связанный клиент / выгодоприобретатель"
+                        options={stakeholderNames.length ? stakeholderNames : ['Сначала заполните блок Клиент / выгодоприобретатель']}
+                        value={draft.beneficiary}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { beneficiary: value }))}
+                      />
+                      <SelectField
+                        label="18. Связанный процесс"
+                        options={competencyProcessActivityOptions}
+                        value={draft.process}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { process: value }))}
+                      />
+                      <SelectField
+                        label="19. Действие при отклонении"
+                        options={qualityDeviationActions}
+                        value={draft.deviationAction}
+                        onChange={value => patch(applyQualityIndicatorPatch(draft, { deviationAction: value }))}
+                      />
+                    </div>
 
-                <div className="project-theory-grid three">
-                  <TextAreaField
-                    label="6. Формула расчета"
-                    placeholder="Подставляется после выбора метрики качества"
-                    value={indicator.formula}
-                    readOnly
-                  />
-                  <TextField
-                    label="7. Базовое значение"
-                    placeholder="Какой уровень качества сейчас?"
-                    value={indicator.currentValue}
-                    onChange={value => updateQualityIndicator(indicator.id, { currentValue: value })}
-                  />
-                  <TextField
-                    label="8. Минимально допустимый уровень"
-                    placeholder="Ниже какого уровня качество неприемлемо?"
-                    value={indicator.minimumValue}
-                    onChange={value => updateQualityIndicator(indicator.id, { minimumValue: value })}
-                  />
-                  <TextField
-                    label="9. Целевое значение"
-                    placeholder="Какой уровень качества должен быть достигнут?"
-                    value={indicator.targetValue}
-                    onChange={value => updateQualityIndicator(indicator.id, { targetValue: value })}
-                  />
-                  <SelectField
-                    label="10. Единица измерения"
-                    options={qualityUnits}
-                    value={indicator.unit}
-                    onChange={value => updateQualityIndicator(indicator.id, { unit: value })}
-                  />
-                  <SelectField
-                    label="11. Направление нормы"
-                    options={qualityDirections}
-                    value={indicator.normDirection}
-                    onChange={value => updateQualityIndicator(indicator.id, { normDirection: value })}
-                  />
-                  <SelectField
-                    label="12. Источник контроля"
-                    options={sourceOptions.length ? sourceOptions : ['Сначала выберите объект качества']}
-                    value={indicator.controlSource}
-                    onChange={value => updateQualityIndicator(indicator.id, { controlSource: value })}
-                  />
-                  <SelectField
-                    label="13. Частота контроля"
-                    options={qualityFrequencies}
-                    value={indicator.controlFrequency}
-                    onChange={value => updateQualityIndicator(indicator.id, { controlFrequency: value })}
-                  />
-                  <TextField
-                    label="14. Владелец качества"
-                    placeholder="Кто отвечает за контроль и исправление отклонений?"
-                    value={indicator.owner}
-                    onChange={value => updateQualityIndicator(indicator.id, { owner: value })}
-                  />
-                  <TextField
-                    label="15. Кто принимает качество"
-                    placeholder="Кто подтверждает, что качество соответствует требованию?"
-                    value={indicator.acceptor}
-                    onChange={value => updateQualityIndicator(indicator.id, { acceptor: value })}
-                  />
-                  <LinkedResultSelect
-                    label="16. Связанный критерий результата"
-                    resultNames={resultNames}
-                    value={indicator.resultCriterion}
-                    onChange={value => updateQualityIndicator(indicator.id, { resultCriterion: value })}
-                  />
-                  <SelectField
-                    label="17. Связанный клиент / выгодоприобретатель"
-                    options={stakeholderNames.length ? stakeholderNames : ['Сначала заполните блок Клиент / выгодоприобретатель']}
-                    value={indicator.beneficiary}
-                    onChange={value => updateQualityIndicator(indicator.id, { beneficiary: value })}
-                  />
-                  <SelectField
-                    label="18. Связанный процесс"
-                    options={competencyProcessActivityOptions}
-                    value={indicator.process}
-                    onChange={value => updateQualityIndicator(indicator.id, { process: value })}
-                  />
-                  <SelectField
-                    label="19. Действие при отклонении"
-                    options={qualityDeviationActions}
-                    value={indicator.deviationAction}
-                    onChange={value => updateQualityIndicator(indicator.id, { deviationAction: value })}
-                  />
-                </div>
-
-                <div className="project-theory-method-status compact">
-                  <div>
-                    <b>20. Методологическая проверка</b>
-                    <p>{methodStatus}</p>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {[
-                      ['указана роль качества', indicator.role],
-                      ['указан объект качества', indicator.object],
-                      ['есть конкретное требование качества', indicator.requirement],
-                      ['указан тип дефекта / отклонения', indicator.defects.length ? 'yes' : ''],
-                      ['выбрана метрика', indicator.metric],
-                      ['есть формула', indicator.formula],
-                      ['задан минимально допустимый уровень', indicator.minimumValue],
-                      ['задано целевое значение', indicator.targetValue],
-                      ['указана единица измерения', indicator.unit],
-                      ['указано направление нормы', indicator.normDirection],
-                      ['указан источник контроля', indicator.controlSource],
-                      ['указана частота контроля', indicator.controlFrequency],
-                      ['есть владелец качества', indicator.owner],
-                      ['есть принимающая сторона', indicator.acceptor],
-                      ['качество связано с результатом, клиентом или процессом', indicator.resultCriterion || indicator.beneficiary || indicator.process],
-                    ].map(([label, value]) => (
-                      <label className="project-theory-check-option locked" key={label}>
-                        <input type="checkbox" checked={String(value).trim().length > 0} disabled />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    <div className="project-theory-method-status compact">
+                      <div>
+                        <b>20. Методологическая проверка</b>
+                        <p>{methodStatus}</p>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {[
+                          ['указана роль качества', draft.role],
+                          ['указан объект качества', draft.object],
+                          ['есть конкретное требование качества', draft.requirement],
+                          ['указан тип дефекта / отклонения', draft.defects.length ? 'yes' : ''],
+                          ['выбрана метрика', draft.metric],
+                          ['есть формула', draft.formula],
+                          ['задан минимально допустимый уровень', draft.minimumValue],
+                          ['задано целевое значение', draft.targetValue],
+                          ['указана единица измерения', draft.unit],
+                          ['указано направление нормы', draft.normDirection],
+                          ['указан источник контроля', draft.controlSource],
+                          ['указана частота контроля', draft.controlFrequency],
+                          ['есть владелец качества', draft.owner],
+                          ['есть принимающая сторона', draft.acceptor],
+                          ['качество связано с результатом, клиентом или процессом', draft.resultCriterion || draft.beneficiary || draft.process],
+                        ].map(([label, value]) => (
+                          <label className="project-theory-check-option locked" key={label}>
+                            <input type="checkbox" checked={String(value).trim().length > 0} disabled />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              }}
+            </DraftCard>
+          ))}
           <button className="project-theory-add-card" type="button" onClick={addQualityIndicator}>
             <Icon name="plus" size={16} />
             Добавить показатель качества
@@ -3757,214 +3681,218 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
         note="Фиксирует ядро, которое должно сохраниться при изменениях."
       >
         <div className="project-theory-repeater">
-          {preserveElements.map((element, index) => {
-            const indicatorOptions = getPreserveIndicatorOptions(element.type);
-            const methodStatus = getPreserveMethodStatus(element);
+          {preserveElements.map((element, index) => (
+            <DraftCard
+              key={element.id}
+              card={element}
+              title={`Сохраняемый элемент ${index + 1}`}
+              onApply={next => setPreserveElements(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => {
+                const indicatorOptions = getPreserveIndicatorOptions(draft.type);
+                const methodStatus = getPreserveMethodStatus(draft);
 
-            return (
-              <div className="project-theory-card" key={element.id}>
-                <div className="project-theory-card-head">
-                  <div className="project-theory-card-title">Сохраняемый элемент {index + 1}</div>
-                  <span className="project-theory-status-badge">{methodStatus}</span>
-                </div>
+                return (
+                  <>
+                    <div className="project-theory-flow" aria-label="Последовательность заполнения сохраняемого элемента">
+                      {[
+                        'Тип',
+                        'Конкретизация',
+                        'Почему ядро',
+                        'Можно менять',
+                        'Запрещено',
+                        'Стейкхолдер',
+                        'Критерий',
+                        'Ограничение',
+                        'Индикатор',
+                        'Минимум',
+                        'Единица',
+                        'Норма',
+                        'Источник',
+                        'Частота',
+                        'Владелец',
+                        'Принимает',
+                        'Действие',
+                        'Методология',
+                      ].map((step, stepIndex) => (
+                        <span key={step}>{stepIndex + 1}. {step}</span>
+                      ))}
+                    </div>
 
-                <div className="project-theory-flow" aria-label="Последовательность заполнения сохраняемого элемента">
-                  {[
-                    'Тип',
-                    'Конкретизация',
-                    'Почему ядро',
-                    'Можно менять',
-                    'Запрещено',
-                    'Стейкхолдер',
-                    'Критерий',
-                    'Ограничение',
-                    'Индикатор',
-                    'Минимум',
-                    'Единица',
-                    'Норма',
-                    'Источник',
-                    'Частота',
-                    'Владелец',
-                    'Принимает',
-                    'Действие',
-                    'Методология',
-                  ].map((step, stepIndex) => (
-                    <span key={step}>{stepIndex + 1}. {step}</span>
-                  ))}
-                </div>
+                    <div className="project-theory-grid three">
+                      <SelectField
+                        label="1. Тип сохраняемого элемента"
+                        options={preserveElementTypeOptions}
+                        value={draft.type}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { type: value }))}
+                      />
+                      <TextField
+                        label="2. Конкретизация элемента"
+                        placeholder="Что именно нельзя разрушить?"
+                        value={draft.details}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { details: value }))}
+                      />
+                      <SelectField
+                        label="3. Почему это является ядром, а не практикой"
+                        options={preserveCoreReasonOptions}
+                        value={draft.coreReason}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { coreReason: value }))}
+                      />
+                    </div>
 
-                <div className="project-theory-grid three">
-                  <SelectField
-                    label="1. Тип сохраняемого элемента"
-                    options={preserveElementTypeOptions}
-                    value={element.type}
-                    onChange={value => updatePreserveElement(element.id, { type: value })}
-                  />
-                  <TextField
-                    label="2. Конкретизация элемента"
-                    placeholder="Что именно нельзя разрушить?"
-                    value={element.details}
-                    onChange={value => updatePreserveElement(element.id, { details: value })}
-                  />
-                  <SelectField
-                    label="3. Почему это является ядром, а не практикой"
-                    options={preserveCoreReasonOptions}
-                    value={element.coreReason}
-                    onChange={value => updatePreserveElement(element.id, { coreReason: value })}
-                  />
-                </div>
+                    <div className="project-theory-subblock">
+                      <div className="project-theory-subhead">
+                        <b>4. Что можно менять вокруг этого элемента</b>
+                        <span>Изменяемые практики, которые не должны повреждать ядро.</span>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {preserveChangeableOptions.map(option => (
+                          <label className="project-theory-check-option" key={option}>
+                            <input
+                              type="checkbox"
+                              checked={draft.changeableItems.includes(option)}
+                              onChange={() => patch(togglePreserveMulti(draft, 'changeableItems', option))}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
 
-                <div className="project-theory-subblock">
-                  <div className="project-theory-subhead">
-                    <b>4. Что можно менять вокруг этого элемента</b>
-                    <span>Изменяемые практики, которые не должны повреждать ядро.</span>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {preserveChangeableOptions.map(option => (
-                      <label className="project-theory-check-option" key={option}>
-                        <input
-                          type="checkbox"
-                          checked={element.changeableItems.includes(option)}
-                          onChange={() => togglePreserveMultiValue(element.id, 'changeableItems', option)}
+                    <div className="project-theory-subblock">
+                      <div className="project-theory-subhead">
+                        <b>5. Что запрещено делать</b>
+                        <span>Действия, которые считаются угрозой разрушения ядра.</span>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {preserveForbiddenActionOptions.map(option => (
+                          <label className="project-theory-check-option" key={option}>
+                            <input
+                              type="checkbox"
+                              checked={draft.forbiddenActions.includes(option)}
+                              onChange={() => patch(togglePreserveMulti(draft, 'forbiddenActions', option))}
+                            />
+                            <span>{option}</span>
+                          </label>
+                        ))}
+                      </div>
+                      {draft.forbiddenActions.includes('Другое') && (
+                        <TextField
+                          label="5. Запрещенное действие: другое"
+                          value={draft.forbiddenActionOther}
+                          onChange={value => patch(applyPreserveElementPatch(draft, { forbiddenActionOther: value }))}
                         />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
+                      )}
+                    </div>
 
-                <div className="project-theory-subblock">
-                  <div className="project-theory-subhead">
-                    <b>5. Что запрещено делать</b>
-                    <span>Действия, которые считаются угрозой разрушения ядра.</span>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {preserveForbiddenActionOptions.map(option => (
-                      <label className="project-theory-check-option" key={option}>
-                        <input
-                          type="checkbox"
-                          checked={element.forbiddenActions.includes(option)}
-                          onChange={() => togglePreserveMultiValue(element.id, 'forbiddenActions', option)}
-                        />
-                        <span>{option}</span>
-                      </label>
-                    ))}
-                  </div>
-                  {element.forbiddenActions.includes('Другое') && (
-                    <TextField
-                      label="5. Запрещенное действие: другое"
-                      value={element.forbiddenActionOther}
-                      onChange={value => updatePreserveElement(element.id, { forbiddenActionOther: value })}
-                    />
-                  )}
-                </div>
+                    <div className="project-theory-grid three">
+                      <SelectField
+                        label="6. Связанный клиент / стейкхолдер"
+                        options={stakeholderNames.length ? stakeholderNames : ['Сначала заполните блок Клиент / выгодоприобретатель']}
+                        value={draft.stakeholder}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { stakeholder: value }))}
+                      />
+                      <LinkedResultSelect
+                        label="7. Связанный критерий результата"
+                        resultNames={resultNames}
+                        value={draft.resultCriterion}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { resultCriterion: value }))}
+                      />
+                      <SelectField
+                        label="8. Связанное ограничение"
+                        options={constraintNames.length ? constraintNames : ['Сначала заполните блок Ограничения']}
+                        value={draft.constraint}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { constraint: value }))}
+                      />
+                      <SelectField
+                        label="9. Индикатор сохранности"
+                        options={indicatorOptions}
+                        value={draft.preservationIndicator}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { preservationIndicator: value }))}
+                      />
+                      <TextField
+                        label="10. Минимально допустимый уровень"
+                        placeholder="При каком значении элемент еще не разрушен?"
+                        value={draft.minimumValue}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { minimumValue: value }))}
+                      />
+                      <SelectField
+                        label="11. Единица измерения"
+                        options={preserveUnitOptions}
+                        value={draft.unit}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { unit: value }))}
+                      />
+                      <SelectField
+                        label="12. Направление нормы"
+                        options={preserveNormDirectionOptions}
+                        value={draft.normDirection}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { normDirection: value }))}
+                      />
+                      <SelectField
+                        label="13. Источник контроля"
+                        options={preserveControlSourceOptions}
+                        value={draft.controlSource}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { controlSource: value }))}
+                      />
+                      <SelectField
+                        label="14. Частота контроля"
+                        options={preserveControlFrequencyOptions}
+                        value={draft.controlFrequency}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { controlFrequency: value }))}
+                      />
+                      <TextField
+                        label="15. Владелец сохранности"
+                        placeholder="Кто отвечает за то, чтобы этот элемент не был поврежден?"
+                        value={draft.owner}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { owner: value }))}
+                      />
+                      <TextField
+                        label="16. Кто принимает сохранность"
+                        placeholder="Кто подтверждает, что элемент сохранен?"
+                        value={draft.acceptor}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { acceptor: value }))}
+                      />
+                      <SelectField
+                        label="17. Действие при угрозе разрушения"
+                        options={preserveThreatActionOptions}
+                        value={draft.threatAction}
+                        onChange={value => patch(applyPreserveElementPatch(draft, { threatAction: value }))}
+                      />
+                    </div>
 
-                <div className="project-theory-grid three">
-                  <SelectField
-                    label="6. Связанный клиент / стейкхолдер"
-                    options={stakeholderNames.length ? stakeholderNames : ['Сначала заполните блок Клиент / выгодоприобретатель']}
-                    value={element.stakeholder}
-                    onChange={value => updatePreserveElement(element.id, { stakeholder: value })}
-                  />
-                  <LinkedResultSelect
-                    label="7. Связанный критерий результата"
-                    resultNames={resultNames}
-                    value={element.resultCriterion}
-                    onChange={value => updatePreserveElement(element.id, { resultCriterion: value })}
-                  />
-                  <SelectField
-                    label="8. Связанное ограничение"
-                    options={constraintNames.length ? constraintNames : ['Сначала заполните блок Ограничения']}
-                    value={element.constraint}
-                    onChange={value => updatePreserveElement(element.id, { constraint: value })}
-                  />
-                  <SelectField
-                    label="9. Индикатор сохранности"
-                    options={indicatorOptions}
-                    value={element.preservationIndicator}
-                    onChange={value => updatePreserveElement(element.id, { preservationIndicator: value })}
-                  />
-                  <TextField
-                    label="10. Минимально допустимый уровень"
-                    placeholder="При каком значении элемент еще не разрушен?"
-                    value={element.minimumValue}
-                    onChange={value => updatePreserveElement(element.id, { minimumValue: value })}
-                  />
-                  <SelectField
-                    label="11. Единица измерения"
-                    options={preserveUnitOptions}
-                    value={element.unit}
-                    onChange={value => updatePreserveElement(element.id, { unit: value })}
-                  />
-                  <SelectField
-                    label="12. Направление нормы"
-                    options={preserveNormDirectionOptions}
-                    value={element.normDirection}
-                    onChange={value => updatePreserveElement(element.id, { normDirection: value })}
-                  />
-                  <SelectField
-                    label="13. Источник контроля"
-                    options={preserveControlSourceOptions}
-                    value={element.controlSource}
-                    onChange={value => updatePreserveElement(element.id, { controlSource: value })}
-                  />
-                  <SelectField
-                    label="14. Частота контроля"
-                    options={preserveControlFrequencyOptions}
-                    value={element.controlFrequency}
-                    onChange={value => updatePreserveElement(element.id, { controlFrequency: value })}
-                  />
-                  <TextField
-                    label="15. Владелец сохранности"
-                    placeholder="Кто отвечает за то, чтобы этот элемент не был поврежден?"
-                    value={element.owner}
-                    onChange={value => updatePreserveElement(element.id, { owner: value })}
-                  />
-                  <TextField
-                    label="16. Кто принимает сохранность"
-                    placeholder="Кто подтверждает, что элемент сохранен?"
-                    value={element.acceptor}
-                    onChange={value => updatePreserveElement(element.id, { acceptor: value })}
-                  />
-                  <SelectField
-                    label="17. Действие при угрозе разрушения"
-                    options={preserveThreatActionOptions}
-                    value={element.threatAction}
-                    onChange={value => updatePreserveElement(element.id, { threatAction: value })}
-                  />
-                </div>
-
-                <div className="project-theory-method-status compact">
-                  <div>
-                    <b>18. Методологическая проверка</b>
-                    <p>{methodStatus}</p>
-                  </div>
-                  <div className="project-theory-check-list dense">
-                    {[
-                      ['указан тип сохраняемого элемента', element.type],
-                      ['элемент сформулирован конкретно', element.details],
-                      ['объяснено, почему это ядро', element.coreReason],
-                      ['указано, что вокруг него можно менять', element.changeableItems.length ? 'yes' : ''],
-                      ['указано, что запрещено делать', element.forbiddenActions.length ? 'yes' : ''],
-                      ['есть связанный стейкхолдер, критерий результата или ограничение', element.stakeholder || element.resultCriterion || element.constraint],
-                      ['есть индикатор сохранности', element.preservationIndicator],
-                      ['есть минимально допустимый уровень', element.minimumValue],
-                      ['есть источник контроля', element.controlSource],
-                      ['есть частота контроля', element.controlFrequency],
-                      ['есть владелец сохранности', element.owner],
-                      ['есть принимающая сторона', element.acceptor],
-                      ['определено действие при угрозе разрушения', element.threatAction],
-                    ].map(([label, value]) => (
-                      <label className="project-theory-check-option locked" key={label}>
-                        <input type="checkbox" checked={String(value).trim().length > 0} disabled />
-                        <span>{label}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+                    <div className="project-theory-method-status compact">
+                      <div>
+                        <b>18. Методологическая проверка</b>
+                        <p>{methodStatus}</p>
+                      </div>
+                      <div className="project-theory-check-list dense">
+                        {[
+                          ['указан тип сохраняемого элемента', draft.type],
+                          ['элемент сформулирован конкретно', draft.details],
+                          ['объяснено, почему это ядро', draft.coreReason],
+                          ['указано, что вокруг него можно менять', draft.changeableItems.length ? 'yes' : ''],
+                          ['указано, что запрещено делать', draft.forbiddenActions.length ? 'yes' : ''],
+                          ['есть связанный стейкхолдер, критерий результата или ограничение', draft.stakeholder || draft.resultCriterion || draft.constraint],
+                          ['есть индикатор сохранности', draft.preservationIndicator],
+                          ['есть минимально допустимый уровень', draft.minimumValue],
+                          ['есть источник контроля', draft.controlSource],
+                          ['есть частота контроля', draft.controlFrequency],
+                          ['есть владелец сохранности', draft.owner],
+                          ['есть принимающая сторона', draft.acceptor],
+                          ['определено действие при угрозе разрушения', draft.threatAction],
+                        ].map(([label, value]) => (
+                          <label className="project-theory-check-option locked" key={label}>
+                            <input type="checkbox" checked={String(value).trim().length > 0} disabled />
+                            <span>{label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                );
+              }}
+            </DraftCard>
+          ))}
           <button className="project-theory-add-card" type="button" onClick={addPreserveElement}>
             <Icon name="plus" size={16} />
             Добавить сохраняемый элемент

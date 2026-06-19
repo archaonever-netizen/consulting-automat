@@ -1117,3 +1117,195 @@ npm.cmd run test -- src/pages/tasks/logic.test.ts
 - Данные новых экранов пока живут во frontend snapshot в `localStorage`; backend-модели и relation-связи для этих разделов еще не добавлены.
 - Экран "Гипотезы" восстановлен по общей архитектуре из `Весь проект.txt`, так как `Гипотезы.txt` на рабочем столе пустой.
 - Перед переносом решить, переносить ли `frontend/dist`, так как после сборки обновились hash-файлы.
+
+---
+
+## Яндекс Трекер / Backend foundation
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-19
+- Цель: начать замену старого трекера на Яндекс Трекер; на этом этапе выполнить шаги 1-3: зафиксировать состояние, удалить прежнюю backend-интеграцию, добавить backend-модель подключения Яндекс Трекера.
+
+### Что реализовано
+
+- Из backend удален router старого трекера и связанные с ним service/schema/client-файлы.
+- Из `User` удалена связь со старой моделью подключения трекера.
+- Добавлена модель `YandexTrackerConnection` с зашифрованным токеном, org/cloud org id, данными пользователя трекера и default queue.
+- Актуальная документация обновлена на `yandex_tracker_connections`.
+
+### Измененные файлы
+
+- `backend/main.py` - удалены импорт и регистрация router старого трекера, удален shutdown cleanup старого HTTP-клиента.
+- `backend/models.py` - старая модель подключения заменена на `YandexTrackerConnection`, связь пользователя переименована в `yandex_tracker_connection`.
+- `backend/routes/auth.py` - комментарий про мост исполнителей сделан нейтральным к провайдеру трекера.
+- backend route/service/client/schema-файлы старого трекера - удалены.
+- `README.md`, `docs/ARCHITECTURE.md`, `docs/SECURITY_RLS_TODO.md`, `docs/NOTES.md` - обновлены актуальные упоминания трекера.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `git branch --show-current` - `integrate-lab`.
+- `git status --short --branch` - рабочее дерево уже было грязным до этой задачи; новые изменения ограничены backend/docs файлами выше.
+- поиск старого названия в backend - совпадений не найдено.
+- `.\.venv\Scripts\python.exe -B -c "import backend.main as m; print(m.app.title)"` - приложение импортируется.
+- `.\.venv\Scripts\python.exe -m ruff check --select F backend\main.py backend\models.py backend\routes\auth.py` - успешно.
+
+### Риски и следующие шаги
+
+- Frontend пока не изменялся по условиям остановки после шага 3; `ProfilePage` и `TrackerPage` еще обращаются к старым API-ручкам.
+- Новый `/api/tracker` router, клиент Яндекс Трекера и frontend-переход нужно делать следующими шагами.
+- Для основного репозитория понадобится миграция: удалить/не переносить старую таблицу подключения трекера, создать `yandex_tracker_connections`.
+
+---
+
+## Яндекс Трекер / API client and backend routes
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-19
+- Цель: выполнить шаги 4-5 интеграции Яндекс Трекера: сверить контракт API, добавить backend-клиент и router `/api/tracker`.
+
+### Что реализовано
+
+- Контракт Яндекс Трекера сверлен по официальной документации:
+  - base URL API v3: `https://api.tracker.yandex.net/v3`;
+  - авторизация: `Authorization: OAuth <token>` или `Authorization: Bearer <IAM-token>`;
+  - организация: `X-Org-ID` для Яндекс 360 или `X-Cloud-Org-ID` для Cloud Organization;
+  - текущий пользователь: `GET /myself`;
+  - очереди: `GET /queues/`;
+  - поиск задач: `POST /issues/_search`;
+  - создание/чтение/обновление задач: `POST /issues/`, `GET /issues/{id}`, `PATCH /issues/{id}`;
+  - смена статуса через transitions: `GET /issues/{id}/transitions`, `POST /issues/{id}/transitions/{transition_id}/_execute`.
+- Добавлен async-клиент `YandexTrackerClient` поверх `httpx`.
+- Добавлен service-layer для подключения/отключения Яндекс Трекера, шифрования токена и получения клиента текущего пользователя.
+- Добавлены Pydantic-схемы для подключения, задач, поиска и transitions.
+- Добавлен backend-router `/api/tracker`:
+  - `GET/POST/DELETE /api/tracker/connection`;
+  - `GET /api/tracker/queues`;
+  - `GET /api/tracker/issues`;
+  - `POST /api/tracker/issues/search`;
+  - `POST /api/tracker/issues`;
+  - `GET/PATCH /api/tracker/issues/{issue_id}`;
+  - `GET /api/tracker/issues/{issue_id}/transitions`;
+  - `POST /api/tracker/issues/{issue_id}/transitions/{transition_id}`.
+- В startup добавлена idempotent-проверка недостающих колонок `yandex_tracker_connections` для lab-БД.
+
+### Измененные файлы
+
+- `backend/main.py` - подключен `tracker.router`, добавлен `_ensure_yandex_tracker_columns`.
+- `backend/models.py` - модель `YandexTrackerConnection` дополнена `token_type`, `org_id` сделан nullable для поддержки Cloud Organization.
+- `backend/routes/tracker.py` - новый router backend API Яндекс Трекера.
+- `backend/schemas/tracker.py` - новые request/response-схемы.
+- `backend/services/yandex_tracker.py` - service-layer подключения и получения клиента.
+- `backend/services/yandex_tracker_client.py` - async REST-клиент Яндекс Трекера.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- поиск старого названия в backend - совпадений не найдено.
+- `.\.venv\Scripts\python.exe -B -c "import backend.main as m; print(m.app.title)"` - приложение импортируется.
+- `.\.venv\Scripts\python.exe -m ruff check --select F backend\main.py backend\models.py backend\routes\auth.py backend\routes\tracker.py backend\schemas\tracker.py backend\services\yandex_tracker.py backend\services\yandex_tracker_client.py` - успешно.
+
+### Риски и следующие шаги
+
+- Live-проверка запросов к Яндекс Трекеру не выполнялась: в lab нет реального токена и org id.
+- Frontend пока всё ещё использует старые tracker API-ручки; переход экранов `ProfilePage`/`TrackerPage` на `/api/tracker/*` нужен следующим этапом.
+- Для основного репозитория нужна нормальная миграция БД; startup `ALTER TABLE` оставлен только как lab-страховка.
+
+---
+
+## Яндекс Трекер / Frontend integration
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-19
+- Цель: выполнить шаги 7-8 интеграции Яндекс Трекера: перевести профиль и страницу трекера на `/api/tracker`, собрать frontend и проверить отсутствие старых frontend-ссылок.
+
+### Что реализовано
+
+- `ProfilePage` переведен на Яндекс Трекер:
+  - подключение теперь идет через `POST /api/tracker/connection`;
+  - отключение через `DELETE /api/tracker/connection`;
+  - статус через `GET /api/tracker/connection`;
+  - форма поддерживает `X-Org-ID`, `X-Cloud-Org-ID`, OAuth/IAM token type и очередь по умолчанию.
+- `TrackerPage` переписан под модель Яндекс Трекера:
+  - проверяет подключение через `/api/tracker/connection`;
+  - загружает очереди через `/api/tracker/queues`;
+  - загружает задачи через `/api/tracker/issues`;
+  - группирует задачи по статусам;
+  - поддерживает поиск query-синтаксисом Яндекс Трекера;
+  - создает задачи через `POST /api/tracker/issues`;
+  - открывает drawer задачи, загружает детали и transitions;
+  - сохраняет summary/description через `PATCH /api/tracker/issues/{issue_id}`;
+  - меняет статус через `POST /api/tracker/issues/{issue_id}/transitions/{transition_id}`.
+- Из frontend удалены обращения к старым tracker API-ручкам и старые тексты.
+- Выполнен `npm.cmd run build`, поэтому обновились hash-файлы в `frontend/dist`.
+
+### Измененные файлы
+
+- `frontend/src/pages/ProfilePage.tsx` - форма и состояние интеграции переведены на Яндекс Трекер.
+- `frontend/src/pages/TrackerPage.tsx` - старый board/card UI заменен на UI очередей, задач, поиска, создания, редактирования и transitions Яндекс Трекера.
+- `frontend/dist/index.html`, `frontend/dist/portal.html`, `frontend/dist/assets/*` - обновлены build-артефакты после сборки.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- поиск старого названия и старых tracker API-ручек во `frontend\src` - совпадений не найдено.
+- поиск старого названия и старых tracker API-ручек во `frontend` - совпадений не найдено.
+- `npm.cmd exec eslint -- src/pages/ProfilePage.tsx src/pages/TrackerPage.tsx` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- Live-проверка с настоящим Яндекс Трекером не выполнялась: нет реального токена и id организации.
+- Drag-and-drop канбан старого трекера не переносился один-в-один, потому что API Яндекс Трекера работает через очереди, задачи и workflow transitions; текущий UI дает базовый рабочий слой без локальной эмуляции досок.
+- Для production-переноса нужно отдельно решить миграцию БД и проверить реальные поля задач конкретной организации Яндекс Трекера.
+
+---
+
+## Яндекс Трекер / Final cleanup and verification
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-19
+- Цель: выполнить шаги 9-10 интеграции Яндекс Трекера: зачистить остаточные упоминания старой tracker-интеграции, проверить код и обновить журнал переноса.
+
+### Что реализовано
+
+- Проведена финальная зачистка остаточных упоминаний старого tracker-бренда в актуальных документах и комментариях.
+- `docs/methodologies/ffe_opportunity_discovery.md` теперь ссылается на задачи в Яндекс Трекере.
+- `docs/REVIEW_LOG.md` обновлен на текущую tracker-интеграцию и шифрование токена Яндекс Трекера.
+- `yandex_calendar.py` больше не ссылается на старую tracker-интеграцию как пример шифрования.
+- В `yandex_calendar.py` дополнительно убраны старые F-ошибки Ruff: неиспользуемый импорт и лишнее присваивание результата.
+- Свежие записи `docs/TRANSFER_LOG.md` переформулированы так, чтобы строгий поиск старого названия по репозиторию был нулевым.
+
+### Измененные файлы
+
+- `docs/methodologies/ffe_opportunity_discovery.md` - обновлена ссылка на tracker-задачи.
+- `docs/REVIEW_LOG.md` - обновлены устаревшие описания tracker-интеграции.
+- `yandex_calendar.py` - обновлен TODO-комментарий и убраны F-ошибки.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись и очищены формулировки свежих записей миграции.
+
+### Проверки
+
+- строгий поиск старого названия и старых tracker API-ручек по содержимому репозитория без `.venv`, `node_modules`, `.git` - совпадений не найдено.
+- строгий поиск старого названия в именах файлов без `.venv`, `node_modules`, `.git` - совпадений не найдено.
+- `.\.venv\Scripts\python.exe -B -c "import backend.main as m; print(m.app.title)"` - приложение импортируется.
+- `.\.venv\Scripts\python.exe -m ruff check --select F backend\main.py backend\models.py backend\routes\auth.py backend\routes\tracker.py backend\schemas\tracker.py backend\services\yandex_tracker.py backend\services\yandex_tracker_client.py yandex_calendar.py` - успешно.
+- `npm.cmd exec eslint -- src/pages/ProfilePage.tsx src/pages/TrackerPage.tsx` в `frontend` - успешно.
+- `npm.cmd run test` в `frontend` - успешно, 30 тестов пройдены.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- Live-проверка с настоящим Яндекс Трекером всё ещё не выполнялась: нужен реальный токен и id организации.
+- Перед переносом в основной репозиторий отдельно решить production-миграцию БД для `yandex_tracker_connections`.

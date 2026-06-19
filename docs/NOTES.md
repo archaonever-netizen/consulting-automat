@@ -48,7 +48,7 @@ QUICKSTART.md, QUICK_START.md, START_HERE.md, design_handoff_shef/) — исхо
 Чтобы возродить: создать OAuth-приложение на https://oauth.yandex.ru/client/new (Web-app),
 задать YANDEX_CLIENT_ID/SECRET/REDIRECT_URI, переписать `yandex_calendar.py` на async
 и подключить к `backend/services/tasks.py`. Прод-требования из старого чеклиста: HTTPS
-для OAuth callback, шифрование токенов в БД (по аналогии с Kaiten-токеном — Fernet).
+для OAuth callback, шифрование токенов в БД через Fernet.
 
 ## 3. Дизайн-система ШЕФ (выжимка из design_handoff_shef, папка удалена 12.06.2026)
 
@@ -80,7 +80,7 @@ logo.js, JSX-образцы) — в git-истории до коммита уд�
 - **09.06.2026** — миграция Flask → FastAPI + React завершена (этапы 0–1: 17 эндпоинтов,
   7 страниц; бандл тогда был 297 КБ). Статусные файлы DONE/PLAN_COMPLETION/CHECKLIST.
 - **далее (git log)** — база знаний (eb360d7), метрик-брифинги и профили размера
-  бизнеса (7120b9e, 58ce974), интеграция Kaiten (7201667, 1919480, ff8eac3),
+  бизнеса (7120b9e, 58ce974), интеграция внешнего трекера (7201667, 1919480, ff8eac3),
   сеть агентов и матрица связей (5c3afa0), бриф FFE для стартапа (adf21d0),
   фреймворк декомпозиции целей с верификатором (18eb7e5 …4e813da), источники
   знаний BPMM (4897c7d).

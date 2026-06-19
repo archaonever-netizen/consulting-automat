@@ -49,6 +49,17 @@ class ProjectUpdate(BaseModel):
         return value or None
 
 
+class CardValidateRequest(BaseModel):
+    card_id: str
+    card_title: str
+    content: str
+
+    @field_validator("content", "card_title")
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return (value or "").strip()
+
+
 class ProjectRead(BaseModel):
     id: int
     client_id: int

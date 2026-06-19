@@ -28,7 +28,6 @@ from .routes import (  # noqa: E402
     clients,
     company,
     goals,
-    kaiten,
     knowledge,
     portal,
     portal_users,
@@ -36,6 +35,7 @@ from .routes import (  # noqa: E402
     secretary,
     sources,
     tasks,
+    tracker,
 )
 from .services.bots import seed_bots  # noqa: E402
 from .services.knowledge import seed_bpmm_source, seed_if_empty  # noqa: E402
@@ -181,6 +181,33 @@ def _ensure_knowledge_rag_columns(conn):
         ))
 
 
+def _ensure_yandex_tracker_columns(conn):
+    """Idempotently add Yandex Tracker columns to existing lab DBs."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(conn)
+    tables = set(inspector.get_table_names())
+    if 'yandex_tracker_connections' not in tables:
+        return
+
+    cols = {c['name'] for c in inspector.get_columns('yandex_tracker_connections')}
+    columns = {
+        'org_id': "ALTER TABLE yandex_tracker_connections ADD COLUMN org_id VARCHAR(255)",
+        'cloud_org_id': "ALTER TABLE yandex_tracker_connections ADD COLUMN cloud_org_id VARCHAR(255)",
+        'token_type': (
+            "ALTER TABLE yandex_tracker_connections "
+            "ADD COLUMN token_type VARCHAR(20) DEFAULT 'oauth' NOT NULL"
+        ),
+        'tracker_user_id': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_user_id VARCHAR(255)",
+        'tracker_user_name': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_user_name VARCHAR(255)",
+        'tracker_email': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_email VARCHAR(255)",
+        'default_queue': "ALTER TABLE yandex_tracker_connections ADD COLUMN default_queue VARCHAR(100)",
+    }
+    for name, ddl in columns.items():
+        if name not in cols:
+            conn.execute(text(ddl))
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Инициализация БД и сидов — в защищённом блоке с таймаутом. Если БД на старте
@@ -201,6 +228,24 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(_ensure_task_columns)
             await conn.run_sync(_ensure_subchat_columns)
             await conn.run_sync(_ensure_knowledge_rag_columns)
+            await conn.run_sync(_ensure_yandex_tracker_columns)
+        # Сборщик осиротевших задач импорта. Фоновый конвейер «Добавить
+        # методологию» живёт как in-process asyncio-задача и НЕ переживает
+        # перезапуск процесса (деплой, OOM-кил и т.п.). Любая задача в статусе
+        # running/queued на старте — заведомо мёртвая: помечаем её failed, иначе
+        # она навсегда блокирует очередь импорта (queue-of-one) и в UI висит
+        # «зависла».
+        from sqlalchemy import text as _text
+        async with AsyncSessionLocal() as db:
+            res = await db.execute(_text(
+                "UPDATE ingest_jobs SET status='failed', "
+                "error=COALESCE(NULLIF(error, ''), '') || "
+                "'[reaper] сервер перезапущен — задача прервана (возможно, не хватило памяти на extract)', "
+                "updated_at=now() WHERE status IN ('running', 'queued')"
+            ))
+            await db.commit()
+            if res.rowcount:
+                log.warning("startup: reaper — осиротевших задач импорта помечено failed: %s", res.rowcount)
         await _seed_founder()
         async with AsyncSessionLocal() as db:
             await seed_if_empty(db)
@@ -208,6 +253,11 @@ async def lifespan(app: FastAPI):
             await seed_bots(db)
 
     db_target = settings.database_url.split("@")[-1]
+    # Диагностика окружения: видит ли процесс ключи Supabase Storage (значения не логируем).
+    log.warning(
+        "startup: Supabase Storage env — url=%s key=%s bucket=%s",
+        bool(settings.supabase_url), bool(settings.supabase_service_key), settings.supabase_storage_bucket,
+    )
     try:
         log.warning("startup: инициализация БД (target=%s)", db_target)
         await asyncio.wait_for(_init_db(), timeout=90)
@@ -219,8 +269,6 @@ async def lifespan(app: FastAPI):
         )
     yield
     # Cleanup on shutdown
-    from .services.kaiten_client import close_shared_client
-    await close_shared_client()
     await engine.dispose()
 
 
@@ -272,11 +320,11 @@ app.include_router(agent.router, prefix="/api/agent", tags=["agent"])
 app.include_router(chat.router, prefix="/api/chat", tags=["chat"])
 app.include_router(knowledge.router, prefix="/api/knowledge", tags=["knowledge"])
 app.include_router(sources.router, prefix="/api/knowledge", tags=["sources"])
-app.include_router(kaiten.router, prefix="/api/kaiten", tags=["kaiten"])
 app.include_router(goals.router, prefix="/api/goals", tags=["goals"])
 app.include_router(projects.router, prefix="/api/projects", tags=["projects"])
 app.include_router(secretary.router, prefix="/api/secretary", tags=["secretary"])
 app.include_router(bots.router, prefix="/api/bots", tags=["bots"])
+app.include_router(tracker.router, prefix="/api/tracker", tags=["tracker"])
 
 
 # ── Раздача собранного фронтенда (SPA) ──
