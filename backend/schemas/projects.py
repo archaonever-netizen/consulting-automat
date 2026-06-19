@@ -50,14 +50,19 @@ class ProjectUpdate(BaseModel):
 
 
 class CardValidateRequest(BaseModel):
-    card_id: str
     card_title: str
     content: str
+    content_hash: Optional[str] = None
 
     @field_validator("content", "card_title")
     @classmethod
     def strip_text(cls, value: str) -> str:
         return (value or "").strip()
+
+
+class CardContentUpsert(BaseModel):
+    # Содержимое карточки — произвольная JSON-структура снапшота редактора.
+    content: dict
 
 
 class ProjectRead(BaseModel):

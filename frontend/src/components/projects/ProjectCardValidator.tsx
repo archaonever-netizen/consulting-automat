@@ -3,24 +3,13 @@ import axios from 'axios';
 import Icon from '../Icon';
 import api from '../../services/api';
 import { buildCardValidationText } from './projectCardValidation';
-
-type Verdict = 'valid' | 'partial' | 'invalid' | 'no_evidence';
-
-interface EvidenceRef {
-  source_key: string | null;
-  page_start: number | null;
-  page_end: number | null;
-  section: string | null;
-  card_type: string | null;
-}
-
-interface ValidationResult {
-  answer: string;
-  verdict: Verdict;
-  evidence: EvidenceRef[];
-  contentHash: string;
-  checkedAt: string;
-}
+import {
+  readValidationCache,
+  writeValidationCache,
+  type EvidenceRef,
+  type ValidationResult,
+  type Verdict,
+} from './projectCardValidationCache';
 
 interface ProjectCardValidatorProps {
   projectId: number;
@@ -43,19 +32,6 @@ function hashContent(text: string): string {
     h = ((h << 5) + h + text.charCodeAt(i)) | 0;
   }
   return (h >>> 0).toString(36);
-}
-
-function cacheKey(projectId: number, cardId: string) {
-  return `project_card_validation:${projectId}:${cardId}`;
-}
-
-function readCache(projectId: number, cardId: string): ValidationResult | null {
-  try {
-    const raw = window.localStorage.getItem(cacheKey(projectId, cardId));
-    return raw ? (JSON.parse(raw) as ValidationResult) : null;
-  } catch {
-    return null;
-  }
 }
 
 function errText(e: unknown): string {
@@ -89,7 +65,7 @@ function formatEvidence(ref: EvidenceRef): string {
 }
 
 export default function ProjectCardValidator({ projectId, cardId, cardTitle }: ProjectCardValidatorProps) {
-  const [result, setResult] = useState<ValidationResult | null>(() => readCache(projectId, cardId));
+  const [result, setResult] = useState<ValidationResult | null>(() => readValidationCache(projectId, cardId));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [hint, setHint] = useState('');
@@ -99,7 +75,7 @@ export default function ProjectCardValidator({ projectId, cardId, cardTitle }: P
   // показать «карточка изменилась после проверки».
   useEffect(() => {
     setCurrentHash(hashContent(buildCardValidationText(projectId, cardId)));
-    setResult(readCache(projectId, cardId));
+    setResult(readValidationCache(projectId, cardId));
     setError('');
     setHint('');
   }, [projectId, cardId]);
@@ -117,25 +93,21 @@ export default function ProjectCardValidator({ projectId, cardId, cardTitle }: P
     const contentHash = hashContent(content);
     setLoading(true);
     try {
-      const { data } = await api.post('/api/projects/cards/validate', {
-        card_id: cardId,
-        card_title: cardTitle,
-        content,
-      });
+      const { data } = await api.post(
+        `/api/projects/${projectId}/cards/${encodeURIComponent(cardId)}/validate`,
+        { card_title: cardTitle, content, content_hash: contentHash },
+      );
       const next: ValidationResult = {
         answer: data.answer ?? '',
         verdict: (data.verdict as Verdict) ?? 'no_evidence',
         evidence: (data.evidence as EvidenceRef[]) ?? [],
-        contentHash,
-        checkedAt: new Date().toISOString(),
+        contentHash: data.contentHash || contentHash,
+        checkedAt: data.checkedAt || new Date().toISOString(),
       };
       setResult(next);
       setCurrentHash(contentHash);
-      try {
-        window.localStorage.setItem(cacheKey(projectId, cardId), JSON.stringify(next));
-      } catch {
-        /* переполнение localStorage не должно ломать UI */
-      }
+      // Сервер уже сохранил результат в БД; локальный кэш — для мгновенного показа.
+      writeValidationCache(projectId, cardId, next);
     } catch (e) {
       setError(errText(e));
     } finally {

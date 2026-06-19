@@ -1,3 +1,5 @@
+import { pushCardSnapshot } from './projectCardServerSync';
+
 export type ProjectTheoryBlockId =
   | 'mission'
   | 'stakeholder'
@@ -116,4 +118,5 @@ export function writeProjectTheorySnapshot(projectId: number, snapshot: ProjectT
   if (typeof window === 'undefined') return;
 
   window.localStorage.setItem(getProjectTheorySnapshotKey(projectId), JSON.stringify(snapshot));
+  pushCardSnapshot(projectId, 'project-theory', snapshot);
 }

@@ -6,6 +6,7 @@ import ProjectLeftPanel from './ProjectLeftPanel';
 import { seedOkrSnapshot } from './ProjectOkrCanvas';
 import ProjectRightPanel from './ProjectRightPanel';
 import ProjectToolbar from './ProjectToolbar';
+import { hydrateProjectCards } from './projectCardSync';
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
 
 export interface ProjectSection {
@@ -55,10 +56,21 @@ interface ProjectWorkspaceProps {
 export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState(PROJECT_FRAMEWORK_CARDS[0].id);
+  // Гидрация из БD должна завершиться ДО монтирования канвасов, иначе они
+  // инициализируют состояние из пустого localStorage и затрут серверные данные.
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    setHydrated(false);
     seedFrameworkSectionSnapshots(project.id);
     seedOkrSnapshot(project.id);
+    hydrateProjectCards(project.id).finally(() => {
+      if (!cancelled) setHydrated(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [project.id]);
   const activeSection = activeSectionId
     ? PROJECT_SECTIONS.find(section => section.id === activeSectionId) || null
@@ -99,7 +111,16 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           activeCardId={activeSection ? null : activeFrameworkCard.id}
           onSelectFrameworkCard={selectFrameworkCard}
         />
-        <ProjectCanvas projectId={project.id} view={canvasView} />
+        {hydrated ? (
+          <ProjectCanvas projectId={project.id} view={canvasView} />
+        ) : (
+          <section className="project-canvas">
+            <div className="project-canvas-empty">
+              <span className="spinner" />
+              <span>Загрузка данных проекта…</span>
+            </div>
+          </section>
+        )}
         <ProjectRightPanel project={project} />
       </div>
     </div>

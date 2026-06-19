@@ -291,6 +291,39 @@ class Project(Base):
     )
 
     client: Mapped['Client'] = relationship('Client', back_populates='projects')
+    card_states: Mapped[List['ProjectCardState']] = relationship(
+        'ProjectCardState', back_populates='project', cascade='all, delete-orphan'
+    )
+
+
+class ProjectCardState(Base):
+    """Состояние одной карточки фреймворка проекта.
+
+    Хранит и введённые пользователем данные карточки (content_json — тот же
+    lossless-снапшот, что раньше жил только в localStorage), и последний
+    результат ИИ-валидатора (validation_json). Одна строка на (project, card).
+    """
+    __tablename__ = 'project_card_states'
+    __table_args__ = (
+        UniqueConstraint('project_id', 'card_id', name='uq_project_card'),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('projects.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    card_id: Mapped[str] = mapped_column(String(60), nullable=False)
+    # Введённое содержимое карточки (произвольная JSON-структура снапшота).
+    content_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    # Последний результат валидатора: {answer, verdict, evidence, contentHash, checkedAt}.
+    validation_json: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)
+    validated_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    project: Mapped['Project'] = relationship('Project', back_populates='card_states')
 
 
 class Brief(Base):

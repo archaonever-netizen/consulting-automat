@@ -1,3 +1,5 @@
+import { pushCardSnapshot } from './projectCardServerSync';
+
 export type ProjectTargetStateSnapshotItem = {
   id: string;
   label: string;
@@ -68,4 +70,5 @@ export function writeProjectTargetStateSnapshot(projectId: number, snapshot: Pro
   if (typeof window === 'undefined') return;
 
   window.localStorage.setItem(getProjectTargetStateSnapshotKey(projectId), JSON.stringify(snapshot));
+  pushCardSnapshot(projectId, 'target-state', snapshot);
 }

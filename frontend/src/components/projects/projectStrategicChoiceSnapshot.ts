@@ -1,3 +1,5 @@
+import { pushCardSnapshot } from './projectCardServerSync';
+
 export type ProjectStrategicChoiceSnapshotItem = {
   id: string;
   label: string;
@@ -84,4 +86,5 @@ export function writeProjectStrategicChoiceSnapshot(projectId: number, snapshot:
   if (typeof window === 'undefined') return;
 
   window.localStorage.setItem(getProjectStrategicChoiceSnapshotKey(projectId), JSON.stringify(snapshot));
+  pushCardSnapshot(projectId, 'strategic-choice', snapshot);
 }

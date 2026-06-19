@@ -1,3 +1,5 @@
+import { pushCardSnapshot } from './projectCardServerSync';
+
 export type ProjectFrameworkSectionSnapshotItem = {
   id: string;
   label: string;
@@ -40,4 +42,5 @@ export function writeProjectFrameworkSectionSnapshot(projectId: number, sectionI
   if (typeof window === 'undefined') return;
 
   window.localStorage.setItem(getProjectFrameworkSectionSnapshotKey(projectId, sectionId), JSON.stringify(snapshot));
+  pushCardSnapshot(projectId, sectionId, snapshot);
 }
