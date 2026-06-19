@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
@@ -17,14 +18,14 @@ type FieldDef = {
   placeholder?: string;
 };
 
-type RecordState = {
+export type RecordState = {
   id: number;
   values: Record<string, string>;
 };
 
 type SourceContext = ReturnType<typeof useProjectSources>;
 
-type ScreenConfig = {
+export type ScreenConfig = {
   id: string;
   title: string;
   lead: string;
@@ -61,9 +62,9 @@ function sectionOptions(snapshot: ProjectFrameworkSectionSnapshot | null) {
 }
 
 // Reserved key for the user-editable card name. Not part of any config.fields.
-const NAME_KEY = '__cardName';
+export const NAME_KEY = '__cardName';
 
-function readProjectSources(projectId: number) {
+export function readProjectSources(projectId: number) {
   const theory = readProjectTheorySnapshot(projectId) || getFallbackProjectTheorySnapshot(projectId);
   const diagnosis = readProjectDiagnosisSnapshot(projectId) || getFallbackProjectDiagnosisSnapshot(projectId);
   const strategy = readProjectStrategicChoiceSnapshot(projectId) || getFallbackProjectStrategicChoiceSnapshot(projectId);
@@ -174,7 +175,7 @@ function Section({ number, title, note, children }: { number: string; title: str
   );
 }
 
-function createRecord(config: ScreenConfig, sources: SourceContext, id: number): RecordState {
+export function createRecord(config: ScreenConfig, sources: SourceContext, id: number): RecordState {
   const prefill = config.prefill?.(sources) || {};
   return {
     id,
@@ -200,7 +201,7 @@ function getFieldOptions(base: string[], fallback: string[]) {
   return base.length ? base : fallback;
 }
 
-function createConfigs(sources: SourceContext): Record<string, ScreenConfig> {
+export function createConfigs(sources: SourceContext): Record<string, ScreenConfig> {
   const resultOptions = getFieldOptions(sources.resultOptions, ['критерий результата', 'KR', 'KPI', 'качество']);
   const stakeholderOptions = getFieldOptions(sources.stakeholderOptions, ['клиент', 'пользователь результата', 'выгодоприобретатель']);
   const constraintOptions = getFieldOptions(sources.constraintOptions, ['срок', 'бюджет', 'ресурс', 'регуляторное ограничение']);
@@ -519,7 +520,7 @@ function buildValidationChecks(config: ScreenConfig, sources: SourceContext, rec
   ];
 }
 
-function buildSectionSnapshot(projectId: number, config: ScreenConfig, sources: SourceContext, records: RecordState[]): ProjectFrameworkSectionSnapshot {
+export function buildSectionSnapshot(projectId: number, config: ScreenConfig, sources: SourceContext, records: RecordState[]): ProjectFrameworkSectionSnapshot {
   const checks = buildValidationChecks(config, sources, records);
   return {
     projectId,

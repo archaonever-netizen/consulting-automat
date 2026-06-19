@@ -60,8 +60,11 @@ def _usage_dict(resp) -> dict:
     }
 
 
-def _chat_json(model: str, system: str, user: str) -> tuple[dict, dict]:
-    """Вызвать модель и вернуть (распарсенный JSON, расход токенов)."""
+def _chat_json(model: str, system: str, user: str, *, max_tokens: int = 1200) -> tuple[dict, dict]:
+    """Вызвать модель и вернуть (распарсенный JSON, расход токенов).
+
+    max_tokens поднимается для объёмных ответов (например, ревью всего проекта).
+    """
     from openai import OpenAI
     settings = get_settings()
     client = OpenAI(api_key=settings.promptra_api_key, base_url=settings.promptra_base_url, timeout=120)
@@ -69,7 +72,7 @@ def _chat_json(model: str, system: str, user: str) -> tuple[dict, dict]:
         model=model,
         messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
         temperature=0.2,
-        max_tokens=1200,
+        max_tokens=max_tokens,
     )
     raw = resp.choices[0].message.content or ""
     m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)

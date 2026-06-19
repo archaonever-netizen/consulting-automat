@@ -19,6 +19,8 @@ export interface ProjectCanvasView {
 interface ProjectCanvasProps {
   projectId: number;
   view: ProjectCanvasView;
+  // Меняется после применённой Методологом правки — форсирует перечтение снапшота канвасом.
+  reloadNonce?: number;
 }
 
 const SECTION_CARD_IDS = [
@@ -32,22 +34,23 @@ const SECTION_CARD_IDS = [
   'facts-learning',
 ];
 
-function renderCanvasBody(projectId: number, frameworkCardId: string): ReactNode {
-  if (frameworkCardId === 'project-theory') return <ProjectTheoryCanvas key={projectId} projectId={projectId} />;
-  if (frameworkCardId === 'diagnosis') return <ProjectDiagnosisCanvas key={projectId} projectId={projectId} />;
-  if (frameworkCardId === 'strategic-choice') return <ProjectStrategicChoiceCanvas key={projectId} projectId={projectId} />;
-  if (frameworkCardId === 'target-state') return <ProjectTargetStateCanvas key={projectId} projectId={projectId} />;
-  if (frameworkCardId === 'whole-project') return <ProjectWholeProjectCanvas key={projectId} projectId={projectId} />;
-  if (frameworkCardId === 'okr-kpi') return <ProjectOkrCanvas key={projectId} projectId={projectId} />;
+function renderCanvasBody(projectId: number, frameworkCardId: string, nonce: number): ReactNode {
+  const k = `${projectId}:${nonce}`;
+  if (frameworkCardId === 'project-theory') return <ProjectTheoryCanvas key={k} projectId={projectId} />;
+  if (frameworkCardId === 'diagnosis') return <ProjectDiagnosisCanvas key={k} projectId={projectId} />;
+  if (frameworkCardId === 'strategic-choice') return <ProjectStrategicChoiceCanvas key={k} projectId={projectId} />;
+  if (frameworkCardId === 'target-state') return <ProjectTargetStateCanvas key={k} projectId={projectId} />;
+  if (frameworkCardId === 'whole-project') return <ProjectWholeProjectCanvas key={k} projectId={projectId} />;
+  if (frameworkCardId === 'okr-kpi') return <ProjectOkrCanvas key={k} projectId={projectId} />;
   if (SECTION_CARD_IDS.includes(frameworkCardId)) {
-    return <ProjectFrameworkSectionCanvas key={`${projectId}-${frameworkCardId}`} projectId={projectId} screenId={frameworkCardId} />;
+    return <ProjectFrameworkSectionCanvas key={`${projectId}-${frameworkCardId}:${nonce}`} projectId={projectId} screenId={frameworkCardId} />;
   }
   return null;
 }
 
-export default function ProjectCanvas({ projectId, view }: ProjectCanvasProps) {
+export default function ProjectCanvas({ projectId, view, reloadNonce = 0 }: ProjectCanvasProps) {
   const cardId = view.frameworkCardId;
-  const body = cardId ? renderCanvasBody(projectId, cardId) : null;
+  const body = cardId ? renderCanvasBody(projectId, cardId, reloadNonce) : null;
 
   if (cardId && body) {
     return (

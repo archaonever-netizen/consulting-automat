@@ -65,6 +65,38 @@ class CardContentUpsert(BaseModel):
     content: dict
 
 
+class ProjectReviewSection(BaseModel):
+    card_id: str
+    title: str
+    text: str = ""
+
+
+class ProjectReviewRequest(BaseModel):
+    full_text: str = ""
+    sections: list[ProjectReviewSection] = []
+
+
+class ProjectChatMessage(BaseModel):
+    role: str
+    content: str
+
+
+class ProjectChatRequest(BaseModel):
+    message: str
+    history: list[ProjectChatMessage] = []
+    # Машиночитаемая карта редактируемого проекта и последняя оценка — произвольный JSON.
+    project_model: Optional[dict] = None
+    review: Optional[dict] = None
+
+    @field_validator("message")
+    @classmethod
+    def message_required(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("Message is required")
+        return value
+
+
 class ProjectRead(BaseModel):
     id: int
     client_id: int

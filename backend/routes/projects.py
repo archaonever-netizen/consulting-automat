@@ -9,10 +9,17 @@ from ..routes.auth import get_current_user_dep
 from ..schemas.projects import (
     CardContentUpsert,
     CardValidateRequest,
+    ProjectChatRequest,
     ProjectCreate,
+    ProjectReviewRequest,
     ProjectUpdate,
 )
-from ..services import card_validator, project_cards, projects as project_service
+from ..services import (
+    card_validator,
+    project_cards,
+    project_methodolog,
+    projects as project_service,
+)
 
 router = APIRouter()
 
@@ -78,6 +85,87 @@ async def validate_card(
     }
     await project_cards.save_validation(db, project_id, card_id, validation)
     return validation
+
+
+@router.get("/{project_id}/review")
+async def get_project_review(
+    project_id: int,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Сохранённая оценка всего проекта и история чата Методолога (для гидрации панели)."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return await project_cards.get_review(db, project_id)
+
+
+@router.post(
+    "/{project_id}/review",
+    dependencies=[Depends(rate_limit("project_review", 5))],
+)
+async def review_project(
+    project_id: int,
+    data: ProjectReviewRequest,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Полная оценка всего проекта светофором R/A/G строго по методологиям из RAG.
+
+    Платный ИИ-вызов (гибридный поиск + модель) → per-user rate limit.
+    Гибридный поиск требует Postgres/pgvector → на dev SQLite ожидаемый 503.
+    """
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    sections = [s.model_dump() for s in data.sections]
+    try:
+        result = await project_methodolog.review_project(data.full_text, sections)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    review = {
+        "answer": result["answer"],
+        "overall": result["overall"],
+        "summary": result["summary"],
+        "sections": result["sections"],
+        "evidence": result["evidence"],
+        "has_support": result["has_support"],
+        "checkedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    await project_cards.save_review(db, project_id, review)
+    return review
+
+
+@router.post(
+    "/{project_id}/review/chat",
+    dependencies=[Depends(rate_limit("project_chat", 30))],
+)
+async def review_chat(
+    project_id: int,
+    data: ProjectChatRequest,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Диалог-уточнение с Методологом: ответ + предложения правок (без самостоятельного применения)."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    history = [m.model_dump() for m in data.history]
+    try:
+        result = await project_methodolog.chat_methodolog(
+            data.message,
+            history=history,
+            project_model=data.project_model,
+            review=data.review,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+
+    # История чата = прошлые сообщения + новое сообщение пользователя + ответ методолога.
+    messages = history + [
+        {"role": "user", "content": data.message},
+        {"role": "assistant", "content": result["reply"]},
+    ]
+    await project_cards.save_chat_messages(db, project_id, messages)
+    return {"reply": result["reply"], "proposals": result["proposals"], "evidence": result["evidence"]}
 
 
 @router.get("")

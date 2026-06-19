@@ -1309,3 +1309,75 @@ npm.cmd run test -- src/pages/tasks/logic.test.ts
 
 - Live-проверка с настоящим Яндекс Трекером всё ещё не выполнялась: нужен реальный токен и id организации.
 - Перед переносом в основной репозиторий отдельно решить production-миграцию БД для `yandex_tracker_connections`.
+
+---
+
+## Проекты / ИИ-Методолог проекта
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-19
+- Цель: перенести в основной deploy-блок правую панель `ИИ-Методолог проекта`: оценка всего проекта по RAG-методологиям, чат с методологом и подтверждаемые предложения правок.
+
+### Что реализовано
+
+- Добавлен backend service `project_methodolog`:
+  - `review_project` оценивает весь проект светофором `green/amber/red` по разделам и в целом;
+  - `chat_methodolog` отвечает на вопросы по проекту и возвращает структурированные proposals;
+  - ответы модели ограничены найденными RAG-источниками `S1..Sn`, как в карточном валидаторе.
+- Добавлены API проекта:
+  - `GET /api/projects/{project_id}/review` - сохранённая оценка и история чата;
+  - `POST /api/projects/{project_id}/review` - новая оценка всего проекта;
+  - `POST /api/projects/{project_id}/review/chat` - чат с методологом и proposals.
+- Сохранение результата переиспользует таблицу `ProjectCardState` со служебным `card_id="__project_review__"`:
+  - `validation_json` хранит последнюю оценку проекта;
+  - `content_json.messages` хранит последние сообщения чата.
+- В frontend правая панель проекта заменена на `ProjectMethodologist`:
+  - кнопка `Валидация`;
+  - общий RAG-статус проекта;
+  - разбор по разделам;
+  - ссылки на источники;
+  - чат с методологом;
+  - кнопки `Применить` / `Отклонить` для предложенных правок.
+- Добавлен frontend model/apply layer:
+  - `projectReview.ts` собирает payload оценки и вызывает API;
+  - `projectEditModel.ts` отдаёт модели машинную карту редактируемых карточек;
+  - `projectEditApplier.ts` применяет подтверждённые изменения к секционным карточкам через snapshot;
+  - сложные карточки пока не редактируются автоматически и мягко отказывают пользователю.
+- После применённой правки канвас проекта перемонтируется через `reloadNonce`, чтобы перечитать свежий snapshot.
+- Выполнен `npm.cmd run build`, поэтому обновлены hash-файлы в `frontend/dist`.
+
+### Изменённые файлы
+
+- `backend/routes/projects.py` - добавлены review/chat endpoints.
+- `backend/schemas/projects.py` - добавлены схемы оценки и чата.
+- `backend/services/methodolog.py` - `_chat_json` получил настраиваемый `max_tokens`.
+- `backend/services/project_cards.py` - хранение проектного review и истории чата.
+- `backend/services/project_methodolog.py` - новый service проектного ИИ-Методолога.
+- `frontend/src/components/projects/ProjectMethodologist.tsx` - новая правая панель.
+- `frontend/src/components/projects/projectReview.ts` - API/types/payload оценки.
+- `frontend/src/components/projects/projectEditModel.ts` - машинная карта редактируемого проекта.
+- `frontend/src/components/projects/projectEditApplier.ts` - применение подтверждённых proposals.
+- `frontend/src/components/projects/ProjectRightPanel.tsx` - подключена панель Методолога.
+- `frontend/src/components/projects/ProjectWorkspace.tsx` - reload открытого канваса после применённой правки.
+- `frontend/src/components/projects/ProjectCanvas.tsx` - поддержка `reloadNonce`.
+- `frontend/src/components/projects/ProjectFrameworkSectionCanvas.tsx` - экспорт helper-типов/функций для применителя правок.
+- `frontend/src/styles/styles.css` - стили панели Методолога, RAG-оценок, чата и proposals.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновлены build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `.\.venv\Scripts\python.exe -B -c "import backend.main as m; print(m.app.title)"` - приложение импортируется.
+- `.\.venv\Scripts\python.exe -m ruff check --select F backend\routes\projects.py backend\schemas\projects.py backend\services\methodolog.py backend\services\project_cards.py backend\services\project_methodolog.py` - успешно.
+- `npm.cmd exec eslint -- src/components/projects/ProjectCanvas.tsx src/components/projects/ProjectFrameworkSectionCanvas.tsx src/components/projects/ProjectRightPanel.tsx src/components/projects/ProjectWorkspace.tsx src/components/projects/ProjectMethodologist.tsx src/components/projects/projectReview.ts src/components/projects/projectEditModel.ts src/components/projects/projectEditApplier.ts` - успешно.
+- `npm.cmd run test` - успешно, 30 тестов пройдены.
+- `npm.cmd run build` - успешно.
+
+### Риски и следующие шаги
+
+- Full project review и chat требуют RAG-поиска на Postgres/pgvector; на SQLite ожидается 503 с понятным текстом.
+- Автоматическое применение правок в v1 работает только для секционных карточек с повторяющимися окнами; сложные карточки требуют ручного редактирования.
+- Применение proposals сейчас пишет в frontend snapshot/localStorage и затем подхватывается существующей синхронизацией карточек проекта.

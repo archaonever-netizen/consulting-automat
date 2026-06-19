@@ -1231,15 +1231,104 @@ a:hover { color: var(--accent-hover); }
 .project-toolbar-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .project-workspace-grid {
-  flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr) 280px;
+  flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr) 360px;
   background: var(--surface-2);
 }
-.project-modal-page .project-workspace-grid { grid-template-columns: 230px minmax(0, 1fr) 260px; }
+.project-modal-page .project-workspace-grid { grid-template-columns: 230px minmax(0, 1fr) 340px; }
 .project-side {
   min-width: 0; padding: 14px; background: var(--card-bg); border-right: 1px solid var(--line);
   overflow-y: auto;
 }
 .project-right-panel { border-right: none; border-left: 1px solid var(--line); }
+
+/* === ИИ-Методолог проекта (правая панель) === */
+.project-methodologist { display: flex; flex-direction: column; gap: 12px; }
+.project-methodologist-lead { margin: 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; }
+.project-methodologist .project-card-validator-btn { width: 100%; justify-content: center; }
+
+/* Светофор оценки */
+.rag-badge {
+  display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px;
+  font-size: 12px; font-weight: 800; letter-spacing: .02em;
+}
+.rag-badge.big { width: 100%; justify-content: center; padding: 9px 12px; font-size: 13px; }
+.rag-badge.ok { color: var(--success); background: var(--success-weak); }
+.rag-badge.warn { color: var(--amber); background: var(--amber-weak); }
+.rag-badge.bad { color: var(--danger); background: var(--danger-weak); }
+.rag-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.rag-dot.ok { background: var(--success); }
+.rag-dot.warn { background: var(--amber); }
+.rag-dot.bad { background: var(--danger); }
+.rag-tag { margin-left: auto; font-size: 10.5px; font-weight: 800; letter-spacing: .04em; opacity: .8; }
+
+.project-review { display: flex; flex-direction: column; gap: 10px; }
+.project-review-summary { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-primary); }
+.project-review-sections { display: flex; flex-direction: column; gap: 8px; }
+.project-review-section {
+  border: 1px solid var(--line); border-left: 3px solid var(--line); border-radius: var(--radius-sm);
+  padding: 9px 11px; background: var(--card-bg); display: flex; flex-direction: column; gap: 5px;
+}
+.project-review-section.ok { border-left-color: var(--success); }
+.project-review-section.warn { border-left-color: var(--amber); }
+.project-review-section.bad { border-left-color: var(--danger); }
+.project-review-section-head { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.project-review-line { font-size: 12px; line-height: 1.45; color: var(--text-secondary); }
+.project-review-line span { font-weight: 700; color: var(--text-primary); }
+
+/* Чат */
+.project-methodologist-chat { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.project-chat-messages { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; }
+.project-chat-empty { color: var(--text-secondary); font-size: 12.5px; text-align: center; padding: 14px 8px; }
+.project-chat-msg { display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
+.project-chat-msg.user { align-items: flex-end; }
+.project-chat-bubble {
+  border-radius: var(--radius-md); padding: 8px 11px; font-size: 13px; line-height: 1.5;
+  background: var(--surface-2); color: var(--text-primary); max-width: 92%;
+}
+.project-chat-msg.user .project-chat-bubble { background: var(--accent-weak); color: var(--accent-ink); }
+.project-chat-bubble p { margin: 0 0 4px; }
+.project-chat-bubble p:last-child { margin: 0; }
+
+/* Предложения правок */
+.project-proposals { display: flex; flex-direction: column; gap: 8px; width: 92%; }
+.project-proposal {
+  border: 1px solid var(--border-2); border-radius: var(--radius-sm); padding: 9px 11px;
+  background: var(--card-bg); display: flex; flex-direction: column; gap: 6px;
+}
+.project-proposal.applied { border-color: var(--success); }
+.project-proposal.rejected, .project-proposal.failed { opacity: .8; }
+.project-proposal-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.project-proposal-op {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--accent-ink); background: var(--accent-weak); padding: 2px 8px; border-radius: 999px;
+}
+.project-proposal-card { font-size: 11px; color: var(--text-secondary); }
+.project-proposal-human { font-size: 13px; font-weight: 700; line-height: 1.4; color: var(--text-primary); }
+.project-proposal-rationale { font-size: 12px; color: var(--text-secondary); line-height: 1.45; }
+.project-proposal-actions { display: flex; gap: 8px; }
+.project-proposal-apply, .project-proposal-reject {
+  display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; border-radius: var(--radius-sm);
+  font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: var(--transition);
+}
+.project-proposal-apply { border: 1px solid transparent; background: var(--accent); color: #fff; }
+.project-proposal-apply:hover { background: var(--accent-ink); }
+.project-proposal-reject { border: 1px solid var(--border-2); background: var(--card-bg); color: var(--text-secondary); }
+.project-proposal-reject:hover { border-color: var(--danger); color: var(--danger); }
+.project-proposal-result { font-size: 12px; font-weight: 700; }
+.project-proposal-result.applied { color: var(--success); }
+.project-proposal-result.failed { color: var(--danger); }
+.project-proposal-result.rejected { color: var(--text-secondary); }
+
+.project-chat-input { display: flex; gap: 8px; align-items: flex-end; }
+.project-chat-input .form-textarea { flex: 1; resize: none; }
+.project-chat-send {
+  flex: 0 0 auto; width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: var(--radius-sm); background: var(--accent); color: #fff;
+  cursor: pointer; transition: var(--transition);
+}
+.project-chat-send:hover:not(:disabled) { background: var(--accent-ink); }
+.project-chat-send:disabled { opacity: .55; cursor: not-allowed; }
+
 .project-panel-title {
   font-size: 11.5px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase;
   color: var(--ink-3); margin-bottom: 12px;

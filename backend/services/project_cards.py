@@ -65,3 +65,42 @@ async def save_validation(db: AsyncSession, project_id: int, card_id: str, valid
     await db.commit()
     await db.refresh(row)
     return _serialize(row)
+
+
+# Служебная «карточка» для проектного ИИ-Методолога: хранит последнюю оценку всего проекта
+# (validation_json) и историю чата (content_json.messages). card_id не пересекается с реальными.
+REVIEW_CARD_ID = "__project_review__"
+_MAX_CHAT_MESSAGES = 30
+
+
+async def get_review(db: AsyncSession, project_id: int) -> dict:
+    """Вернуть сохранённую оценку проекта и историю чата для гидрации панели."""
+    row = (await db.scalars(
+        select(ProjectCardState).where(
+            ProjectCardState.project_id == project_id,
+            ProjectCardState.card_id == REVIEW_CARD_ID,
+        )
+    )).first()
+    if row is None:
+        return {"review": None, "messages": []}
+    messages = (row.content_json or {}).get("messages", []) if isinstance(row.content_json, dict) else []
+    return {
+        "review": row.validation_json,
+        "messages": messages,
+        "reviewed_at": row.validated_at.isoformat() if row.validated_at else None,
+    }
+
+
+async def save_review(db: AsyncSession, project_id: int, review: dict) -> None:
+    """Сохранить последнюю оценку всего проекта."""
+    row = await _get_or_create(db, project_id, REVIEW_CARD_ID)
+    row.validation_json = review
+    row.validated_at = datetime.utcnow()
+    await db.commit()
+
+
+async def save_chat_messages(db: AsyncSession, project_id: int, messages: list[dict]) -> None:
+    """Сохранить (обрезанную) историю чата Методолога."""
+    row = await _get_or_create(db, project_id, REVIEW_CARD_ID)
+    row.content_json = {"messages": messages[-_MAX_CHAT_MESSAGES:]}
+    await db.commit()

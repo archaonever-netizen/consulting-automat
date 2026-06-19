@@ -59,17 +59,26 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   // Гидрация из БD должна завершиться ДО монтирования канвасов, иначе они
   // инициализируют состояние из пустого localStorage и затрут серверные данные.
   const [hydrated, setHydrated] = useState(false);
+  // Инкрементируется после применённой Методологом правки, чтобы перемонтировать
+  // открытый канвас и подхватить свежий снапшот из localStorage.
+  const [reloadNonce, setReloadNonce] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
-    setHydrated(false);
+    const resetTimer = window.setTimeout(() => {
+      if (!cancelled) setHydrated(false);
+    }, 0);
     seedFrameworkSectionSnapshots(project.id);
     seedOkrSnapshot(project.id);
     hydrateProjectCards(project.id).finally(() => {
-      if (!cancelled) setHydrated(true);
+      if (!cancelled) {
+        window.clearTimeout(resetTimer);
+        setHydrated(true);
+      }
     });
     return () => {
       cancelled = true;
+      window.clearTimeout(resetTimer);
     };
   }, [project.id]);
   const activeSection = activeSectionId
@@ -112,7 +121,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           onSelectFrameworkCard={selectFrameworkCard}
         />
         {hydrated ? (
-          <ProjectCanvas projectId={project.id} view={canvasView} />
+          <ProjectCanvas projectId={project.id} view={canvasView} reloadNonce={reloadNonce} />
         ) : (
           <section className="project-canvas">
             <div className="project-canvas-empty">
@@ -121,7 +130,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
             </div>
           </section>
         )}
-        <ProjectRightPanel project={project} />
+        <ProjectRightPanel projectId={project.id} onProjectMutated={() => setReloadNonce(n => n + 1)} />
       </div>
     </div>
   );
