@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import DraftCard from './DraftCard';
 import Icon from '../Icon';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectFrameworkSectionSnapshot, writeProjectFrameworkSectionSnapshot, type ProjectFrameworkSectionSnapshot } from './projectFrameworkSectionSnapshot';
@@ -602,10 +603,6 @@ export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: P
     );
   }
 
-  function updateRecord(id: number, key: string, value: string) {
-    setRecords(current => current.map(record => record.id === id ? { ...record, values: { ...record.values, [key]: value } } : record));
-  }
-
   return (
     <div className="project-theory project-framework-section">
       <section className="project-theory-hero">
@@ -635,27 +632,39 @@ export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: P
       <Section number="1" title={config.cardName} note="Повторяемая карточка: добавляйте столько элементов, сколько нужно для проекта.">
         <div className="project-theory-repeater">
           {records.map((record, index) => (
-            <div className="project-theory-card" key={record.id}>
-              <div className="project-theory-card-title">
-                <input
-                  className="form-input project-card-name-input"
-                  placeholder={`${config.cardName} ${index + 1}`}
-                  value={record.values[NAME_KEY] || ''}
-                  onChange={event => updateRecord(record.id, NAME_KEY, event.target.value)}
-                />
-                <span>{getRecordStatus(record, config)}</span>
-              </div>
-              <div className="project-theory-grid two">
-                {config.fields.map(field => (
-                  <TextField
-                    field={field}
-                    key={field.key}
-                    value={record.values[field.key] || ''}
-                    onChange={value => updateRecord(record.id, field.key, value)}
-                  />
-                ))}
-              </div>
-            </div>
+            <DraftCard
+              key={record.id}
+              card={record}
+              title={`${config.cardName} ${index + 1}`}
+              onApply={next => setRecords(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => {
+                const setValue = (key: string, value: string) => patch({ values: { ...draft.values, [key]: value } });
+                return (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название карточки</span>
+                      <input
+                        className="form-input"
+                        placeholder={`${config.cardName} ${index + 1}`}
+                        value={draft.values[NAME_KEY] || ''}
+                        onChange={event => setValue(NAME_KEY, event.target.value)}
+                      />
+                    </label>
+                    <div className="project-theory-grid two">
+                      {config.fields.map(field => (
+                        <TextField
+                          field={field}
+                          key={field.key}
+                          value={draft.values[field.key] || ''}
+                          onChange={value => setValue(field.key, value)}
+                        />
+                      ))}
+                    </div>
+                  </>
+                );
+              }}
+            </DraftCard>
           ))}
           <button className="project-theory-add-card" type="button" onClick={() => setRecords(current => [...current, createRecord(config, sources, current.length + 1)])}>
             <Icon name="plus" size={16} />

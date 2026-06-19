@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, type Dispatch, type ReactNode, type SetStateAction } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import DraftCard from './DraftCard';
 import Icon from '../Icon';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
@@ -510,10 +511,6 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
     setTarget(current => ({ ...current, ...patch }));
   }
 
-  function updateList<T extends { id: number }>(setter: Dispatch<SetStateAction<T[]>>, id: number, patch: Partial<T>) {
-    setter(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
-  }
-
   function updateComparison(id: string, patch: Partial<ComparisonRow>) {
     setComparisonRows(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
   }
@@ -597,22 +594,27 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">5. Целевые результаты</div>
             {targetResults.map((item, index) => (
-              <div className="project-theory-card" key={item.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Результат ${index + 1}`} value={item.name} onChange={event => updateList(setTargetResults, item.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <SelectField label="Связанный критерий результата" options={resultOptions} value={item.criterion} onChange={value => updateList(setTargetResults, item.id, { criterion: value })} />
-                  <SelectField label="Перспектива" options={perspectiveOptions} value={item.perspective} onChange={value => updateList(setTargetResults, item.id, { perspective: value })} />
-                  <TextField label="Метрика" value={item.metric || results.items.find(result => result.label === item.criterion)?.summary || ''} onChange={value => updateList(setTargetResults, item.id, { metric: value })} />
-                  <TextField label="Базовое значение" value={item.baseline} onChange={value => updateList(setTargetResults, item.id, { baseline: value })} />
-                  <TextField label="Целевое значение" value={item.target} onChange={value => updateList(setTargetResults, item.id, { target: value })} />
-                  <SelectField label="Единица измерения" options={unitOptions} value={item.unit} onChange={value => updateList(setTargetResults, item.id, { unit: value })} />
-                  <TextField label="Срок достижения" value={item.deadline} onChange={value => updateList(setTargetResults, item.id, { deadline: value })} />
-                  <SelectField label="Источник контроля" options={dataSourceOptions} value={item.controlSource} onChange={value => updateList(setTargetResults, item.id, { controlSource: value })} />
-                  <TextField label="Владелец результата" value={item.owner} onChange={value => updateList(setTargetResults, item.id, { owner: value })} />
-                </div>
-              </div>
+              <DraftCard key={item.id} card={item} title={`Результат ${index + 1}`} onApply={next => setTargetResults(current => current.map(row => row.id === next.id ? next : row))}>
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название результата</span>
+                      <input className="form-input" placeholder={`Результат ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <SelectField label="Связанный критерий результата" options={resultOptions} value={draft.criterion} onChange={value => patch({ criterion: value })} />
+                      <SelectField label="Перспектива" options={perspectiveOptions} value={draft.perspective} onChange={value => patch({ perspective: value })} />
+                      <TextField label="Метрика" value={draft.metric || results.items.find(result => result.label === draft.criterion)?.summary || ''} onChange={value => patch({ metric: value })} />
+                      <TextField label="Базовое значение" value={draft.baseline} onChange={value => patch({ baseline: value })} />
+                      <TextField label="Целевое значение" value={draft.target} onChange={value => patch({ target: value })} />
+                      <SelectField label="Единица измерения" options={unitOptions} value={draft.unit} onChange={value => patch({ unit: value })} />
+                      <TextField label="Срок достижения" value={draft.deadline} onChange={value => patch({ deadline: value })} />
+                      <SelectField label="Источник контроля" options={dataSourceOptions} value={draft.controlSource} onChange={value => patch({ controlSource: value })} />
+                      <TextField label="Владелец результата" value={draft.owner} onChange={value => patch({ owner: value })} />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setTargetResults(current => [...current, createTargetResult(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -622,18 +624,23 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">6. Клиентская ценность</div>
             {stakeholderValues.map((item, index) => (
-              <div className="project-theory-card" key={item.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Ценность ${index + 1}`} value={item.name} onChange={event => updateList(setStakeholderValues, item.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <SelectField label="Связанный клиент / выгодоприобретатель" options={stakeholderOptions} value={item.stakeholder} onChange={value => updateList(setStakeholderValues, item.id, { stakeholder: value })} />
-                  <SelectField label="Тип ценности" options={valueTypeOptions} value={item.valueType} onChange={value => updateList(setStakeholderValues, item.id, { valueType: value })} />
-                  <TextField label="Что изменится для клиента" value={item.change} onChange={value => updateList(setStakeholderValues, item.id, { change: value })} multiline />
-                  <SelectField label="Как измеряется ценность" options={[...resultOptions, ...qualityOptions]} value={item.measurement} onChange={value => updateList(setStakeholderValues, item.id, { measurement: value })} />
-                  <TextField label="Минимальный уровень принятия" value={item.minimum} onChange={value => updateList(setStakeholderValues, item.id, { minimum: value })} />
-                </div>
-              </div>
+              <DraftCard key={item.id} card={item} title={`Ценность ${index + 1}`} onApply={next => setStakeholderValues(current => current.map(row => row.id === next.id ? next : row))}>
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название ценности</span>
+                      <input className="form-input" placeholder={`Ценность ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <SelectField label="Связанный клиент / выгодоприобретатель" options={stakeholderOptions} value={draft.stakeholder} onChange={value => patch({ stakeholder: value })} />
+                      <SelectField label="Тип ценности" options={valueTypeOptions} value={draft.valueType} onChange={value => patch({ valueType: value })} />
+                      <TextField label="Что изменится для клиента" value={draft.change} onChange={value => patch({ change: value })} multiline />
+                      <SelectField label="Как измеряется ценность" options={[...resultOptions, ...qualityOptions]} value={draft.measurement} onChange={value => patch({ measurement: value })} />
+                      <TextField label="Минимальный уровень принятия" value={draft.minimum} onChange={value => patch({ minimum: value })} />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setStakeholderValues(current => [...current, createStakeholderValue(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -644,19 +651,24 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         <div className="project-theory-repeater" style={{ marginTop: 12 }}>
           <div className="project-theory-card-title">7. Целевая операционная модель</div>
           {operatingModels.map((item, index) => (
-            <div className="project-theory-card" key={item.id}>
-              <div className="project-theory-card-title">
-                <input className="form-input project-card-name-input" placeholder={`Процесс / система ${index + 1}`} value={item.name} onChange={event => updateList(setOperatingModels, item.id, { name: event.target.value })} />
-              </div>
-              <div className="project-theory-grid three">
-                <TextField label="Связанный процесс / функция" value={item.process} onChange={value => updateList(setOperatingModels, item.id, { process: value })} />
-                <TextField label="Как должно работать" value={item.targetWork} onChange={value => updateList(setOperatingModels, item.id, { targetWork: value })} multiline />
-                <SelectField label="Целевая метрика процесса" options={processMetricOptions} value={item.metric} onChange={value => updateList(setOperatingModels, item.id, { metric: value })} />
-                <TextField label="Целевое значение" value={item.target} onChange={value => updateList(setOperatingModels, item.id, { target: value })} />
-                <SelectField label="Источник контроля" options={dataSourceOptions} value={item.controlSource} onChange={value => updateList(setOperatingModels, item.id, { controlSource: value })} />
-                <TextField label="Владелец процесса" value={item.owner} onChange={value => updateList(setOperatingModels, item.id, { owner: value })} />
-              </div>
-            </div>
+            <DraftCard key={item.id} card={item} title={`Процесс / система ${index + 1}`} onApply={next => setOperatingModels(current => current.map(row => row.id === next.id ? next : row))}>
+              {(draft, patch) => (
+                <>
+                  <label className="project-theory-field">
+                    <span>Название процесса / системы</span>
+                    <input className="form-input" placeholder={`Процесс / система ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                  </label>
+                  <div className="project-theory-grid three">
+                    <TextField label="Связанный процесс / функция" value={draft.process} onChange={value => patch({ process: value })} />
+                    <TextField label="Как должно работать" value={draft.targetWork} onChange={value => patch({ targetWork: value })} multiline />
+                    <SelectField label="Целевая метрика процесса" options={processMetricOptions} value={draft.metric} onChange={value => patch({ metric: value })} />
+                    <TextField label="Целевое значение" value={draft.target} onChange={value => patch({ target: value })} />
+                    <SelectField label="Источник контроля" options={dataSourceOptions} value={draft.controlSource} onChange={value => patch({ controlSource: value })} />
+                    <TextField label="Владелец процесса" value={draft.owner} onChange={value => patch({ owner: value })} />
+                  </div>
+                </>
+              )}
+            </DraftCard>
           ))}
           <button className="project-theory-add-card" type="button" onClick={() => setOperatingModels(current => [...current, createOperatingModel(current.length + 1)])}>
             <Icon name="plus" size={16} />
@@ -670,19 +682,24 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">8. Целевые capabilities</div>
             {capabilityTargets.map((item, index) => (
-              <div className="project-theory-card" key={item.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Компетенция ${index + 1}`} value={item.name} onChange={event => updateList(setCapabilityTargets, item.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <SelectField label="Связанная компетенция" options={[...competencyOptions, ...strategy.capabilities.map(capability => capability.label)]} value={item.competency} onChange={value => updateList(setCapabilityTargets, item.id, { competency: value })} />
-                  <TextField label="Текущий уровень" value={item.currentLevel || strategy.capabilities.find(capability => capability.label === item.competency)?.summary || ''} onChange={value => updateList(setCapabilityTargets, item.id, { currentLevel: value })} />
-                  <TextField label="Требуемый уровень" value={item.requiredLevel} onChange={value => updateList(setCapabilityTargets, item.id, { requiredLevel: value })} />
-                  <TextField label="Разрыв" value={item.gap} onChange={value => updateList(setCapabilityTargets, item.id, { gap: value })} />
-                  <TextField label="Что создать / усилить" value={item.developmentAction} onChange={value => updateList(setCapabilityTargets, item.id, { developmentAction: value })} multiline />
-                  <TextField label="Владелец развития" value={item.owner} onChange={value => updateList(setCapabilityTargets, item.id, { owner: value })} />
-                </div>
-              </div>
+              <DraftCard key={item.id} card={item} title={`Компетенция ${index + 1}`} onApply={next => setCapabilityTargets(current => current.map(row => row.id === next.id ? next : row))}>
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название компетенции</span>
+                      <input className="form-input" placeholder={`Компетенция ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <SelectField label="Связанная компетенция" options={[...competencyOptions, ...strategy.capabilities.map(capability => capability.label)]} value={draft.competency} onChange={value => patch({ competency: value })} />
+                      <TextField label="Текущий уровень" value={draft.currentLevel || strategy.capabilities.find(capability => capability.label === draft.competency)?.summary || ''} onChange={value => patch({ currentLevel: value })} />
+                      <TextField label="Требуемый уровень" value={draft.requiredLevel} onChange={value => patch({ requiredLevel: value })} />
+                      <TextField label="Разрыв" value={draft.gap} onChange={value => patch({ gap: value })} />
+                      <TextField label="Что создать / усилить" value={draft.developmentAction} onChange={value => patch({ developmentAction: value })} multiline />
+                      <TextField label="Владелец развития" value={draft.owner} onChange={value => patch({ owner: value })} />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setCapabilityTargets(current => [...current, createCapabilityTarget(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -692,18 +709,23 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">9. Management systems</div>
             {managementTargets.map((item, index) => (
-              <div className="project-theory-card" key={item.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Система ${index + 1}`} value={item.name} onChange={event => updateList(setManagementTargets, item.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <SelectField label="Тип системы" options={managementSystemOptions} value={item.systemType} onChange={value => updateList(setManagementTargets, item.id, { systemType: value })} />
-                  <TextField label="Как должна работать" value={item.targetWork || strategy.managementSystems} onChange={value => updateList(setManagementTargets, item.id, { targetWork: value })} multiline />
-                  <SelectField label="Что поддерживает" options={strategyChoiceOptions} value={item.supportsChoice} onChange={value => updateList(setManagementTargets, item.id, { supportsChoice: value })} />
-                  <SelectField label="Источник данных" options={dataSourceOptions} value={item.dataSource} onChange={value => updateList(setManagementTargets, item.id, { dataSource: value })} />
-                  <TextField label="Владелец системы" value={item.owner} onChange={value => updateList(setManagementTargets, item.id, { owner: value })} />
-                </div>
-              </div>
+              <DraftCard key={item.id} card={item} title={`Система ${index + 1}`} onApply={next => setManagementTargets(current => current.map(row => row.id === next.id ? next : row))}>
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название системы</span>
+                      <input className="form-input" placeholder={`Система ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <SelectField label="Тип системы" options={managementSystemOptions} value={draft.systemType} onChange={value => patch({ systemType: value })} />
+                      <TextField label="Как должна работать" value={draft.targetWork || strategy.managementSystems} onChange={value => patch({ targetWork: value })} multiline />
+                      <SelectField label="Что поддерживает" options={strategyChoiceOptions} value={draft.supportsChoice} onChange={value => patch({ supportsChoice: value })} />
+                      <SelectField label="Источник данных" options={dataSourceOptions} value={draft.dataSource} onChange={value => patch({ dataSource: value })} />
+                      <TextField label="Владелец системы" value={draft.owner} onChange={value => patch({ owner: value })} />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setManagementTargets(current => [...current, createManagementSystemTarget(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -715,18 +737,23 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">10. Целевое качество</div>
             {qualityTargets.map((item, index) => (
-              <div className="project-theory-card" key={item.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Качество ${index + 1}`} value={item.name} onChange={event => updateList(setQualityTargets, item.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <SelectField label="Связанный показатель качества" options={qualityOptions} value={item.qualityIndicator} onChange={value => updateList(setQualityTargets, item.id, { qualityIndicator: value })} />
-                  <TextField label="Минимально допустимый уровень" value={item.minimum || quality.items.find(q => q.label === item.qualityIndicator)?.summary || ''} onChange={value => updateList(setQualityTargets, item.id, { minimum: value })} />
-                  <TextField label="Целевой уровень" value={item.target} onChange={value => updateList(setQualityTargets, item.id, { target: value })} />
-                  <SelectField label="Источник контроля" options={dataSourceOptions} value={item.controlSource} onChange={value => updateList(setQualityTargets, item.id, { controlSource: value })} />
-                  <TextField label="Действие при отклонении" value={item.deviationAction} onChange={value => updateList(setQualityTargets, item.id, { deviationAction: value })} />
-                </div>
-              </div>
+              <DraftCard key={item.id} card={item} title={`Качество ${index + 1}`} onApply={next => setQualityTargets(current => current.map(row => row.id === next.id ? next : row))}>
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название показателя</span>
+                      <input className="form-input" placeholder={`Качество ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <SelectField label="Связанный показатель качества" options={qualityOptions} value={draft.qualityIndicator} onChange={value => patch({ qualityIndicator: value })} />
+                      <TextField label="Минимально допустимый уровень" value={draft.minimum || quality.items.find(q => q.label === draft.qualityIndicator)?.summary || ''} onChange={value => patch({ minimum: value })} />
+                      <TextField label="Целевой уровень" value={draft.target} onChange={value => patch({ target: value })} />
+                      <SelectField label="Источник контроля" options={dataSourceOptions} value={draft.controlSource} onChange={value => patch({ controlSource: value })} />
+                      <TextField label="Действие при отклонении" value={draft.deviationAction} onChange={value => patch({ deviationAction: value })} />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setQualityTargets(current => [...current, createQualityTarget(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -736,18 +763,23 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">11. Сохраняемое ядро</div>
             {preserveTargets.map((item, index) => (
-              <div className="project-theory-card" key={item.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Ядро ${index + 1}`} value={item.name} onChange={event => updateList(setPreserveTargets, item.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <SelectField label="Что нельзя разрушить" options={preserveOptions} value={item.preserveElement} onChange={value => updateList(setPreserveTargets, item.id, { preserveElement: value })} />
-                  <TextField label="Как выглядит в целевом состоянии" value={item.targetLook} onChange={value => updateList(setPreserveTargets, item.id, { targetLook: value })} multiline />
-                  <TextField label="Индикатор сохранности" value={item.indicator || preserve.items.find(p => p.label === item.preserveElement)?.summary || ''} onChange={value => updateList(setPreserveTargets, item.id, { indicator: value })} />
-                  <TextField label="Минимально допустимый уровень" value={item.minimum} onChange={value => updateList(setPreserveTargets, item.id, { minimum: value })} />
-                  <TextField label="Запрещенное изменение" value={item.forbiddenChange} onChange={value => updateList(setPreserveTargets, item.id, { forbiddenChange: value })} />
-                </div>
-              </div>
+              <DraftCard key={item.id} card={item} title={`Ядро ${index + 1}`} onApply={next => setPreserveTargets(current => current.map(row => row.id === next.id ? next : row))}>
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название элемента ядра</span>
+                      <input className="form-input" placeholder={`Ядро ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <SelectField label="Что нельзя разрушить" options={preserveOptions} value={draft.preserveElement} onChange={value => patch({ preserveElement: value })} />
+                      <TextField label="Как выглядит в целевом состоянии" value={draft.targetLook} onChange={value => patch({ targetLook: value })} multiline />
+                      <TextField label="Индикатор сохранности" value={draft.indicator || preserve.items.find(p => p.label === draft.preserveElement)?.summary || ''} onChange={value => patch({ indicator: value })} />
+                      <TextField label="Минимально допустимый уровень" value={draft.minimum} onChange={value => patch({ minimum: value })} />
+                      <TextField label="Запрещенное изменение" value={draft.forbiddenChange} onChange={value => patch({ forbiddenChange: value })} />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setPreserveTargets(current => [...current, createPreserveTarget(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -769,18 +801,23 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         </div>
         <div className="project-theory-repeater" style={{ marginTop: 12 }}>
           {constraintTargets.map((item, index) => (
-            <div className="project-theory-card" key={item.id}>
-              <div className="project-theory-card-title">
-                <input className="form-input project-card-name-input" placeholder={`Ограничение ${index + 1}`} value={item.name} onChange={event => updateList(setConstraintTargets, item.id, { name: event.target.value })} />
-              </div>
-              <div className="project-theory-grid two">
-                <SelectField label="Связанное ограничение" options={constraintOptions} value={item.constraint} onChange={value => updateList(setConstraintTargets, item.id, { constraint: value })} />
-                <TextField label="Как соблюдается" value={item.compliance} onChange={value => updateList(setConstraintTargets, item.id, { compliance: value })} multiline />
-                <TextField label="Порог / лимит" value={item.limit || constraints.items.find(c => c.label === item.constraint)?.summary || ''} onChange={value => updateList(setConstraintTargets, item.id, { limit: value })} />
-                <SelectField label="Источник контроля" options={dataSourceOptions} value={item.controlSource} onChange={value => updateList(setConstraintTargets, item.id, { controlSource: value })} />
-                <TextField label="Последствие нарушения" value={item.violationConsequence} onChange={value => updateList(setConstraintTargets, item.id, { violationConsequence: value })} />
-              </div>
-            </div>
+            <DraftCard key={item.id} card={item} title={`Ограничение ${index + 1}`} onApply={next => setConstraintTargets(current => current.map(row => row.id === next.id ? next : row))}>
+              {(draft, patch) => (
+                <>
+                  <label className="project-theory-field">
+                    <span>Название ограничения</span>
+                    <input className="form-input" placeholder={`Ограничение ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                  </label>
+                  <div className="project-theory-grid two">
+                    <SelectField label="Связанное ограничение" options={constraintOptions} value={draft.constraint} onChange={value => patch({ constraint: value })} />
+                    <TextField label="Как соблюдается" value={draft.compliance} onChange={value => patch({ compliance: value })} multiline />
+                    <TextField label="Порог / лимит" value={draft.limit || constraints.items.find(c => c.label === draft.constraint)?.summary || ''} onChange={value => patch({ limit: value })} />
+                    <SelectField label="Источник контроля" options={dataSourceOptions} value={draft.controlSource} onChange={value => patch({ controlSource: value })} />
+                    <TextField label="Последствие нарушения" value={draft.violationConsequence} onChange={value => patch({ violationConsequence: value })} />
+                  </div>
+                </>
+              )}
+            </DraftCard>
           ))}
           <button className="project-theory-add-card" type="button" onClick={() => setConstraintTargets(current => [...current, createConstraintTarget(current.length + 1)])}>
             <Icon name="plus" size={16} />
@@ -796,19 +833,24 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         </div>
         <div className="project-theory-repeater" style={{ marginTop: 12 }}>
           {keyResults.map((item, index) => (
-            <div className="project-theory-card" key={item.id}>
-              <div className="project-theory-card-title">
-                <input className="form-input project-card-name-input" placeholder={`Key Result ${index + 1}`} value={item.name} onChange={event => updateList(setKeyResults, item.id, { name: event.target.value })} />
-              </div>
-              <div className="project-theory-grid two">
-                <TextField label="Формулировка key result" value={item.statement} onChange={value => updateList(setKeyResults, item.id, { statement: value })} multiline />
-                <SelectField label="Метрика" options={resultOptions} value={item.metric} onChange={value => updateList(setKeyResults, item.id, { metric: value })} />
-                <TextField label="Целевое значение" value={item.target} onChange={value => updateList(setKeyResults, item.id, { target: value })} />
-                <TextField label="Срок" value={item.deadline} onChange={value => updateList(setKeyResults, item.id, { deadline: value })} />
-                <SelectField label="Источник контроля" options={dataSourceOptions} value={item.controlSource} onChange={value => updateList(setKeyResults, item.id, { controlSource: value })} />
-                <SelectField label="Проверка без спора" options={yesNoOptions} value={item.indisputable} onChange={value => updateList(setKeyResults, item.id, { indisputable: value })} />
-              </div>
-            </div>
+            <DraftCard key={item.id} card={item} title={`Key Result ${index + 1}`} onApply={next => setKeyResults(current => current.map(row => row.id === next.id ? next : row))}>
+              {(draft, patch) => (
+                <>
+                  <label className="project-theory-field">
+                    <span>Название key result</span>
+                    <input className="form-input" placeholder={`Key Result ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                  </label>
+                  <div className="project-theory-grid two">
+                    <TextField label="Формулировка key result" value={draft.statement} onChange={value => patch({ statement: value })} multiline />
+                    <SelectField label="Метрика" options={resultOptions} value={draft.metric} onChange={value => patch({ metric: value })} />
+                    <TextField label="Целевое значение" value={draft.target} onChange={value => patch({ target: value })} />
+                    <TextField label="Срок" value={draft.deadline} onChange={value => patch({ deadline: value })} />
+                    <SelectField label="Источник контроля" options={dataSourceOptions} value={draft.controlSource} onChange={value => patch({ controlSource: value })} />
+                    <SelectField label="Проверка без спора" options={yesNoOptions} value={draft.indisputable} onChange={value => patch({ indisputable: value })} />
+                  </div>
+                </>
+              )}
+            </DraftCard>
           ))}
           <button className="project-theory-add-card" type="button" onClick={() => setKeyResults(current => [...current, createKeyResult(current.length + 1)])}>
             <Icon name="plus" size={16} />

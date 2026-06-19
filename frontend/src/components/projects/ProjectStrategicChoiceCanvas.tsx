@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import DraftCard from './DraftCard';
 import Icon from '../Icon';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectStrategicChoiceSnapshot, writeProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
@@ -464,34 +465,6 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
     setChoice(current => ({ ...current, ...patch }));
   }
 
-  function updateCapability(id: number, patch: Partial<CapabilityCard>) {
-    setCapabilities(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
-  }
-
-  function updateAlternative(id: number, patch: Partial<AlternativeCard>) {
-    setAlternatives(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
-  }
-
-  function toggleAlternativeValue(id: number, field: 'capabilities' | 'constraints' | 'preserveRisk', value: string) {
-    setAlternatives(current => current.map(item => {
-      if (item.id !== id) return item;
-      const values = item[field].includes(value) ? item[field].filter(option => option !== value) : [...item[field], value];
-      return { ...item, [field]: values };
-    }));
-  }
-
-  function updateTradeOff(id: number, patch: Partial<TradeOffCard>) {
-    setTradeOffs(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
-  }
-
-  function updateAction(id: number, patch: Partial<ActionCard>) {
-    setActions(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
-  }
-
-  function updateHypothesis(id: number, patch: Partial<HypothesisCard>) {
-    setHypotheses(current => current.map(item => item.id === id ? { ...item, ...patch } : item));
-  }
-
   return (
     <div className="project-theory project-strategy">
       <section className="project-theory-hero">
@@ -572,19 +545,29 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">Capabilities</div>
             {capabilities.map((capability, index) => (
-              <div className="project-theory-card" key={capability.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Способность ${index + 1}`} value={capability.name} onChange={event => updateCapability(capability.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <SelectField label="Необходимая компетенция" options={competencyOptions} value={capability.competency} onChange={value => updateCapability(capability.id, { competency: value })} />
-                  <TextField label="Текущий уровень" value={capability.currentLevel} onChange={value => updateCapability(capability.id, { currentLevel: value })} />
-                  <TextField label="Требуемый уровень" value={capability.requiredLevel} onChange={value => updateCapability(capability.id, { requiredLevel: value })} />
-                  <TextField label="Разрыв" value={capability.gap} onChange={value => updateCapability(capability.id, { gap: value })} />
-                  <TextField label="Что нужно создать / усилить" value={capability.strengthen} onChange={value => updateCapability(capability.id, { strengthen: value })} multiline />
-                  <TextField label="Что привлечь извне" value={capability.external} onChange={value => updateCapability(capability.id, { external: value })} multiline />
-                </div>
-              </div>
+              <DraftCard
+                key={capability.id}
+                card={capability}
+                title={`Способность ${index + 1}`}
+                onApply={next => setCapabilities(current => current.map(item => item.id === next.id ? next : item))}
+              >
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название способности</span>
+                      <input className="form-input" placeholder={`Способность ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <SelectField label="Необходимая компетенция" options={competencyOptions} value={draft.competency} onChange={value => patch({ competency: value })} />
+                      <TextField label="Текущий уровень" value={draft.currentLevel} onChange={value => patch({ currentLevel: value })} />
+                      <TextField label="Требуемый уровень" value={draft.requiredLevel} onChange={value => patch({ requiredLevel: value })} />
+                      <TextField label="Разрыв" value={draft.gap} onChange={value => patch({ gap: value })} />
+                      <TextField label="Что нужно создать / усилить" value={draft.strengthen} onChange={value => patch({ strengthen: value })} multiline />
+                      <TextField label="Что привлечь извне" value={draft.external} onChange={value => patch({ external: value })} multiline />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setCapabilities(current => [...current, createCapability(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -611,25 +594,32 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
       <StrategicSection number="9-10" title="Альтернативы выбора" note="Сравниваем выбранный подход с альтернативами и обязательной альтернативой ничего не делать.">
         <div className="project-theory-repeater">
           {alternatives.map((alternative, index) => (
-            <div className="project-theory-card" key={alternative.id}>
-              <div className="project-theory-card-head">
-                <div className="project-theory-card-title">Альтернатива {index + 1}</div>
-                <span className="project-theory-status-badge">{alternative.status}</span>
-              </div>
-              <div className="project-theory-grid two">
-                <TextField label="Название альтернативы" value={alternative.name} onChange={value => updateAlternative(alternative.id, { name: value })} />
-                <SelectField label="Статус альтернативы" options={alternativeStatusOptions} value={alternative.status} onChange={value => updateAlternative(alternative.id, { status: value })} />
-                <TextField label="Как отвечает на Диагноз" value={alternative.diagnosisFit} onChange={value => updateAlternative(alternative.id, { diagnosisFit: value })} multiline />
-                <TextField label="Where to play альтернативы" value={alternative.whereToPlay} onChange={value => updateAlternative(alternative.id, { whereToPlay: value })} multiline />
-                <TextField label="How to win альтернативы" value={alternative.howToWin} onChange={value => updateAlternative(alternative.id, { howToWin: value })} multiline />
-                <TextField label="Management systems" value={alternative.managementSystems} onChange={value => updateAlternative(alternative.id, { managementSystems: value })} multiline />
-                <TextField label="Resource commitments" value={alternative.resourceCommitments} onChange={value => updateAlternative(alternative.id, { resourceCommitments: value })} multiline />
-                <TextField label="Что придется не делать" value={alternative.whatNotToDo} onChange={value => updateAlternative(alternative.id, { whatNotToDo: value })} multiline />
-                <Checklist label="Нужные capabilities" options={competencyOptions} values={alternative.capabilities} onToggle={value => toggleAlternativeValue(alternative.id, 'capabilities', value)} />
-                <Checklist label="Ограничения и риски" options={constraintOptions} values={alternative.constraints} onToggle={value => toggleAlternativeValue(alternative.id, 'constraints', value)} />
-                <Checklist label="Что может повредить" options={preserveOptions} values={alternative.preserveRisk} onToggle={value => toggleAlternativeValue(alternative.id, 'preserveRisk', value)} />
-              </div>
-            </div>
+            <DraftCard
+              key={alternative.id}
+              card={alternative}
+              title={`Альтернатива ${index + 1}`}
+              onApply={next => setAlternatives(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => {
+                const toggleValue = (field: 'capabilities' | 'constraints' | 'preserveRisk', value: string) =>
+                  patch({ [field]: draft[field].includes(value) ? draft[field].filter(option => option !== value) : [...draft[field], value] } as Partial<AlternativeCard>);
+                return (
+                  <div className="project-theory-grid two">
+                    <TextField label="Название альтернативы" value={draft.name} onChange={value => patch({ name: value })} />
+                    <SelectField label="Статус альтернативы" options={alternativeStatusOptions} value={draft.status} onChange={value => patch({ status: value })} />
+                    <TextField label="Как отвечает на Диагноз" value={draft.diagnosisFit} onChange={value => patch({ diagnosisFit: value })} multiline />
+                    <TextField label="Where to play альтернативы" value={draft.whereToPlay} onChange={value => patch({ whereToPlay: value })} multiline />
+                    <TextField label="How to win альтернативы" value={draft.howToWin} onChange={value => patch({ howToWin: value })} multiline />
+                    <TextField label="Management systems" value={draft.managementSystems} onChange={value => patch({ managementSystems: value })} multiline />
+                    <TextField label="Resource commitments" value={draft.resourceCommitments} onChange={value => patch({ resourceCommitments: value })} multiline />
+                    <TextField label="Что придется не делать" value={draft.whatNotToDo} onChange={value => patch({ whatNotToDo: value })} multiline />
+                    <Checklist label="Нужные capabilities" options={competencyOptions} values={draft.capabilities} onToggle={value => toggleValue('capabilities', value)} />
+                    <Checklist label="Ограничения и риски" options={constraintOptions} values={draft.constraints} onToggle={value => toggleValue('constraints', value)} />
+                    <Checklist label="Что может повредить" options={preserveOptions} values={draft.preserveRisk} onToggle={value => toggleValue('preserveRisk', value)} />
+                  </div>
+                );
+              }}
+            </DraftCard>
           ))}
           <button className="project-theory-add-card" type="button" onClick={() => setAlternatives(current => [...current, createAlternative(current.length + 1)])}>
             <Icon name="plus" size={16} />
@@ -657,18 +647,28 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">12. Trade-offs / что не делаем</div>
             {tradeOffs.map((tradeOff, index) => (
-              <div className="project-theory-card" key={tradeOff.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Отказ ${index + 1}`} value={tradeOff.name} onChange={event => updateTradeOff(tradeOff.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <TextField label="От чего отказываемся" value={tradeOff.refusal} onChange={value => updateTradeOff(tradeOff.id, { refusal: value })} />
-                  <TextField label="Почему отказываемся" value={tradeOff.reason} onChange={value => updateTradeOff(tradeOff.id, { reason: value })} />
-                  <TextField label="Какой ресурс высвобождается" value={tradeOff.releasedResource} onChange={value => updateTradeOff(tradeOff.id, { releasedResource: value })} />
-                  <TextField label="Какой риск снижается" value={tradeOff.reducedRisk} onChange={value => updateTradeOff(tradeOff.id, { reducedRisk: value })} />
-                  <TextField label="Кто подтверждает отказ" value={tradeOff.approver} onChange={value => updateTradeOff(tradeOff.id, { approver: value })} />
-                </div>
-              </div>
+              <DraftCard
+                key={tradeOff.id}
+                card={tradeOff}
+                title={`Отказ ${index + 1}`}
+                onApply={next => setTradeOffs(current => current.map(item => item.id === next.id ? next : item))}
+              >
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название отказа</span>
+                      <input className="form-input" placeholder={`Отказ ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <TextField label="От чего отказываемся" value={draft.refusal} onChange={value => patch({ refusal: value })} />
+                      <TextField label="Почему отказываемся" value={draft.reason} onChange={value => patch({ reason: value })} />
+                      <TextField label="Какой ресурс высвобождается" value={draft.releasedResource} onChange={value => patch({ releasedResource: value })} />
+                      <TextField label="Какой риск снижается" value={draft.reducedRisk} onChange={value => patch({ reducedRisk: value })} />
+                      <TextField label="Кто подтверждает отказ" value={draft.approver} onChange={value => patch({ approver: value })} />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setTradeOffs(current => [...current, createTradeOff(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -678,20 +678,30 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">14. Coherent actions</div>
             {actions.map((action, index) => (
-              <div className="project-theory-card" key={action.id}>
-                <div className="project-theory-card-title">
-                  <input className="form-input project-card-name-input" placeholder={`Действие ${index + 1}`} value={action.name} onChange={event => updateAction(action.id, { name: event.target.value })} />
-                </div>
-                <div className="project-theory-grid two">
-                  <TextField label="Действие" value={action.action} onChange={value => updateAction(action.id, { action: value })} />
-                  <TextField label="Какой выбор поддерживает" value={action.supportsChoice} onChange={value => updateAction(action.id, { supportsChoice: value })} />
-                  <TextField label="Какой ресурс требуется" value={action.resource} onChange={value => updateAction(action.id, { resource: value })} />
-                  <TextField label="Владелец" value={action.owner} onChange={value => updateAction(action.id, { owner: value })} />
-                  <TextField label="Срок" value={action.deadline} onChange={value => updateAction(action.id, { deadline: value })} />
-                  <TextField label="Зависимость" value={action.dependency} onChange={value => updateAction(action.id, { dependency: value })} />
-                  <TextField label="Связь с будущей инициативой / задачей" value={action.futureLink} onChange={value => updateAction(action.id, { futureLink: value })} />
-                </div>
-              </div>
+              <DraftCard
+                key={action.id}
+                card={action}
+                title={`Действие ${index + 1}`}
+                onApply={next => setActions(current => current.map(item => item.id === next.id ? next : item))}
+              >
+                {(draft, patch) => (
+                  <>
+                    <label className="project-theory-field">
+                      <span>Название действия</span>
+                      <input className="form-input" placeholder={`Действие ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    </label>
+                    <div className="project-theory-grid two">
+                      <TextField label="Действие" value={draft.action} onChange={value => patch({ action: value })} />
+                      <TextField label="Какой выбор поддерживает" value={draft.supportsChoice} onChange={value => patch({ supportsChoice: value })} />
+                      <TextField label="Какой ресурс требуется" value={draft.resource} onChange={value => patch({ resource: value })} />
+                      <TextField label="Владелец" value={draft.owner} onChange={value => patch({ owner: value })} />
+                      <TextField label="Срок" value={draft.deadline} onChange={value => patch({ deadline: value })} />
+                      <TextField label="Зависимость" value={draft.dependency} onChange={value => patch({ dependency: value })} />
+                      <TextField label="Связь с будущей инициативой / задачей" value={draft.futureLink} onChange={value => patch({ futureLink: value })} />
+                    </div>
+                  </>
+                )}
+              </DraftCard>
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setActions(current => [...current, createAction(current.length + 1)])}>
               <Icon name="plus" size={16} />
@@ -704,17 +714,27 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
       <StrategicSection number="16-17" title="Гипотезы и выход в следующий экран" note="Непроверенные предположения из выбора передаются на экран Гипотезы вместе с выбранной стратегической позицией.">
         <div className="project-theory-repeater">
           {hypotheses.map((hypothesis, index) => (
-            <div className="project-theory-card" key={hypothesis.id}>
-              <div className="project-theory-card-title">
-                <input className="form-input project-card-name-input" placeholder={`Гипотеза ${index + 1}`} value={hypothesis.name} onChange={event => updateHypothesis(hypothesis.id, { name: event.target.value })} />
-              </div>
-              <div className="project-theory-grid two">
-                <TextField label="Предположение" value={hypothesis.assumption} onChange={value => updateHypothesis(hypothesis.id, { assumption: value })} multiline />
-                <TextField label="На какой выбор влияет" value={hypothesis.choiceLink} onChange={value => updateHypothesis(hypothesis.id, { choiceLink: value })} />
-                <TextField label="Что подтвердит" value={hypothesis.confirms} onChange={value => updateHypothesis(hypothesis.id, { confirms: value })} multiline />
-                <TextField label="Что опровергнет" value={hypothesis.refutes} onChange={value => updateHypothesis(hypothesis.id, { refutes: value })} multiline />
-              </div>
-            </div>
+            <DraftCard
+              key={hypothesis.id}
+              card={hypothesis}
+              title={`Гипотеза ${index + 1}`}
+              onApply={next => setHypotheses(current => current.map(item => item.id === next.id ? next : item))}
+            >
+              {(draft, patch) => (
+                <>
+                  <label className="project-theory-field">
+                    <span>Название гипотезы</span>
+                    <input className="form-input" placeholder={`Гипотеза ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                  </label>
+                  <div className="project-theory-grid two">
+                    <TextField label="Предположение" value={draft.assumption} onChange={value => patch({ assumption: value })} multiline />
+                    <TextField label="На какой выбор влияет" value={draft.choiceLink} onChange={value => patch({ choiceLink: value })} />
+                    <TextField label="Что подтвердит" value={draft.confirms} onChange={value => patch({ confirms: value })} multiline />
+                    <TextField label="Что опровергнет" value={draft.refutes} onChange={value => patch({ refutes: value })} multiline />
+                  </div>
+                </>
+              )}
+            </DraftCard>
           ))}
           <button className="project-theory-add-card" type="button" onClick={() => setHypotheses(current => [...current, createHypothesis(current.length + 1)])}>
             <Icon name="plus" size={16} />

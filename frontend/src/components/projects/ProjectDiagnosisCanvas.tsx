@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import DraftCard from './DraftCard';
 import Icon from '../Icon';
 import { readProjectDiagnosisSnapshot, writeProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import {
@@ -336,56 +337,6 @@ function MultiSelectChecklist({
             <span>{option}</span>
           </label>
         ))}
-      </div>
-    </div>
-  );
-}
-
-function DraftCard<T extends { id: number }>({
-  card,
-  title,
-  onApply,
-  children,
-}: {
-  card: T;
-  title: string;
-  onApply: (next: T) => void;
-  children: (draft: T, patch: (value: Partial<T>) => void) => ReactNode;
-}) {
-  const [draft, setDraft] = useState<T>(card);
-  const [committed, setCommitted] = useState<T>(card);
-
-  // Resync the draft when the committed card changes from outside (e.g. after Apply
-  // recomputes a derived field). Adjusting state during render is the recommended
-  // alternative to a setState-in-effect for this case.
-  if (committed !== card) {
-    setCommitted(card);
-    setDraft(card);
-  }
-
-  const dirty = useMemo(
-    () => (Object.keys(card) as Array<keyof T>).some(key => card[key] !== draft[key]),
-    [card, draft],
-  );
-
-  const patch = (value: Partial<T>) => setDraft(current => ({ ...current, ...value }) as T);
-
-  return (
-    <div className="project-theory-card">
-      <div className="project-theory-card-head">
-        <div className="project-theory-card-title">{title}</div>
-        <span className={`project-theory-status-badge${dirty ? ' is-draft' : ''}`}>
-          {dirty ? 'Черновик' : 'Применено'}
-        </span>
-      </div>
-      {children(draft, patch)}
-      <div className="project-theory-card-foot">
-        <button className="btn btn-soft btn-sm" type="button" disabled={!dirty} onClick={() => setDraft(card)}>
-          Сбросить
-        </button>
-        <button className="btn btn-primary btn-sm" type="button" disabled={!dirty} onClick={() => onApply(draft)}>
-          Применить
-        </button>
       </div>
     </div>
   );
