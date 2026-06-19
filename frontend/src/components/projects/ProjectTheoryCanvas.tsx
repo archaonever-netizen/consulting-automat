@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
 import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot, writeProjectTheorySnapshot, type ProjectTheorySnapshotItem } from './projectTheorySnapshot';
@@ -1538,10 +1538,11 @@ function SelectField({
   onChange,
 }: {
   label: string;
-  options: string[];
+  options: Array<string | RefOption>;
   value?: string;
   onChange?: (value: string) => void;
 }) {
+  const normalized = options.map(option => (typeof option === 'string' ? { value: option, label: option } : option));
   return (
     <label className="project-theory-field">
       <span>{label}</span>
@@ -1552,7 +1553,7 @@ function SelectField({
         onChange={event => onChange?.(event.target.value)}
       >
         <option value="" disabled>Выберите</option>
-        {options.map(option => <option key={option}>{option}</option>)}
+        {normalized.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </label>
   );
@@ -1637,19 +1638,19 @@ function ProjectTheorySection({ number, title, note, children }: { number: strin
 
 function LinkedResultSelect({
   label,
-  resultNames,
+  resultOptions,
   value,
   onChange,
 }: {
   label: string;
-  resultNames: string[];
+  resultOptions: RefOption[];
   value?: string;
   onChange?: (value: string) => void;
 }) {
   return (
     <SelectField
       label={label}
-      options={resultNames.length ? resultNames : ['Сначала укажите название результата']}
+      options={resultOptions.length ? resultOptions : ['Сначала укажите название результата']}
       value={value}
       onChange={onChange}
     />
@@ -1873,12 +1874,82 @@ function getMissionValue(mission: MissionCard) {
   return mission.value === 'Другое' ? mission.valueOther.trim() : mission.value.trim();
 }
 
-function buildMissionStatement(mission: MissionCard) {
-  const beneficiary = mission.mainBeneficiary || mission.valueFor || '[выгодоприобретатель]';
+// Связи карточки Миссия хранятся как стабильный value (id карточки), а имя
+// резолвится из актуального списка — иначе ссылка «застревает» на болванке
+// «Стейкхолдер N» после переименования карточки.
+type RefOption = { value: string; label: string };
+
+type MissionRefs = {
+  stakeholders: RefOption[];
+  competencies: RefOption[];
+  protections: RefOption[];
+};
+
+function refLabel(options: RefOption[], value: string): string {
+  if (!value) return value;
+  const byValue = options.find(option => option.value === value);
+  if (byValue) return byValue.label;
+  // обратная совместимость: если в значении лежит само имя — отдаём его как есть
+  const byLabel = options.find(option => option.label === value);
+  if (byLabel) return byLabel.label;
+  return value;
+}
+
+// Преобразует старое строковое значение (актуальное имя карточки или болванку
+// «Стейкхолдер N») в стабильный value-id. Если соответствие не найдено — оставляет как есть.
+function migrateRefValue(value: string, options: RefOption[], genericPrefixes: string[]): string {
+  if (!value) return value;
+  if (options.some(option => option.value === value)) return value;
+  const byLabel = options.find(option => option.label === value);
+  if (byLabel) return byLabel.value;
+  for (const prefix of genericPrefixes) {
+    const match = value.match(new RegExp(`^${prefix} (\\d+)$`));
+    if (match) {
+      const option = options[Number(match[1]) - 1];
+      if (option) return option.value;
+    }
+  }
+  return value;
+}
+
+function migrateProtectValue(value: string, preserveOptions: RefOption[], constraintOptions: RefOption[]): string {
+  if (!value) return value;
+  const namespaced = [
+    ...preserveOptions.map(option => ({ value: `pe:${option.value}`, label: option.label })),
+    ...constraintOptions.map(option => ({ value: `c:${option.value}`, label: option.label })),
+  ];
+  if (namespaced.some(option => option.value === value)) return value;
+  const byLabel = namespaced.find(option => option.label === value);
+  if (byLabel) return byLabel.value;
+  const preserveMatch = value.match(/^Сохраняемый элемент (\d+)$/);
+  if (preserveMatch && preserveOptions[Number(preserveMatch[1]) - 1]) {
+    return `pe:${preserveOptions[Number(preserveMatch[1]) - 1].value}`;
+  }
+  const constraintMatch = value.match(/^Ограничение (\d+)$/);
+  if (constraintMatch && constraintOptions[Number(constraintMatch[1]) - 1]) {
+    return `c:${constraintOptions[Number(constraintMatch[1]) - 1].value}`;
+  }
+  return value;
+}
+
+// Сохраняет ссылочную идентичность, если миграция не изменила ни один элемент,
+// чтобы setState не вызывал лишний ререндер/перезапись снапшота.
+function migrateCollection<T>(items: T[], migrateItem: (item: T) => T): T[] {
+  let changed = false;
+  const next = items.map(item => {
+    const migrated = migrateItem(item);
+    if (migrated !== item) changed = true;
+    return migrated;
+  });
+  return changed ? next : items;
+}
+
+function buildMissionStatement(mission: MissionCard, refs: MissionRefs) {
+  const beneficiary = refLabel(refs.stakeholders, mission.mainBeneficiary) || mission.valueFor || '[выгодоприобретатель]';
   const value = getMissionValue(mission) || '[ценность]';
   const problem = mission.problem || '[проблема / потребность]';
-  const capability = mission.relatedCompetencies[0] || mission.assumption || '[ключевое изменение / способность]';
-  const protection = mission.protectRelations[0] || '[сохраняемое ядро / ограничение]';
+  const capability = refLabel(refs.competencies, mission.relatedCompetencies[0] ?? '') || mission.assumption || '[ключевое изменение / способность]';
+  const protection = refLabel(refs.protections, mission.protectRelations[0] ?? '') || '[сохраняемое ядро / ограничение]';
 
   return `Проект существует для того, чтобы ${beneficiary} получил ${value}, решив ${problem}, за счет ${capability}, без нарушения ${protection}.`;
 }
@@ -1891,23 +1962,23 @@ function createSnapshotItem(id: string, label: string, summary: string): Project
   return { id, label, summary };
 }
 
-function summarizeMission(mission: MissionCard) {
+function summarizeMission(mission: MissionCard, refs: MissionRefs) {
   return compactJoin([
-    mission.finalStatement || buildMissionStatement(mission),
-    mission.mainBeneficiary ? `Выгодоприобретатель: ${mission.mainBeneficiary}` : '',
+    mission.finalStatement || buildMissionStatement(mission, refs),
+    mission.mainBeneficiary ? `Выгодоприобретатель: ${refLabel(refs.stakeholders, mission.mainBeneficiary)}` : '',
     mission.problem ? `Потребность: ${mission.problem}` : '',
     getMissionValue(mission) ? `Ценность: ${getMissionValue(mission)}` : '',
     mission.victoryState ? `Состояние победы: ${mission.victoryState}` : '',
   ]);
 }
 
-function summarizeStakeholder(stakeholder: StakeholderCard, label: string) {
+function summarizeStakeholder(stakeholder: StakeholderCard, label: string, resultLabel: string) {
   return compactJoin([
     label,
     stakeholder.type ? `тип: ${stakeholder.type}` : '',
     stakeholder.need ? `потребность: ${stakeholder.need}` : '',
     stakeholder.value ? `ценность: ${stakeholder.value}` : '',
-    stakeholder.resultCriterion ? `критерий: ${stakeholder.resultCriterion}` : '',
+    resultLabel ? `критерий: ${resultLabel}` : '',
   ]);
 }
 
@@ -1923,23 +1994,23 @@ function summarizeCriterion(criterion: ResultCriterion, label: string) {
   ]);
 }
 
-function summarizeCompetency(competency: CompetencyCard, label: string) {
+function summarizeCompetency(competency: CompetencyCard, label: string, resultLabel: string) {
   return compactJoin([
     label,
     competency.holder || competency.holderDetails ? `носитель: ${competency.holder || competency.holderDetails}` : '',
-    competency.resultCriterion ? `результат: ${competency.resultCriterion}` : '',
+    resultLabel ? `результат: ${resultLabel}` : '',
     competency.requiredLevel ? `требуемый уровень: ${competency.requiredLevel}` : '',
     competency.verificationMethod ? `проверка: ${competency.verificationMethod}` : '',
   ]);
 }
 
-function summarizeConstraint(constraint: ConstraintCard, label: string) {
+function summarizeConstraint(constraint: ConstraintCard, label: string, resultLabel: string) {
   return compactJoin([
     label,
     constraint.type ? `тип: ${constraint.type}` : '',
     constraint.limit || constraint.unit ? `лимит: ${compactJoin([constraint.limit, constraint.unit])}` : '',
     constraint.scope ? `область: ${constraint.scope}` : '',
-    constraint.resultCriterion ? `результат: ${constraint.resultCriterion}` : '',
+    resultLabel ? `результат: ${resultLabel}` : '',
     constraint.violationConsequence ? `последствие нарушения: ${constraint.violationConsequence}` : '',
   ]);
 }
@@ -2100,10 +2171,104 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     () => preserveElements.map((element, index) => element.details.trim() || element.type.trim() || `Сохраняемый элемент ${index + 1}`),
     [preserveElements],
   );
-  const missionProtectionOptions = useMemo(
-    () => [...preserveElementNames, ...constraintNames],
-    [preserveElementNames, constraintNames],
+  // Опции связей миссии: value — стабильный id карточки, label — её актуальное имя.
+  const stakeholderOptions = useMemo<RefOption[]>(
+    () => stakeholders.map((stakeholder, index) => ({ value: String(stakeholder.id), label: stakeholderNames[index] })),
+    [stakeholders, stakeholderNames],
   );
+  const competencyOptions = useMemo<RefOption[]>(
+    () => competencies.map((competency, index) => ({ value: String(competency.id), label: competencyNames[index] })),
+    [competencies, competencyNames],
+  );
+  const resultOptions = useMemo<RefOption[]>(
+    () => criteria.map((criterion, index) => ({ value: String(criterion.id), label: resultNames[index] })),
+    [criteria, resultNames],
+  );
+  const preserveOptions = useMemo<RefOption[]>(
+    () => preserveElements.map((element, index) => ({ value: String(element.id), label: preserveElementNames[index] })),
+    [preserveElements, preserveElementNames],
+  );
+  const constraintOptions = useMemo<RefOption[]>(
+    () => constraints.map((constraint, index) => ({ value: String(constraint.id), label: constraintNames[index] })),
+    [constraints, constraintNames],
+  );
+  // Связь миссии «что нельзя нарушить» смешивает два списка (элементы + ограничения),
+  // поэтому id неймспейсятся (pe:/c:), чтобы совпадающие числовые id не сталкивались.
+  const missionProtectionOptions = useMemo<RefOption[]>(
+    () => [
+      ...preserveOptions.map(option => ({ value: `pe:${option.value}`, label: option.label })),
+      ...constraintOptions.map(option => ({ value: `c:${option.value}`, label: option.label })),
+    ],
+    [preserveOptions, constraintOptions],
+  );
+  const missionRefs = useMemo<MissionRefs>(
+    () => ({ stakeholders: stakeholderOptions, competencies: competencyOptions, protections: missionProtectionOptions }),
+    [stakeholderOptions, competencyOptions, missionProtectionOptions],
+  );
+
+  // Разовая миграция уже сохранённых перекрёстных связей всех карточек:
+  // строковые имена/болванки («Стейкхолдер N» и т.п.) → стабильные id карточек.
+  const crossRefsMigrated = useRef(false);
+  useEffect(() => {
+    if (crossRefsMigrated.current) return;
+    crossRefsMigrated.current = true;
+    const migrateResult = (value: string) => migrateRefValue(value, resultOptions, ['Критерий результата']);
+    const migrateStakeholder = (value: string) => migrateRefValue(value, stakeholderOptions, ['Стейкхолдер']);
+
+    setMission(current => {
+      const next: MissionCard = {
+        ...current,
+        mainBeneficiary: migrateStakeholder(current.mainBeneficiary),
+        relatedCompetencies: current.relatedCompetencies.map(value => migrateRefValue(value, competencyOptions, ['Компетенция'])),
+        relatedResults: current.relatedResults.map(migrateResult),
+        protectRelations: current.protectRelations.map(value => migrateProtectValue(value, preserveOptions, constraintOptions)),
+      };
+      const same = next.mainBeneficiary === current.mainBeneficiary
+        && next.relatedCompetencies.every((value, index) => value === current.relatedCompetencies[index])
+        && next.relatedResults.every((value, index) => value === current.relatedResults[index])
+        && next.protectRelations.every((value, index) => value === current.protectRelations[index]);
+      return same ? current : next;
+    });
+
+    setStakeholders(current => migrateCollection(current, item => {
+      const resultCriterion = migrateResult(item.resultCriterion);
+      return resultCriterion === item.resultCriterion ? item : { ...item, resultCriterion };
+    }));
+
+    setCompetencies(current => migrateCollection(current, item => {
+      const resultCriterion = migrateResult(item.resultCriterion);
+      return resultCriterion === item.resultCriterion ? item : { ...item, resultCriterion };
+    }));
+
+    setConstraints(current => migrateCollection(current, item => {
+      const resultCriterion = migrateResult(item.resultCriterion);
+      return resultCriterion === item.resultCriterion ? item : { ...item, resultCriterion };
+    }));
+
+    setCriteria(current => migrateCollection(current, item => {
+      const requiredCompetencies = item.requiredCompetencies.map(value => migrateRefValue(value, competencyOptions, ['Компетенция']));
+      const changed = requiredCompetencies.some((value, index) => value !== item.requiredCompetencies[index]);
+      return changed ? { ...item, requiredCompetencies } : item;
+    }));
+
+    setQualityIndicators(current => migrateCollection(current, item => {
+      const resultCriterion = migrateResult(item.resultCriterion);
+      const beneficiary = migrateStakeholder(item.beneficiary);
+      return resultCriterion === item.resultCriterion && beneficiary === item.beneficiary
+        ? item
+        : { ...item, resultCriterion, beneficiary };
+    }));
+
+    setPreserveElements(current => migrateCollection(current, item => {
+      const stakeholder = migrateStakeholder(item.stakeholder);
+      const resultCriterion = migrateResult(item.resultCriterion);
+      const constraint = migrateRefValue(item.constraint, constraintOptions, ['Ограничение']);
+      return stakeholder === item.stakeholder && resultCriterion === item.resultCriterion && constraint === item.constraint
+        ? item
+        : { ...item, stakeholder, resultCriterion, constraint };
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   // Singleton-карточка миссии как объект с id для DraftCard. Мемоизируем, чтобы ссылка
   // менялась только при изменении mission (иначе DraftCard сбрасывал бы черновик каждый рендер).
   const missionCard = useMemo(() => ({ ...mission, id: 0 }), [mission]);
@@ -2111,10 +2276,10 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
   useEffect(() => {
     const timer = setTimeout(() => {
     const blockById = Object.fromEntries(PROJECT_THEORY_BLOCKS.map(block => [block.id, block]));
-    const missionSummary = summarizeMission(mission);
+    const missionSummary = summarizeMission(mission, missionRefs);
     const stakeholderItems = stakeholders.map((stakeholder, index) => {
       const label = stakeholderNames[index];
-      return createSnapshotItem(String(stakeholder.id), label, summarizeStakeholder(stakeholder, label));
+      return createSnapshotItem(String(stakeholder.id), label, summarizeStakeholder(stakeholder, label, refLabel(resultOptions, stakeholder.resultCriterion)));
     });
     const resultItems = criteria.map((criterion, index) => {
       const label = resultNames[index];
@@ -2122,11 +2287,11 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     });
     const competencyItems = competencies.map((competency, index) => {
       const label = competencyNames[index];
-      return createSnapshotItem(String(competency.id), label, summarizeCompetency(competency, label));
+      return createSnapshotItem(String(competency.id), label, summarizeCompetency(competency, label, refLabel(resultOptions, competency.resultCriterion)));
     });
     const constraintItems = constraints.map((constraint, index) => {
       const label = constraintNames[index];
-      return createSnapshotItem(String(constraint.id), label, summarizeConstraint(constraint, label));
+      return createSnapshotItem(String(constraint.id), label, summarizeConstraint(constraint, label, refLabel(resultOptions, constraint.resultCriterion)));
     });
     const qualityItems = qualityIndicators.map((indicator, index) => {
       const label = indicator.requirement.trim() || indicator.metric.trim() || indicator.object.trim() || `Показатель качества ${index + 1}`;
@@ -2197,6 +2362,8 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     nextPreserveElementId,
     nextQualityIndicatorId,
     nextStakeholderId,
+    missionRefs,
+    resultOptions,
     preserveElementNames,
     preserveElements,
     projectId,
@@ -2435,7 +2602,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             />
             <SelectField
               label="2. Главный выгодоприобретатель"
-              options={stakeholderNames.length ? stakeholderNames : ['Сначала заполните блок Клиент / выгодоприобретатель']}
+              options={stakeholderOptions.length ? stakeholderOptions : ['Сначала заполните блок Клиент / выгодоприобретатель']}
               value={draft.mainBeneficiary}
               onChange={value => patch(applyMissionPatch(draft, { mainBeneficiary: value }))}
             />
@@ -2525,33 +2692,41 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <div className="project-theory-field full">
               <span>11. Связанные ключевые компетенции</span>
               <div className="project-theory-check-list dense">
-                {(competencyNames.length ? competencyNames : ['Сначала заполните блок Ключевые компетенции']).map(option => (
-                  <label className="project-theory-check-option" key={option}>
+                {competencyOptions.length ? competencyOptions.map(option => (
+                  <label className="project-theory-check-option" key={option.value}>
                     <input
                       type="checkbox"
-                      checked={draft.relatedCompetencies.includes(option)}
-                      disabled={!competencyNames.length}
-                      onChange={() => patch(toggleMissionMulti(draft, 'relatedCompetencies', option))}
+                      checked={draft.relatedCompetencies.includes(option.value)}
+                      onChange={() => patch(toggleMissionMulti(draft, 'relatedCompetencies', option.value))}
                     />
-                    <span>{option}</span>
+                    <span>{option.label}</span>
                   </label>
-                ))}
+                )) : (
+                  <label className="project-theory-check-option">
+                    <input type="checkbox" disabled />
+                    <span>Сначала заполните блок Ключевые компетенции</span>
+                  </label>
+                )}
               </div>
             </div>
             <div className="project-theory-field full">
               <span>12. Связанные критерии результата</span>
               <div className="project-theory-check-list dense">
-                {(resultNames.length ? resultNames : ['Сначала заполните блок Критерии результата']).map(option => (
-                  <label className="project-theory-check-option" key={option}>
+                {resultOptions.length ? resultOptions.map(option => (
+                  <label className="project-theory-check-option" key={option.value}>
                     <input
                       type="checkbox"
-                      checked={draft.relatedResults.includes(option)}
-                      disabled={!resultNames.length}
-                      onChange={() => patch(toggleMissionMulti(draft, 'relatedResults', option))}
+                      checked={draft.relatedResults.includes(option.value)}
+                      onChange={() => patch(toggleMissionMulti(draft, 'relatedResults', option.value))}
                     />
-                    <span>{option}</span>
+                    <span>{option.label}</span>
                   </label>
-                ))}
+                )) : (
+                  <label className="project-theory-check-option">
+                    <input type="checkbox" disabled />
+                    <span>Сначала заполните блок Критерии результата</span>
+                  </label>
+                )}
               </div>
             </div>
           </div>
@@ -2585,17 +2760,21 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
           <div className="project-theory-field full">
             <span>14. Что миссия не должна нарушить</span>
             <div className="project-theory-check-list dense">
-              {(missionProtectionOptions.length ? missionProtectionOptions : ['Сначала заполните ограничения или блок Что нельзя разрушить']).map(option => (
-                <label className="project-theory-check-option" key={option}>
+              {missionProtectionOptions.length ? missionProtectionOptions.map(option => (
+                <label className="project-theory-check-option" key={option.value}>
                   <input
                     type="checkbox"
-                    checked={draft.protectRelations.includes(option)}
-                    disabled={!missionProtectionOptions.length}
-                    onChange={() => patch(toggleMissionMulti(draft, 'protectRelations', option))}
+                    checked={draft.protectRelations.includes(option.value)}
+                    onChange={() => patch(toggleMissionMulti(draft, 'protectRelations', option.value))}
                   />
-                  <span>{option}</span>
+                  <span>{option.label}</span>
                 </label>
-              ))}
+              )) : (
+                <label className="project-theory-check-option">
+                  <input type="checkbox" disabled />
+                  <span>Сначала заполните ограничения или блок Что нельзя разрушить</span>
+                </label>
+              )}
             </div>
           </div>
 
@@ -2608,7 +2787,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             />
             <div className="project-theory-field">
               <span>16. Итоговая формулировка миссии</span>
-              <button className="btn btn-ghost btn-sm" type="button" onClick={() => patch({ finalStatement: buildMissionStatement(draft) })}>
+              <button className="btn btn-ghost btn-sm" type="button" onClick={() => patch({ finalStatement: buildMissionStatement(draft, missionRefs) })}>
                 <Icon name="sparkle" size={14} />
                 Собрать по шаблону
               </button>
@@ -2756,7 +2935,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                       />
                       <LinkedResultSelect
                         label="8. Критерий подтверждения пользы"
-                        resultNames={resultNames}
+                        resultOptions={resultOptions}
                         value={draft.resultCriterion}
                         onChange={value => patch(applyStakeholderPatch(draft, { resultCriterion: value }))}
                       />
@@ -3017,17 +3196,21 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                         <span>Какие способности нужны, чтобы этот критерий результата был достигнут.</span>
                       </div>
                       <div className="project-theory-check-list dense">
-                        {(competencyNames.length ? competencyNames : ['Сначала заполните блок Ключевые компетенции']).map(option => (
-                          <label className="project-theory-check-option" key={option}>
+                        {competencyOptions.length ? competencyOptions.map(option => (
+                          <label className="project-theory-check-option" key={option.value}>
                             <input
                               type="checkbox"
-                              checked={draft.requiredCompetencies.includes(option)}
-                              disabled={!competencyNames.length}
-                              onChange={() => patch({ requiredCompetencies: draft.requiredCompetencies.includes(option) ? draft.requiredCompetencies.filter(item => item !== option) : [...draft.requiredCompetencies, option] })}
+                              checked={draft.requiredCompetencies.includes(option.value)}
+                              onChange={() => patch({ requiredCompetencies: draft.requiredCompetencies.includes(option.value) ? draft.requiredCompetencies.filter(item => item !== option.value) : [...draft.requiredCompetencies, option.value] })}
                             />
-                            <span>{option}</span>
+                            <span>{option.label}</span>
                           </label>
-                        ))}
+                        )) : (
+                          <label className="project-theory-check-option">
+                            <input type="checkbox" disabled />
+                            <span>Сначала заполните блок Ключевые компетенции</span>
+                          </label>
+                        )}
                       </div>
                     </div>
 
@@ -3155,7 +3338,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                       />
                       <LinkedResultSelect
                         label="7. Для какого результата нужна"
-                        resultNames={resultNames}
+                        resultOptions={resultOptions}
                         value={draft.resultCriterion}
                         onChange={value => patch({ resultCriterion: value })}
                       />
@@ -3371,7 +3554,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                       />
                       <LinkedResultSelect
                         label="9. Связанный критерий результата"
-                        resultNames={resultNames}
+                        resultOptions={resultOptions}
                         value={draft.resultCriterion}
                         onChange={value => patch(applyConstraintPatch(draft, { resultCriterion: value }))}
                       />
@@ -3609,13 +3792,13 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                       />
                       <LinkedResultSelect
                         label="16. Связанный критерий результата"
-                        resultNames={resultNames}
+                        resultOptions={resultOptions}
                         value={draft.resultCriterion}
                         onChange={value => patch(applyQualityIndicatorPatch(draft, { resultCriterion: value }))}
                       />
                       <SelectField
                         label="17. Связанный клиент / выгодоприобретатель"
-                        options={stakeholderNames.length ? stakeholderNames : ['Сначала заполните блок Клиент / выгодоприобретатель']}
+                        options={stakeholderOptions.length ? stakeholderOptions : ['Сначала заполните блок Клиент / выгодоприобретатель']}
                         value={draft.beneficiary}
                         onChange={value => patch(applyQualityIndicatorPatch(draft, { beneficiary: value }))}
                       />
@@ -3788,19 +3971,19 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
                     <div className="project-theory-grid three">
                       <SelectField
                         label="6. Связанный клиент / стейкхолдер"
-                        options={stakeholderNames.length ? stakeholderNames : ['Сначала заполните блок Клиент / выгодоприобретатель']}
+                        options={stakeholderOptions.length ? stakeholderOptions : ['Сначала заполните блок Клиент / выгодоприобретатель']}
                         value={draft.stakeholder}
                         onChange={value => patch(applyPreserveElementPatch(draft, { stakeholder: value }))}
                       />
                       <LinkedResultSelect
                         label="7. Связанный критерий результата"
-                        resultNames={resultNames}
+                        resultOptions={resultOptions}
                         value={draft.resultCriterion}
                         onChange={value => patch(applyPreserveElementPatch(draft, { resultCriterion: value }))}
                       />
                       <SelectField
                         label="8. Связанное ограничение"
-                        options={constraintNames.length ? constraintNames : ['Сначала заполните блок Ограничения']}
+                        options={constraintOptions.length ? constraintOptions : ['Сначала заполните блок Ограничения']}
                         value={draft.constraint}
                         onChange={value => patch(applyPreserveElementPatch(draft, { constraint: value }))}
                       />
