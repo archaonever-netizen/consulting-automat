@@ -161,7 +161,7 @@ const reliabilityOptions = ['высокая', 'средняя', 'низкая'];
 
 const fallbackTheoryRelations: TheoryRelation[] = getFallbackProjectTheorySnapshot(0).blocks;
 
-const createDiagnosis = (): DiagnosisState => ({
+export const createDiagnosis = (): DiagnosisState => ({
   status: 'Не заполнено',
   rawRequest: '',
   requestType: '',
@@ -190,7 +190,7 @@ const createGapsFromRelations = (relations: TheoryRelation[]) => (
   relations.length ? relations : fallbackTheoryRelations
 ).map((relation, index) => createGapFromRelation(relation, index + 1));
 
-const createSymptom = (id: number): SymptomCard => ({
+export const createSymptom = (id: number): SymptomCard => ({
   id,
   description: '',
   location: '',
@@ -200,7 +200,7 @@ const createSymptom = (id: number): SymptomCard => ({
   dataSource: '',
 });
 
-const createFact = (id: number): FactCard => ({
+export const createFact = (id: number): FactCard => ({
   id,
   indicator: '',
   value: '',
@@ -210,7 +210,7 @@ const createFact = (id: number): FactCard => ({
   confirms: '',
 });
 
-const createAlternative = (id: number): AlternativeCard => ({
+export const createAlternative = (id: number): AlternativeCard => ({
   id,
   reason: '',
   confirms: '',
@@ -228,7 +228,7 @@ const createVerification = (id: number): VerificationCard => ({
   owner: '',
 });
 
-const createConsequence = (id: number): ConsequenceCard => ({
+export const createConsequence = (id: number): ConsequenceCard => ({
   id,
   deterioration: '',
   affected: '',

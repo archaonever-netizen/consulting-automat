@@ -100,7 +100,7 @@ const statusOptions = ['Не заполнено', 'Заполнено части
 const winTypeOptions = ['выигрыш через более низкую стоимость', 'выигрыш через дифференциацию / уникальную ценность'];
 const alternativeStatusOptions = ['выбрана', 'отклонена', 'требует проверки', 'оставить как резерв'];
 
-const createChoice = (): StrategicChoiceState => ({
+export const createChoice = (): StrategicChoiceState => ({
   status: 'Не заполнено',
   strategicQuestion: '',
   winningAspiration: '',
@@ -134,7 +134,7 @@ const createChoice = (): StrategicChoiceState => ({
   guidingPolicy: '',
 });
 
-const createCapability = (id: number, competency = ''): CapabilityCard => ({
+export const createCapability = (id: number, competency = ''): CapabilityCard => ({
   id,
   name: '',
   competency,
@@ -160,7 +160,7 @@ const createAlternative = (id: number): AlternativeCard => ({
   status: 'требует проверки',
 });
 
-const createTradeOff = (id: number): TradeOffCard => ({
+export const createTradeOff = (id: number): TradeOffCard => ({
   id,
   name: '',
   refusal: '',
@@ -170,7 +170,7 @@ const createTradeOff = (id: number): TradeOffCard => ({
   approver: '',
 });
 
-const createAction = (id: number): ActionCard => ({
+export const createAction = (id: number): ActionCard => ({
   id,
   name: '',
   action: '',
@@ -182,7 +182,7 @@ const createAction = (id: number): ActionCard => ({
   futureLink: '',
 });
 
-const createHypothesis = (id: number): HypothesisCard => ({
+export const createHypothesis = (id: number): HypothesisCard => ({
   id,
   name: '',
   assumption: '',

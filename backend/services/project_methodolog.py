@@ -281,7 +281,7 @@ async def chat_methodolog(
 
     parts = []
     if project_model is not None:
-        parts.append("PROJECT_MODEL (редактируемые цели):\n" + json.dumps(project_model, ensure_ascii=False)[:6000])
+        parts.append("PROJECT_MODEL (редактируемые цели):\n" + json.dumps(project_model, ensure_ascii=False)[:10000])
     if review is not None:
         parts.append("REVIEW (последняя оценка):\n" + json.dumps(
             {"overall": review.get("overall"), "summary": review.get("summary"),

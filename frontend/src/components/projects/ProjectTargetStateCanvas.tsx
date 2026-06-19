@@ -138,7 +138,7 @@ const dataSourceOptions = ['financial report', 'CRM', 'HR', 'audit', 'акт п�
 const unitOptions = ['₽', '%', 'шт.', 'баллы', 'часы', 'дни', 'выполнено-не выполнено'];
 const yesNoOptions = ['да', 'нет'];
 
-const createTargetState = (): TargetState => ({
+export const createTargetState = (): TargetState => ({
   status: 'Не заполнено',
   statement: '',
   type: '',
@@ -156,7 +156,7 @@ const createTargetState = (): TargetState => ({
   finalStatement: '',
 });
 
-const createTargetResult = (id: number, criterion = ''): TargetResult => ({
+export const createTargetResult = (id: number, criterion = ''): TargetResult => ({
   id,
   name: '',
   criterion,
@@ -170,7 +170,7 @@ const createTargetResult = (id: number, criterion = ''): TargetResult => ({
   owner: '',
 });
 
-const createStakeholderValue = (id: number, stakeholder = ''): StakeholderValue => ({
+export const createStakeholderValue = (id: number, stakeholder = ''): StakeholderValue => ({
   id,
   name: '',
   stakeholder,
@@ -180,7 +180,7 @@ const createStakeholderValue = (id: number, stakeholder = ''): StakeholderValue 
   minimum: '',
 });
 
-const createOperatingModel = (id: number): OperatingModel => ({
+export const createOperatingModel = (id: number): OperatingModel => ({
   id,
   name: '',
   process: '',
@@ -191,7 +191,7 @@ const createOperatingModel = (id: number): OperatingModel => ({
   owner: '',
 });
 
-const createCapabilityTarget = (id: number, competency = ''): CapabilityTarget => ({
+export const createCapabilityTarget = (id: number, competency = ''): CapabilityTarget => ({
   id,
   name: '',
   competency,
@@ -202,7 +202,7 @@ const createCapabilityTarget = (id: number, competency = ''): CapabilityTarget =
   owner: '',
 });
 
-const createManagementSystemTarget = (id: number): ManagementSystemTarget => ({
+export const createManagementSystemTarget = (id: number): ManagementSystemTarget => ({
   id,
   name: '',
   systemType: '',
@@ -212,7 +212,7 @@ const createManagementSystemTarget = (id: number): ManagementSystemTarget => ({
   owner: '',
 });
 
-const createQualityTarget = (id: number, qualityIndicator = ''): QualityTarget => ({
+export const createQualityTarget = (id: number, qualityIndicator = ''): QualityTarget => ({
   id,
   name: '',
   qualityIndicator,
@@ -222,7 +222,7 @@ const createQualityTarget = (id: number, qualityIndicator = ''): QualityTarget =
   deviationAction: '',
 });
 
-const createPreserveTarget = (id: number, preserveElement = ''): PreserveTarget => ({
+export const createPreserveTarget = (id: number, preserveElement = ''): PreserveTarget => ({
   id,
   name: '',
   preserveElement,
@@ -232,7 +232,7 @@ const createPreserveTarget = (id: number, preserveElement = ''): PreserveTarget 
   forbiddenChange: '',
 });
 
-const createConstraintTarget = (id: number, constraint = ''): ConstraintTarget => ({
+export const createConstraintTarget = (id: number, constraint = ''): ConstraintTarget => ({
   id,
   name: '',
   constraint,
@@ -242,7 +242,7 @@ const createConstraintTarget = (id: number, constraint = ''): ConstraintTarget =
   violationConsequence: '',
 });
 
-const createKeyResult = (id: number): KeyResult => ({
+export const createKeyResult = (id: number): KeyResult => ({
   id,
   name: '',
   statement: '',
