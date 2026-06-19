@@ -187,6 +187,22 @@ describe('applyProjectEdit (complex cards)', () => {
     expect((snap.form as { targetResults: unknown[] }).targetResults).toHaveLength(1);
   });
 
+  it('infers the list from value keys when list is omitted', () => {
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'add_item', card_id: 'diagnosis', human: 'add', values: { description: 'Простои на линии' },
+    });
+    expect(res.ok).toBe(true);
+    expect(readProjectDiagnosisSnapshot(PROJECT_ID)!.symptoms.some(s => s.label === 'Простои на линии')).toBe(true);
+  });
+
+  it('resolves card_id given by title instead of id', () => {
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_field', card_id: 'Диагноз', field: 'keyChallenge', value: 'Узкое место', human: 'fix',
+    });
+    expect(res.ok).toBe(true);
+    expect(readProjectDiagnosisSnapshot(PROJECT_ID)!.keyChallenge).toBe('Узкое место');
+  });
+
   it('exposes complex cards as editable in the model', () => {
     const model = buildProjectEditModel(PROJECT_ID);
     const diag = model.editable_cards.find(c => c.card_id === 'diagnosis');

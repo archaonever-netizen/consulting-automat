@@ -143,12 +143,41 @@ function mergeItemValues(item: FormItem, values: Record<string, unknown> | undef
 
 function findList(spec: ComplexCardSpec, name: string | undefined): ComplexListSpec | undefined {
   if (name) {
-    const byKey = spec.lists.find(l => l.projKey === name || l.formKey === name);
+    const lc = name.trim().toLowerCase();
+    const byKey = spec.lists.find(l => l.projKey.toLowerCase() === lc || l.formKey.toLowerCase() === lc);
     if (byKey) return byKey;
-    const byTitle = spec.lists.find(l => l.title.toLowerCase() === name.trim().toLowerCase());
+    const byTitle = spec.lists.find(l => l.title.toLowerCase() === lc || `${l.title}s`.toLowerCase() === lc);
     if (byTitle) return byTitle;
   }
   return spec.lists.length === 1 ? spec.lists[0] : undefined;
+}
+
+// Если модель не указала list, угадываем его по ключам значений (для add/update)…
+function inferListByValues(spec: ComplexCardSpec, values: Record<string, unknown> | undefined): ComplexListSpec | undefined {
+  const keys = Object.keys(values || {});
+  if (!keys.length) return undefined;
+  let best: ComplexListSpec | undefined;
+  let bestScore = 0;
+  for (const ls of spec.lists) {
+    if (!ls.createItem) continue;
+    const blank = ls.createItem(0) as Record<string, unknown>;
+    const score = keys.filter(k => k in blank).length;
+    if (score > bestScore) {
+      bestScore = score;
+      best = ls;
+    }
+  }
+  return bestScore > 0 ? best : undefined;
+}
+
+// …или по тому, в каком списке реально есть элемент с указанным item_id (для update/delete).
+function inferListByItemId(spec: ComplexCardSpec, form: Record<string, unknown>, itemId: unknown): ComplexListSpec | undefined {
+  for (const ls of spec.lists) {
+    const arr = Array.isArray(form[ls.formKey]) ? (form[ls.formKey] as FormItem[]) : [];
+    const idx = pickIndex(arr, itemId, i => String(i.id), it => itemLabel(it, ls.labelKeys, ''));
+    if (idx !== -1) return ls;
+  }
+  return undefined;
 }
 
 function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Proposal): ApplyResult {
@@ -170,8 +199,12 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
     return ok('Формулировка обновлена.');
   }
 
-  const listSpec = findList(spec, proposal.list);
-  if (!listSpec) return fail('Не указан или не найден список для изменения.');
+  let listSpec = findList(spec, proposal.list);
+  if (!listSpec) {
+    if (proposal.op === 'add_item' || proposal.op === 'update_item') listSpec = inferListByValues(spec, proposal.values);
+    if (!listSpec && (proposal.op === 'update_item' || proposal.op === 'delete_item')) listSpec = inferListByItemId(spec, form, proposal.item_id);
+  }
+  if (!listSpec) return fail('Не понял, какой список менять — укажите раздел карточки явно.');
   const arr = (Array.isArray(form[listSpec.formKey]) ? [...(form[listSpec.formKey] as FormItem[])] : []) as FormItem[];
   const labelOf = (it: FormItem, index = 0) => itemLabel(it, listSpec.labelKeys, `${listSpec.title} ${index + 1}`);
 
@@ -201,13 +234,29 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
   return ok(proposal.op === 'add_item' ? 'Добавлено новое окно.' : proposal.op === 'delete_item' ? 'Окно удалено.' : 'Формулировка обновлена.');
 }
 
+// Модель иногда присылает в card_id название карточки вместо её id — сопоставляем.
+function resolveCardId(projectId: number, raw: string): string {
+  if (GENERIC_SECTION_IDS.includes(raw) || isComplexCard(raw)) return raw;
+  const lc = (raw || '').trim().toLowerCase();
+  if (!lc) return raw;
+  for (const id of Object.keys(COMPLEX_CARDS)) {
+    if (COMPLEX_CARDS[id].title.toLowerCase() === lc) return id;
+  }
+  const configs = createConfigs(readProjectSources(projectId));
+  for (const id of GENERIC_SECTION_IDS) {
+    if (configs[id]?.title.toLowerCase() === lc) return id;
+  }
+  return raw;
+}
+
 /**
  * Применить одно подтверждённое предложение. Возвращает результат для UI.
  * НЕ вызывается без явного подтверждения пользователя (это делает панель).
  */
 export function applyProjectEdit(projectId: number, proposal: Proposal): ApplyResult {
-  const cardId = proposal.card_id;
-  if (GENERIC_SECTION_IDS.includes(cardId)) return applySectionEdit(projectId, proposal);
-  if (isComplexCard(cardId)) return applyComplexEdit(projectId, COMPLEX_CARDS[cardId], proposal);
-  return fail('Эту карточку пока нельзя править автоматически — внесите изменение вручную в самой карточке.');
+  const cardId = resolveCardId(projectId, proposal.card_id);
+  const resolved = cardId === proposal.card_id ? proposal : { ...proposal, card_id: cardId };
+  if (GENERIC_SECTION_IDS.includes(cardId)) return applySectionEdit(projectId, resolved);
+  if (isComplexCard(cardId)) return applyComplexEdit(projectId, COMPLEX_CARDS[cardId], resolved);
+  return fail(`Эту карточку («${proposal.card_id}») пока нельзя править автоматически — внесите изменение вручную.`);
 }

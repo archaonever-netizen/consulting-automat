@@ -143,7 +143,15 @@ export default function ProjectMethodologist({ projectId, onProjectMutated }: Pr
   }
 
   function applyProposal(key: string, proposal: Proposal) {
-    const result = applyProjectEdit(projectId, proposal);
+    let result: { ok: boolean; message: string };
+    try {
+      result = applyProjectEdit(projectId, proposal);
+    } catch (e) {
+      // Не оставляем правку «молчаливой»: показываем причину прямо в карточке предложения.
+      // eslint-disable-next-line no-console
+      console.error('applyProjectEdit failed', proposal, e);
+      result = { ok: false, message: `Ошибка применения: ${e instanceof Error ? e.message : String(e)}` };
+    }
     setProposalStates(cur => ({
       ...cur,
       [key]: { status: result.ok ? 'applied' : 'failed', message: result.message },
