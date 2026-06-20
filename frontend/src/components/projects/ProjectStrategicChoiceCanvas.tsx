@@ -145,7 +145,7 @@ export const createCapability = (id: number, competency = ''): CapabilityCard =>
   external: '',
 });
 
-const createAlternative = (id: number): AlternativeCard => ({
+export const createAlternative = (id: number): AlternativeCard => ({
   id,
   name: '',
   diagnosisFit: '',
@@ -389,6 +389,12 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         choice.resourceAllocation,
         choice.reviewMechanism,
       ]),
+      noActionConsequence: compactJoin([
+        choice.noActionWhatHappens,
+        choice.noActionMissedResult,
+        choice.noActionAffected,
+        choice.noActionVerdict,
+      ]),
       acceptedChoice,
       guidingPolicy,
       capabilities: capabilities.map((capability, index) => ({
@@ -401,6 +407,19 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
           capability.gap ? `разрыв: ${capability.gap}` : '',
           capability.strengthen,
           capability.external,
+        ]),
+      })),
+      alternatives: alternatives.map((alternative, index) => ({
+        id: String(alternative.id),
+        label: alternative.name.trim() || alternative.diagnosisFit || `Альтернатива ${index + 1}`,
+        summary: compactJoin([
+          alternative.diagnosisFit,
+          alternative.whereToPlay,
+          alternative.howToWin,
+          alternative.managementSystems,
+          alternative.resourceCommitments,
+          alternative.whatNotToDo,
+          alternative.status,
         ]),
       })),
       tradeOffs: tradeOffs.map((tradeOff, index) => ({
@@ -774,4 +793,4 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
 }
 
 // Опции выпадающих списков — для видимости ИИ-Методологу (projectComplexCards → buildComplexEditable).
-export { winTypeOptions };
+export { winTypeOptions, alternativeStatusOptions };

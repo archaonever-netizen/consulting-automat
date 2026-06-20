@@ -26,9 +26,11 @@ export type ProjectStrategicChoiceSnapshot = {
   howSystemChange: string;
   howBetterThanAlternatives: string;
   managementSystems: string;
+  noActionConsequence: string;
   acceptedChoice: string;
   guidingPolicy: string;
   capabilities: ProjectStrategicChoiceSnapshotItem[];
+  alternatives: ProjectStrategicChoiceSnapshotItem[];
   tradeOffs: ProjectStrategicChoiceSnapshotItem[];
   actions: ProjectStrategicChoiceSnapshotItem[];
   hypotheses: ProjectStrategicChoiceSnapshotItem[];
@@ -57,9 +59,11 @@ export function getFallbackProjectStrategicChoiceSnapshot(projectId: number): Pr
     howSystemChange: '',
     howBetterThanAlternatives: '',
     managementSystems: '',
+    noActionConsequence: '',
     acceptedChoice: '',
     guidingPolicy: '',
     capabilities: [],
+    alternatives: [],
     tradeOffs: [],
     actions: [],
     hypotheses: [],

@@ -218,7 +218,7 @@ export const createAlternative = (id: number): AlternativeCard => ({
   status: 'требует проверки',
 });
 
-const createVerification = (id: number): VerificationCard => ({
+export const createVerification = (id: number): VerificationCard => ({
   id,
   subject: '',
   method: '',
@@ -427,6 +427,11 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
         id: String(consequence.id),
         label: consequence.deterioration || `Последствие ${index + 1}`,
         summary: compactJoin([consequence.deterioration, consequence.affected, consequence.timing, consequence.damage, consequence.source]),
+      })),
+      verifications: verifications.map((verification, index) => ({
+        id: String(verification.id),
+        label: verification.subject || `Проверка ${index + 1}`,
+        summary: compactJoin([verification.subject, verification.method, verification.confirmFact, verification.refuteFact, verification.deadline, verification.owner]),
       })),
       form: { diagnosis, gaps, symptoms, facts, alternatives, verifications, consequences } satisfies DiagnosisForm,
     }), 400);
@@ -774,4 +779,5 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
 export {
   requestTypeOptions, obstacleTypeOptions, scaleOptions,
   dataSourceOptions, reliabilityOptions, alternativeStatusOptions, relationStatusOptions,
+  verificationMethodOptions,
 };

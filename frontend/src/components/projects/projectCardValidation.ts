@@ -89,6 +89,7 @@ function buildDiagnosis(projectId: number): string {
     items('Факты', s.facts),
     items('Альтернативные объяснения', s.alternatives),
     items('Последствия без изменений', s.consequences),
+    items('Проверка диагноза', s.verifications),
   ]);
 }
 
@@ -115,7 +116,9 @@ function buildStrategicChoice(projectId: number): string {
     field('Системы управления', s.managementSystems),
     field('Принятый выбор', s.acceptedChoice),
     field('Guiding policy', s.guidingPolicy),
+    field('Что будет, если ничего не делать', s.noActionConsequence),
     items('Способности (capabilities)', s.capabilities),
+    items('Стратегические альтернативы', s.alternatives),
     items('Trade-offs', s.tradeOffs),
     items('Действия', s.actions),
     items('Гипотезы', s.hypotheses),

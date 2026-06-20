@@ -11,6 +11,7 @@ import {
   createDiagnosis,
   createFact,
   createSymptom,
+  createVerification,
   alternativeStatusOptions as diagAlternativeStatusOptions,
   dataSourceOptions as diagDataSourceOptions,
   obstacleTypeOptions,
@@ -18,13 +19,16 @@ import {
   reliabilityOptions,
   requestTypeOptions,
   scaleOptions,
+  verificationMethodOptions,
 } from './ProjectDiagnosisCanvas';
 import {
   createAction,
+  createAlternative as createChoiceAlternative,
   createCapability,
   createChoice,
   createHypothesis,
   createTradeOff,
+  alternativeStatusOptions as choiceAlternativeStatusOptions,
   winTypeOptions,
 } from './ProjectStrategicChoiceCanvas';
 import {
@@ -123,6 +127,7 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
       { projKey: 'alternatives', formKey: 'alternatives', title: 'Альтернативное объяснение', labelKeys: ['reason'], createItem: cast<FormItem>(createAlternative), fieldOptions: { status: diagAlternativeStatusOptions } },
       { projKey: 'consequences', formKey: 'consequences', title: 'Последствие', labelKeys: ['deterioration'], createItem: cast<FormItem>(createConsequence), fieldOptions: { source: diagDataSourceOptions } },
       { projKey: 'gaps', formKey: 'gaps', title: 'Разрыв теории и реальности', labelKeys: ['gap', 'observedReality'], createItem: null, fieldOptions: { status: relationStatusOptions } },
+      { projKey: 'verifications', formKey: 'verifications', title: 'Проверка диагноза', labelKeys: ['subject'], createItem: cast<FormItem>(createVerification), fieldOptions: { method: verificationMethodOptions } },
     ],
   },
 
@@ -152,9 +157,22 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
       { key: 'howBetterThanAlternatives', label: 'Лучше альтернатив' },
       { key: 'acceptedChoice', label: 'Принятый выбор' },
       { key: 'guidingPolicy', label: 'Guiding policy' },
+      { key: 'managementMetrics', label: 'Системы управления: метрики' },
+      { key: 'managementRhythm', label: 'Системы управления: управленческий ритм' },
+      { key: 'decisionOwners', label: 'Системы управления: владельцы решений' },
+      { key: 'reporting', label: 'Системы управления: отчётность' },
+      { key: 'controlProcess', label: 'Системы управления: процесс контроля' },
+      { key: 'dataSystem', label: 'Системы управления: данные' },
+      { key: 'resourceAllocation', label: 'Системы управления: распределение ресурсов' },
+      { key: 'reviewMechanism', label: 'Системы управления: механизм пересмотра' },
+      { key: 'noActionWhatHappens', label: 'Если ничего не делать: что произойдёт' },
+      { key: 'noActionMissedResult', label: 'Если ничего не делать: какой результат не достигается' },
+      { key: 'noActionAffected', label: 'Если ничего не делать: кого затронет' },
+      { key: 'noActionVerdict', label: 'Если ничего не делать: вывод' },
     ],
     lists: [
       { projKey: 'capabilities', formKey: 'capabilities', title: 'Способность', labelKeys: ['name', 'competency'], createItem: cast<FormItem>(createCapability) },
+      { projKey: 'alternatives', formKey: 'alternatives', title: 'Стратегическая альтернатива', labelKeys: ['name', 'diagnosisFit'], createItem: cast<FormItem>(createChoiceAlternative), fieldOptions: { status: choiceAlternativeStatusOptions } },
       { projKey: 'tradeOffs', formKey: 'tradeOffs', title: 'Trade-off', labelKeys: ['name', 'refusal'], createItem: cast<FormItem>(createTradeOff) },
       { projKey: 'actions', formKey: 'actions', title: 'Действие', labelKeys: ['name', 'action'], createItem: cast<FormItem>(createAction) },
       { projKey: 'hypotheses', formKey: 'hypotheses', title: 'Гипотеза', labelKeys: ['name', 'assumption'], createItem: cast<FormItem>(createHypothesis) },
@@ -172,6 +190,16 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
     scalarFields: [
       { key: 'statement', label: 'Формулировка целевого состояния' },
       { key: 'type', label: 'Тип', options: targetTypeOptions },
+      { key: 'whereClient', label: 'Where to play: клиент / сегмент' },
+      { key: 'whereGeography', label: 'Where to play: география' },
+      { key: 'whereProduct', label: 'Where to play: продукт / услуга / функция' },
+      { key: 'whereProcess', label: 'Where to play: процесс' },
+      { key: 'whereExcluded', label: 'Where to play: что исключаем' },
+      { key: 'howApproach', label: 'How to win: выбранный способ' },
+      { key: 'howValue', label: 'How to win: ценность для клиента' },
+      { key: 'howAdvantage', label: 'How to win: за счёт чего преимущество' },
+      { key: 'howObstacle', label: 'How to win: какое препятствие снимает' },
+      { key: 'howBetter', label: 'How to win: чем лучше альтернатив' },
       { key: 'objective', label: 'Objective' },
       { key: 'finalStatement', label: 'Итоговая формулировка' },
     ],
@@ -254,8 +282,16 @@ export const COMPLEX_FIELD_LABELS: Record<string, string> = {
   // Диагноз: разрывы (gaps)
   theoryBlock: 'Блок теории проекта', expectedState: 'Ожидаемое состояние',
   observedReality: 'Наблюдаемая реальность', confirmingFact: 'Подтверждающий факт',
+  // Диагноз: проверка диагноза (verifications)
+  subject: 'Что проверяем', method: 'Метод проверки',
+  confirmFact: 'Факт, подтверждающий диагноз', refuteFact: 'Факт, опровергающий диагноз',
   // Стратвыбор: способности
   strengthen: 'Как усилить', external: 'Что взять извне',
+  // Стратвыбор: стратегические альтернативы
+  diagnosisFit: 'Как закрывает диагноз', whereToPlay: 'Where to play', howToWin: 'How to win',
+  capabilities: 'Необходимые способности', managementSystems: 'Системы управления',
+  resourceCommitments: 'Ресурсные обязательства', constraints: 'Ограничения',
+  preserveRisk: 'Риск для сохраняемого ядра', whatNotToDo: 'Что нельзя делать',
   // Стратвыбор: trade-off
   refusal: 'От чего отказываемся', releasedResource: 'Высвобождаемый ресурс',
   reducedRisk: 'Снижаемый риск', approver: 'Кто утверждает',
