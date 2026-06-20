@@ -89,6 +89,8 @@ class ProjectChatRequest(BaseModel):
     review: Optional[dict] = None
     # id открытой карточки-фреймворка (фокус): её шлём модели целиком, прочие — сжато.
     focus_card_id: Optional[str] = None
+    # "plan" — фаза планирования (план + уточняющие вопросы, без правок); "fill" — внесение правок.
+    mode: Optional[str] = "fill"
     # «Глубокий разбор»: принудительно сильная модель (без эвристики-роутера).
     deep: bool = False
 

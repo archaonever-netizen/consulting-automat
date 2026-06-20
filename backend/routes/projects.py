@@ -161,6 +161,7 @@ async def review_chat(
             strong_model=strong_model,
             focus_card_id=data.focus_card_id,
             deep=data.deep,
+            mode=data.mode or "fill",
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))

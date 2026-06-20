@@ -88,6 +88,9 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
   const [sending, setSending] = useState(false);
   // «Глубокий разбор»: принудительно сильная модель (Qwen), минуя эвристику-роутер.
   const [deep, setDeep] = useState(false);
+  // «Режим планирования»: модель сперва составляет план и задаёт уточняющие вопросы
+  // (без правок). Внесение правок — отдельной кнопкой «Заполнить по плану».
+  const [planning, setPlanning] = useState(true);
   const [proposalStates, setProposalStates] = useState<Record<string, ProposalState>>({});
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -129,21 +132,30 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     }
   }
 
-  async function send() {
-    const text = input.trim();
+  async function submit(text: string, mode: 'plan' | 'fill') {
     if (!text || sending) return;
     const history = messages;
     setMessages([...history, { role: 'user', content: text }]);
     setInput('');
     setSending(true);
     try {
-      const res = await sendProjectChat(projectId, text, history, buildProjectEditModel(projectId), review, focusCardId, deep);
+      const res = await sendProjectChat(projectId, text, history, buildProjectEditModel(projectId), review, focusCardId, deep, mode);
       setMessages(cur => [...cur, { role: 'assistant', content: res.reply, proposals: res.proposals }]);
     } catch (e) {
       setMessages(cur => [...cur, { role: 'assistant', content: errText(e) }]);
     } finally {
       setSending(false);
     }
+  }
+
+  // Обычная отправка: в режиме планирования — фаза «план/уточнения», иначе сразу правки.
+  function send() {
+    submit(input.trim(), planning ? 'plan' : 'fill');
+  }
+
+  // «Заполнить по плану»: фаза внесения правок с учётом плана и ответов из истории.
+  function fillFromPlan() {
+    submit(input.trim() || 'Заполни карточку по согласованному плану с учётом моих ответов выше.', 'fill');
   }
 
   function applyProposal(key: string, proposal: Proposal) {
@@ -278,16 +290,22 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
           <div ref={chatEndRef} />
         </div>
 
-        <label className="project-chat-deep" title="Принудительно подключить сильную модель для развёрнутого ответа (медленнее и дороже).">
-          <input type="checkbox" checked={deep} onChange={e => setDeep(e.target.checked)} />
-          <span>Глубокий разбор</span>
-        </label>
+        <div className="project-chat-toggles">
+          <label className="project-chat-deep" title="Сначала план и уточняющие вопросы, без правок. Внесение — кнопкой «Заполнить по плану».">
+            <input type="checkbox" checked={planning} onChange={e => setPlanning(e.target.checked)} />
+            <span>Режим планирования</span>
+          </label>
+          <label className="project-chat-deep" title="Принудительно подключить сильную модель для развёрнутого ответа (медленнее и дороже).">
+            <input type="checkbox" checked={deep} onChange={e => setDeep(e.target.checked)} />
+            <span>Глубокий разбор</span>
+          </label>
+        </div>
 
         <div className="project-chat-input">
           <textarea
             className="form-textarea"
             value={input}
-            placeholder="Спросите методолога или попросите правку…"
+            placeholder={planning ? 'Опишите задачу или ответьте на вопросы методолога…' : 'Спросите методолога или попросите правку…'}
             rows={2}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => {
@@ -301,6 +319,12 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
             <Icon name="send" size={16} />
           </button>
         </div>
+
+        {planning && messages.some(m => m.role === 'assistant') && (
+          <button type="button" className="project-chat-fill" onClick={fillFromPlan} disabled={sending}>
+            <Icon name="check" size={15} /> Заполнить по плану
+          </button>
+        )}
       </div>
     </aside>
   );

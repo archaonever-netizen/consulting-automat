@@ -347,6 +347,19 @@ def _sanitize_proposals(raw_proposals) -> list[dict]:
     return out
 
 
+PLAN_INSTRUCTION = (
+    "РЕЖИМ ПЛАНИРОВАНИЯ. НЕ предлагай правки: поле proposals ОБЯЗАТЕЛЬНО оставь пустым ([]). "
+    "Вместо этого в reply:\n"
+    "1) Составь короткий ПЛАН заполнения фокус-карточки — по разделам/спискам и ключевым полям: "
+    "что и в каком объёме заполнишь, сколько элементов добавишь.\n"
+    "2) Задай ВСЕ существенные уточняющие вопросы (нумерованным списком), ответы на которые нужны "
+    "для конкретного и качественного заполнения — не выдумывай факты сам.\n"
+    "Пользователь ответит на вопросы в чате, после чего нажмёт «Заполнить по плану» — и только тогда "
+    "ты внесёшь правки. Если это ответ пользователя на твои вопросы — уточни/дополни план и при "
+    "необходимости задай оставшиеся вопросы. Пиши по-русски, по делу."
+)
+
+
 async def chat_methodolog(
     message: str,
     *,
@@ -357,6 +370,7 @@ async def chat_methodolog(
     strong_model: str = METHODOLOG_MODEL,
     focus_card_id: str | None = None,
     deep: bool = False,
+    mode: str = "fill",
     source_keys: list[str] | None = None,
 ) -> dict:
     """Диалог-уточнение с предложениями правок (без самостоятельного применения).
@@ -371,13 +385,20 @@ async def chat_methodolog(
 
     Возврат: {reply, proposals[], evidence[], intent, model, usage}.
     """
+    planning = mode == "plan"
     intent = classify_intent(message)
     if deep and intent == "light":
         intent = "heavy"
-    model = strong_model if intent in ("heavy", "whole") else fast_model
-    max_tokens = 4000 if intent in ("heavy", "whole") else 1500
-    # whole — нужен весь проект; light/heavy — фокус-карточка целиком, прочие сжато.
-    model_for_prompt = project_model if intent == "whole" else _compact_project_model(project_model, focus_card_id)
+    if planning:
+        # Планирование — всегда сильная модель и развёрнутый ответ; фокус-карточку видим целиком.
+        model = strong_model
+        max_tokens = 4000
+        model_for_prompt = _compact_project_model(project_model, focus_card_id)
+    else:
+        model = strong_model if intent in ("heavy", "whole") else fast_model
+        max_tokens = 4000 if intent in ("heavy", "whole") else 1500
+        # whole — нужен весь проект; light/heavy — фокус-карточка целиком, прочие сжато.
+        model_for_prompt = project_model if intent == "whole" else _compact_project_model(project_model, focus_card_id)
     focused = model_for_prompt is not project_model and focus_card_id and focus_card_id != "whole-project"
 
     hits = await search(message, scope="both", source_keys=source_keys, limit=MAX_EVIDENCE)
@@ -407,7 +428,10 @@ async def chat_methodolog(
     parts.append(
         "НАЙДЕННЫЕ ВЫДЕРЖКИ:\n" + (evidence if hits else "(ничего не найдено)")
     )
-    parts.append("Ответь по схеме. Предлагай правки только как proposals, ничего не применяй сам.")
+    if planning:
+        parts.append(PLAN_INSTRUCTION)
+    else:
+        parts.append("Ответь по схеме. Предлагай правки только как proposals, ничего не применяй сам.")
     user = "\n\n".join(parts)
 
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
@@ -417,12 +441,15 @@ async def chat_methodolog(
         raw = {"reply": "Не удалось получить ответ модели. Попробуйте ещё раз.", "proposals": [],
                "_error": f"{type(e).__name__}: {str(e)[:160]}"}
 
+    # В режиме планирования правки НЕ отдаём, даже если модель их вернула вопреки инструкции.
+    proposals = [] if planning else _sanitize_proposals(raw.get("proposals"))
     return {
         "reply": str(raw.get("reply") or "").strip() or "—",
-        "proposals": _sanitize_proposals(raw.get("proposals")),
+        "proposals": proposals,
         "evidence": _evidence_out(hits),
         "intent": intent,
         "model": model,
+        "mode": mode,
         "raw": raw,
         "usage": usage,
     }

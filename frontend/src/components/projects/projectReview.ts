@@ -109,6 +109,7 @@ export async function sendProjectChat(
   review: ProjectReview | null,
   focusCardId: string | null,
   deep: boolean,
+  mode: 'plan' | 'fill',
 ): Promise<ChatResponse> {
   const { data } = await api.post(`/api/projects/${projectId}/review/chat`, {
     message,
@@ -117,6 +118,7 @@ export async function sendProjectChat(
     review,
     focus_card_id: focusCardId,
     deep,
+    mode,
   }, { timeout: AI_CALL_TIMEOUT_MS });
   return data as ChatResponse;
 }

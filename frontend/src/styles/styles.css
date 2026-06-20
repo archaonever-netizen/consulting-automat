@@ -1324,6 +1324,16 @@ a:hover { color: var(--accent-hover); }
   font-size: 12px; color: var(--text-secondary); cursor: pointer; user-select: none;
 }
 .project-chat-deep input { cursor: pointer; margin: 0; }
+.project-chat-toggles { display: flex; flex-wrap: wrap; gap: 14px; align-self: flex-start; }
+
+.project-chat-fill {
+  margin-top: 8px; align-self: stretch; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 9px 12px; border: 1px solid var(--accent); border-radius: var(--radius-sm);
+  background: var(--accent-weak); color: var(--accent-ink); font: inherit; font-size: 13px; font-weight: 700;
+  cursor: pointer; transition: var(--transition);
+}
+.project-chat-fill:hover:not(:disabled) { background: var(--accent); color: #fff; }
+.project-chat-fill:disabled { opacity: .55; cursor: not-allowed; }
 
 .project-chat-input { display: flex; gap: 8px; align-items: flex-end; }
 .project-chat-input .form-textarea { flex: 1; resize: none; }
