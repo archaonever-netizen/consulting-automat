@@ -132,6 +132,7 @@ export async function sendProjectChat(
   deep: boolean,
   mode: 'plan' | 'fill',
   plan: ProjectPlan | null,
+  quiet = false,
 ): Promise<ChatResponse> {
   const { data } = await api.post(`/api/projects/${projectId}/review/chat`, {
     message,
@@ -142,6 +143,7 @@ export async function sendProjectChat(
     deep,
     mode,
     plan,
+    quiet,
   }, { timeout: AI_CALL_TIMEOUT_MS });
   return data as ChatResponse;
 }

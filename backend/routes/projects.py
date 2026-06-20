@@ -180,11 +180,13 @@ async def review_chat(
     else:
         saved_plan = data.plan
 
-    # История чата = прошлые сообщения + новое сообщение пользователя + ответ методолога.
-    messages = history + [
-        {"role": "user", "content": data.message},
-        {"role": "assistant", "content": result["reply"]},
-    ]
+    # История чата = прошлые сообщения + (сообщение пользователя, если не quiet) + ответ методолога.
+    # quiet — действие кнопки: не сохраняем user-сообщение, чтобы не засорять переписку.
+    new_turns: list[dict] = []
+    if not data.quiet:
+        new_turns.append({"role": "user", "content": data.message})
+    new_turns.append({"role": "assistant", "content": result["reply"]})
+    messages = history + new_turns
     await project_cards.save_chat_messages(
         db, project_id, messages, card_id=data.focus_card_id, plan=saved_plan,
     )

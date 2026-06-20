@@ -4,6 +4,7 @@ import Icon from '../Icon';
 import type { EvidenceRef } from './projectCardValidationCache';
 import { applyProjectEdit } from './projectEditApplier';
 import { buildProjectEditModel } from './projectEditModel';
+import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
 import {
   fetchProjectReview,
   projectHasContent,
@@ -120,9 +121,9 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     return () => { cancelled = true; };
   }, [projectId, focusCardId]);
 
-  useEffect(() => {
+  function scrollToBottom() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [messages, sending]);
+  }
 
   async function runValidation() {
     setReviewError('');
@@ -140,14 +141,17 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     }
   }
 
-  async function submit(text: string, mode: 'plan' | 'fill') {
+  // quiet — действие кнопки: не показываем сообщение пользователя в чате (и не сохраняем его).
+  async function submit(text: string, mode: 'plan' | 'fill', quiet = false) {
     if (!text || sending) return;
     const history = messages;
-    setMessages([...history, { role: 'user', content: text }]);
-    setInput('');
+    if (!quiet) {
+      setMessages([...history, { role: 'user', content: text }]);
+      setInput('');
+    }
     setSending(true);
     try {
-      const res = await sendProjectChat(projectId, text, history, buildProjectEditModel(projectId), review, focusCardId, deep, mode, plan);
+      const res = await sendProjectChat(projectId, text, history, buildProjectEditModel(projectId), review, focusCardId, deep, mode, plan, quiet);
       setMessages(cur => [...cur, { role: 'assistant', content: res.reply, proposals: res.proposals }]);
       if (mode === 'plan') {
         // Обновляем план: новый текст + вопросы; ответы сохраняем для совпадающих вопросов.
@@ -175,17 +179,17 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     return false;
   }
 
-  // Обычная отправка: в режиме планирования — фаза «план/уточнения», иначе сразу правки.
+  // Обычная отправка (печатное сообщение пользователя — показываем в чате).
   // Если план уже есть и сообщение — команда-исполнение, переходим к заполнению.
   function send() {
     const text = input.trim();
     const execute = planning && plan !== null && looksLikeExecute(text);
-    submit(text, execute ? 'fill' : planning ? 'plan' : 'fill');
+    submit(text, execute ? 'fill' : planning ? 'plan' : 'fill', false);
   }
 
-  // «Заполнить по плану»: фаза внесения правок с учётом плана и ответов (план шлётся в submit).
+  // «Заполнить по плану»: внесение правок по плану/ответам. quiet — без сообщения в чате.
   function fillFromPlan() {
-    submit(input.trim() || 'Заполни карточку по согласованному плану с учётом моих ответов.', 'fill');
+    submit('Заполни карточку по согласованному плану с учётом моих ответов.', 'fill', true);
   }
 
   function setAnswer(i: number, val: string) {
@@ -203,7 +207,7 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
       .filter(x => x.a);
     if (pairs.length === 0) return;
     const text = 'Ответы на уточняющие вопросы:\n' + pairs.map(x => `• ${x.q}\n  ${x.a}`).join('\n');
-    submit(text, 'plan');
+    submit(text, 'plan', true);
   }
 
   // «Новый чат»: очистить чат и план текущей карточки (на сервере и локально).
@@ -243,9 +247,18 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     setProposalStates(cur => ({ ...cur, [key]: { status: 'rejected', message: 'Отклонено' } }));
   }
 
+  // Блок проверки всего проекта (интро + кнопка + RAG-разбор) показываем только в чате
+  // карточки «Весь проект» — иначе он занимал весь правый бар над любым чатом.
+  const isWholeProject = focusCardId === 'whole-project';
+  const focusTitle = focusCardId
+    ? (PROJECT_FRAMEWORK_CARDS.find(c => c.id === focusCardId)?.title ?? 'Карточка')
+    : 'Общий чат';
+
   return (
     <aside className="project-side project-right-panel project-methodologist">
       <div className="project-panel-title">ИИ-Методолог проекта</div>
+
+      {isWholeProject && (<>
       <p className="project-methodologist-lead">
         Полный анализ проекта по методологиям с оценкой-светофором. После проверки уточните детали в чате —
         правки вносятся только после вашего подтверждения.
@@ -308,13 +321,19 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
           </>)}
         </div>
       )}
+      </>)}
 
       <div className="project-methodologist-chat">
         <div className="project-chat-head">
-          <span className="project-chat-head-title">Чат по карточке</span>
-          <button type="button" className="project-chat-new" onClick={resetChat} disabled={sending} title="Очистить чат и план этой карточки">
-            <Icon name="plus" size={13} /> Новый чат
-          </button>
+          <span className="project-chat-head-title">{focusTitle}</span>
+          <div className="project-chat-head-actions">
+            <button type="button" className="project-chat-new" onClick={scrollToBottom} title="Прокрутить чат вниз">
+              ↓ Вниз
+            </button>
+            <button type="button" className="project-chat-new" onClick={resetChat} disabled={sending} title="Очистить чат и план этой карточки">
+              <Icon name="plus" size={13} /> Новый чат
+            </button>
+          </div>
         </div>
         <div className="project-chat-messages">
           {messages.length === 0 && (
