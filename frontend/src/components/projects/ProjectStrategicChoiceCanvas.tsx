@@ -207,6 +207,16 @@ function itemLabels(items: Array<{ label: string }>, fallback: string) {
   return items.map(item => item.label).filter(Boolean).length ? items.map(item => item.label) : [fallback];
 }
 
+// Карточка-источник «Теория проекта»: показываем все значения блока, а не только первое.
+// У миссии в items[0].label лежит декоративный заголовок «Формулировка миссии»,
+// поэтому для неё берём expectedState — там реальный текст миссии.
+function theoryBlockSummary(block: { id: ProjectTheoryBlockId; items: Array<{ label: string }>; expectedState: string }) {
+  if (block.id === 'mission') {
+    return block.expectedState || '—';
+  }
+  return block.items.map(item => item.label).filter(Boolean).join(', ') || block.expectedState || '—';
+}
+
 function TextField({
   label,
   value,
@@ -527,7 +537,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
             {[mission, stakeholder, results, competencies, constraints, quality, preserve].map(block => (
               <div className="project-strategy-source-line" key={block.id}>
                 <span>{block.title}</span>
-                <em>{block.items[0]?.label || block.expectedState}</em>
+                <em>{theoryBlockSummary(block)}</em>
               </div>
             ))}
           </div>
