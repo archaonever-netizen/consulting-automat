@@ -27,6 +27,9 @@ import {
   type FormItem,
   type Snapshot,
 } from './projectComplexCards';
+import { mergeItemValues, pickIndex } from './projectEditShared';
+import { THEORY_CARD_ID, applyTheoryEdit, isTheoryCard } from './projectTheoryCards';
+import { OKR_CARD_ID, applyOkrEdit, isOkrCard } from './projectOkrCards';
 import type { Proposal } from './projectReview';
 
 export interface ApplyResult {
@@ -67,24 +70,6 @@ function loadRecords(projectId: number, cardId: string): RecordState[] {
   return Array.isArray(form) ? form.map(r => ({ id: r.id, values: { ...r.values } })) : [];
 }
 
-// Толерантный поиск элемента: модель может прислать точный id, индекс или метку.
-// Совпадение по id → по метке (точно/частично) → единственный элемент.
-function pickIndex<T>(items: T[], rawId: unknown, idOf: (item: T) => string, labelOf: (item: T) => string): number {
-  const raw = (rawId ?? '').toString().trim();
-  if (raw) {
-    let idx = items.findIndex(it => idOf(it) === raw);
-    if (idx !== -1) return idx;
-    const lc = raw.toLowerCase();
-    idx = items.findIndex(it => labelOf(it).trim().toLowerCase() === lc);
-    if (idx !== -1) return idx;
-    if (lc.length >= 3) {
-      idx = items.findIndex(it => labelOf(it).toLowerCase().includes(lc));
-      if (idx !== -1) return idx;
-    }
-  }
-  return items.length === 1 ? 0 : -1;
-}
-
 function applySectionEdit(projectId: number, proposal: Proposal): ApplyResult {
   const { card_id: cardId, op } = proposal;
   const sources = readProjectSources(projectId);
@@ -122,23 +107,6 @@ function applySectionEdit(projectId: number, proposal: Proposal): ApplyResult {
 
 function nextItemId(arr: FormItem[]): number {
   return arr.reduce((m, i) => Math.max(m, Number(i.id) || 0), 0) + 1;
-}
-
-function mergeItemValues(item: FormItem, values: Record<string, unknown> | undefined) {
-  if (!values) return;
-  for (const [k, v] of Object.entries(values)) {
-    if (k === 'id') continue;
-    if (k in item) {
-      item[k] = Array.isArray(item[k])
-        ? String(v).split(/[;,]\s*/).map(s => s.trim()).filter(Boolean)
-        : v == null ? '' : String(v);
-    } else {
-      const lk = k.trim().toLowerCase();
-      if ((lk === 'name' || lk === 'название' || lk === 'название карточки') && 'name' in item) {
-        item.name = v == null ? '' : String(v);
-      }
-    }
-  }
 }
 
 function findList(spec: ComplexCardSpec, name: string | undefined): ComplexListSpec | undefined {
@@ -236,9 +204,11 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
 
 // Модель иногда присылает в card_id название карточки вместо её id — сопоставляем.
 function resolveCardId(projectId: number, raw: string): string {
-  if (GENERIC_SECTION_IDS.includes(raw) || isComplexCard(raw)) return raw;
+  if (GENERIC_SECTION_IDS.includes(raw) || isComplexCard(raw) || isTheoryCard(raw) || isOkrCard(raw)) return raw;
   const lc = (raw || '').trim().toLowerCase();
   if (!lc) return raw;
+  if (lc === 'теория проекта') return THEORY_CARD_ID;
+  if (lc === 'okr / kpi' || lc === 'okr/kpi' || lc === 'okr') return OKR_CARD_ID;
   for (const id of Object.keys(COMPLEX_CARDS)) {
     if (COMPLEX_CARDS[id].title.toLowerCase() === lc) return id;
   }
@@ -258,5 +228,7 @@ export function applyProjectEdit(projectId: number, proposal: Proposal): ApplyRe
   const resolved = cardId === proposal.card_id ? proposal : { ...proposal, card_id: cardId };
   if (GENERIC_SECTION_IDS.includes(cardId)) return applySectionEdit(projectId, resolved);
   if (isComplexCard(cardId)) return applyComplexEdit(projectId, COMPLEX_CARDS[cardId], resolved);
+  if (isTheoryCard(cardId)) return applyTheoryEdit(projectId, resolved);
+  if (isOkrCard(cardId)) return applyOkrEdit(projectId, resolved);
   return fail(`Эту карточку («${proposal.card_id}») пока нельзя править автоматически — внесите изменение вручную.`);
 }

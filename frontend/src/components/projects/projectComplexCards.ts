@@ -11,6 +11,13 @@ import {
   createDiagnosis,
   createFact,
   createSymptom,
+  alternativeStatusOptions as diagAlternativeStatusOptions,
+  dataSourceOptions as diagDataSourceOptions,
+  obstacleTypeOptions,
+  relationStatusOptions,
+  reliabilityOptions,
+  requestTypeOptions,
+  scaleOptions,
 } from './ProjectDiagnosisCanvas';
 import {
   createAction,
@@ -18,6 +25,7 @@ import {
   createChoice,
   createHypothesis,
   createTradeOff,
+  winTypeOptions,
 } from './ProjectStrategicChoiceCanvas';
 import {
   createCapabilityTarget,
@@ -30,6 +38,14 @@ import {
   createStakeholderValue,
   createTargetResult,
   createTargetState,
+  dataSourceOptions as targetDataSourceOptions,
+  managementSystemOptions,
+  perspectiveOptions,
+  processMetricOptions,
+  targetTypeOptions,
+  unitOptions as targetUnitOptions,
+  valueTypeOptions,
+  yesNoOptions,
 } from './ProjectTargetStateCanvas';
 import {
   getFallbackProjectDiagnosisSnapshot,
@@ -54,6 +70,7 @@ export interface ComplexScalarField {
   key: string;        // ключ в скалярном контейнере form
   label: string;      // подпись для пользователя/модели
   projKey?: string;   // ключ в проекции, если отличается от key
+  options?: string[]; // опции выпадающего списка — чтобы модель выбирала валидное значение
 }
 
 export interface ComplexListSpec {
@@ -62,6 +79,7 @@ export interface ComplexListSpec {
   title: string;      // человекочитаемое имя списка
   labelKeys: string[]; // поля-кандидаты для метки элемента
   createItem: ((id: number) => FormItem) | null; // null → добавление не поддержано
+  fieldOptions?: Record<string, string[]>; // ключ поля элемента → опции выпадающего списка
 }
 
 export interface ComplexCardSpec {
@@ -89,22 +107,22 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
     createScalar: () => createDiagnosis() as unknown as Record<string, unknown>,
     scalarFields: [
       { key: 'rawRequest', label: 'Сырой запрос клиента' },
-      { key: 'requestType', label: 'Тип запроса' },
+      { key: 'requestType', label: 'Тип запроса', options: requestTypeOptions },
       { key: 'requestContext', label: 'Контекст запроса' },
       { key: 'keyChallenge', label: 'Ключевой вызов' },
-      { key: 'obstacleType', label: 'Тип ключевого препятствия' },
+      { key: 'obstacleType', label: 'Тип ключевого препятствия', options: obstacleTypeOptions },
       { key: 'limitingFactor', label: 'Ограничивающий фактор' },
-      { key: 'scale', label: 'Масштаб' },
+      { key: 'scale', label: 'Масштаб', options: scaleOptions },
       { key: 'strategicConclusion', label: 'Вывод для стратегического выбора' },
       { key: 'exclusions', label: 'Что исключает диагноз' },
       { key: 'finalStatement', label: 'Итоговая формулировка' },
     ],
     lists: [
-      { projKey: 'symptoms', formKey: 'symptoms', title: 'Симптом', labelKeys: ['description'], createItem: cast<FormItem>(createSymptom) },
-      { projKey: 'facts', formKey: 'facts', title: 'Факт', labelKeys: ['indicator'], createItem: cast<FormItem>(createFact) },
-      { projKey: 'alternatives', formKey: 'alternatives', title: 'Альтернативное объяснение', labelKeys: ['reason'], createItem: cast<FormItem>(createAlternative) },
-      { projKey: 'consequences', formKey: 'consequences', title: 'Последствие', labelKeys: ['deterioration'], createItem: cast<FormItem>(createConsequence) },
-      { projKey: 'gaps', formKey: 'gaps', title: 'Разрыв теории и реальности', labelKeys: ['gap', 'observedReality'], createItem: null },
+      { projKey: 'symptoms', formKey: 'symptoms', title: 'Симптом', labelKeys: ['description'], createItem: cast<FormItem>(createSymptom), fieldOptions: { dataSource: diagDataSourceOptions } },
+      { projKey: 'facts', formKey: 'facts', title: 'Факт', labelKeys: ['indicator'], createItem: cast<FormItem>(createFact), fieldOptions: { dataSource: diagDataSourceOptions, reliability: reliabilityOptions } },
+      { projKey: 'alternatives', formKey: 'alternatives', title: 'Альтернативное объяснение', labelKeys: ['reason'], createItem: cast<FormItem>(createAlternative), fieldOptions: { status: diagAlternativeStatusOptions } },
+      { projKey: 'consequences', formKey: 'consequences', title: 'Последствие', labelKeys: ['deterioration'], createItem: cast<FormItem>(createConsequence), fieldOptions: { source: diagDataSourceOptions } },
+      { projKey: 'gaps', formKey: 'gaps', title: 'Разрыв теории и реальности', labelKeys: ['gap', 'observedReality'], createItem: null, fieldOptions: { status: relationStatusOptions } },
     ],
   },
 
@@ -119,7 +137,7 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
     scalarFields: [
       { key: 'strategicQuestion', label: 'Стратегический вопрос' },
       { key: 'winningAspiration', label: 'Winning aspiration' },
-      { key: 'winType', label: 'Тип победы' },
+      { key: 'winType', label: 'Тип победы', options: winTypeOptions },
       { key: 'whereClient', label: 'Where: клиент' },
       { key: 'whereGeography', label: 'Where: география' },
       { key: 'whereProduct', label: 'Where: продукт' },
@@ -153,20 +171,20 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
     createScalar: () => createTargetState() as unknown as Record<string, unknown>,
     scalarFields: [
       { key: 'statement', label: 'Формулировка целевого состояния' },
-      { key: 'type', label: 'Тип' },
+      { key: 'type', label: 'Тип', options: targetTypeOptions },
       { key: 'objective', label: 'Objective' },
       { key: 'finalStatement', label: 'Итоговая формулировка' },
     ],
     lists: [
-      { projKey: 'results', formKey: 'targetResults', title: 'Результат', labelKeys: ['name', 'criterion', 'metric'], createItem: cast<FormItem>(createTargetResult) },
-      { projKey: 'stakeholderValues', formKey: 'stakeholderValues', title: 'Ценность для стейкхолдера', labelKeys: ['name', 'stakeholder'], createItem: cast<FormItem>(createStakeholderValue) },
-      { projKey: 'operatingModels', formKey: 'operatingModels', title: 'Операционная модель', labelKeys: ['name', 'process'], createItem: cast<FormItem>(createOperatingModel) },
+      { projKey: 'results', formKey: 'targetResults', title: 'Результат', labelKeys: ['name', 'criterion', 'metric'], createItem: cast<FormItem>(createTargetResult), fieldOptions: { perspective: perspectiveOptions, unit: targetUnitOptions, controlSource: targetDataSourceOptions } },
+      { projKey: 'stakeholderValues', formKey: 'stakeholderValues', title: 'Ценность для стейкхолдера', labelKeys: ['name', 'stakeholder'], createItem: cast<FormItem>(createStakeholderValue), fieldOptions: { valueType: valueTypeOptions } },
+      { projKey: 'operatingModels', formKey: 'operatingModels', title: 'Операционная модель', labelKeys: ['name', 'process'], createItem: cast<FormItem>(createOperatingModel), fieldOptions: { metric: processMetricOptions, controlSource: targetDataSourceOptions } },
       { projKey: 'capabilities', formKey: 'capabilityTargets', title: 'Способность', labelKeys: ['name', 'competency'], createItem: cast<FormItem>(createCapabilityTarget) },
-      { projKey: 'managementSystems', formKey: 'managementTargets', title: 'Система управления', labelKeys: ['name', 'systemType'], createItem: cast<FormItem>(createManagementSystemTarget) },
-      { projKey: 'qualityTargets', formKey: 'qualityTargets', title: 'Цель по качеству', labelKeys: ['name', 'qualityIndicator'], createItem: cast<FormItem>(createQualityTarget) },
+      { projKey: 'managementSystems', formKey: 'managementTargets', title: 'Система управления', labelKeys: ['name', 'systemType'], createItem: cast<FormItem>(createManagementSystemTarget), fieldOptions: { systemType: managementSystemOptions, dataSource: targetDataSourceOptions } },
+      { projKey: 'qualityTargets', formKey: 'qualityTargets', title: 'Цель по качеству', labelKeys: ['name', 'qualityIndicator'], createItem: cast<FormItem>(createQualityTarget), fieldOptions: { controlSource: targetDataSourceOptions } },
       { projKey: 'preserveTargets', formKey: 'preserveTargets', title: 'Что сохраняем', labelKeys: ['name', 'preserveElement'], createItem: cast<FormItem>(createPreserveTarget) },
-      { projKey: 'constraints', formKey: 'constraintTargets', title: 'Ограничение', labelKeys: ['name', 'constraint'], createItem: cast<FormItem>(createConstraintTarget) },
-      { projKey: 'keyResults', formKey: 'keyResults', title: 'Key result', labelKeys: ['name', 'statement'], createItem: cast<FormItem>(createKeyResult) },
+      { projKey: 'constraints', formKey: 'constraintTargets', title: 'Ограничение', labelKeys: ['name', 'constraint'], createItem: cast<FormItem>(createConstraintTarget), fieldOptions: { controlSource: targetDataSourceOptions } },
+      { projKey: 'keyResults', formKey: 'keyResults', title: 'Key result', labelKeys: ['name', 'statement'], createItem: cast<FormItem>(createKeyResult), fieldOptions: { controlSource: targetDataSourceOptions, indisputable: yesNoOptions } },
     ],
   },
 };
@@ -268,10 +286,11 @@ export const COMPLEX_FIELD_LABELS: Record<string, string> = {
   statement: 'Формулировка', indisputable: 'Бесспорный признак достижения',
 };
 
-export interface ComplexFieldSchema { key: string; label: string }
+export interface ComplexFieldSchema { key: string; label: string; options?: string[] }
 
 /** Полная схема полей элемента списка: ключи берём из фабрики createItem (или из union
- * ключей существующих элементов, если фабрики нет), метки — из COMPLEX_FIELD_LABELS.
+ * ключей существующих элементов, если фабрики нет), метки — из COMPLEX_FIELD_LABELS,
+ * опции выпадающих списков — из listSpec.fieldOptions (чтобы модель выбирала валидное значение).
  * Нужна модели Методолога, чтобы заполнять элемент ЦЕЛИКОМ, а не только видимые поля. */
 export function listItemFields(listSpec: ComplexListSpec, items: FormItem[]): ComplexFieldSchema[] {
   let keys: string[];
@@ -282,5 +301,8 @@ export function listItemFields(listSpec: ComplexListSpec, items: FormItem[]): Co
     for (const it of items) for (const k of Object.keys(it)) if (k !== 'id') set.add(k);
     keys = [...set];
   }
-  return keys.map(key => ({ key, label: COMPLEX_FIELD_LABELS[key] ?? key }));
+  return keys.map(key => {
+    const options = listSpec.fieldOptions?.[key];
+    return { key, label: COMPLEX_FIELD_LABELS[key] ?? key, ...(options ? { options } : {}) };
+  });
 }

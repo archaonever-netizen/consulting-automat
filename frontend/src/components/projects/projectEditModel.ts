@@ -21,6 +21,8 @@ import {
   listItemFields,
   type FormItem,
 } from './projectComplexCards';
+import { THEORY_CARD_ID, buildTheoryEditable, isTheoryCard } from './projectTheoryCards';
+import { OKR_CARD_ID, buildOkrEditable, isOkrCard } from './projectOkrCards';
 
 export interface EditableFieldSchema {
   key: string;
@@ -45,6 +47,7 @@ export interface EditableScalarField {
   key: string;
   label: string;
   value: string;
+  options?: string[];
 }
 
 export interface EditableCard {
@@ -103,6 +106,7 @@ function buildComplexEditable(projectId: number, cardId: string): EditableCard {
     key: f.key,
     label: f.label,
     value: typeof container[f.key] === 'string' ? (container[f.key] as string) : '',
+    ...(f.options ? { options: f.options } : {}),
   }));
 
   const lists: EditableList[] = spec.lists.map(listSpec => {
@@ -125,10 +129,12 @@ export function buildProjectEditModel(projectId: number): ProjectEditModel {
   const editable_cards: EditableCard[] = [
     ...GENERIC_SECTION_IDS.map(id => buildSectionEditable(projectId, id)),
     ...COMPLEX_CARD_IDS.map(id => buildComplexEditable(projectId, id)),
+    buildTheoryEditable(projectId),
+    buildOkrEditable(projectId),
   ];
 
-  // Теория проекта и OKR пока не правятся автоматически — даём их как контекст для анализа.
-  const editableIds = new Set([...GENERIC_SECTION_IDS, ...COMPLEX_CARD_IDS]);
+  // Все каркасные карточки теперь редактируемы; в context_cards остаётся только то, что не editable.
+  const editableIds = new Set([...GENERIC_SECTION_IDS, ...COMPLEX_CARD_IDS, THEORY_CARD_ID, OKR_CARD_ID]);
   const context_cards: ContextCard[] = PROJECT_FRAMEWORK_CARDS
     .map(c => c.id)
     .filter(id => id !== 'whole-project' && !editableIds.has(id))
@@ -140,7 +146,7 @@ export function buildProjectEditModel(projectId: number): ProjectEditModel {
 
 /** id карточек, для которых применитель умеет вносить правки. */
 export function isEditableCard(cardId: string): boolean {
-  return GENERIC_SECTION_IDS.includes(cardId) || isComplexCard(cardId);
+  return GENERIC_SECTION_IDS.includes(cardId) || isComplexCard(cardId) || isTheoryCard(cardId) || isOkrCard(cardId);
 }
 
 // re-export для применителя/тестов

@@ -881,3 +881,9 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
     </div>
   );
 }
+
+// Опции выпадающих списков — для видимости ИИ-Методологу (projectComplexCards → buildComplexEditable).
+export {
+  targetTypeOptions, perspectiveOptions, valueTypeOptions, processMetricOptions,
+  managementSystemOptions, dataSourceOptions, unitOptions, yesNoOptions,
+};

@@ -375,3 +375,12 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
     </div>
   );
 }
+
+// === Экспорт строительных блоков для применителя правок Методолога (projectOkrCards.ts) ===
+// Канвас — единственный источник истины по фабрикам, опциям и сборке снапшота-проекции
+// (buildOkrSnapshot); адаптер переиспользует их, чтобы патчи совпадали с живым редактированием.
+export {
+  createObjective, createKeyResult, createKpi, buildOkrSnapshot,
+  objectiveSourceOptions, levelOptions, periodOptions, krStatusOptions, commonDataSources,
+};
+export type { ObjectiveCard, KeyResultRow, KpiRow };

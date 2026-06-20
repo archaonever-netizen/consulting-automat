@@ -772,3 +772,6 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
     </div>
   );
 }
+
+// Опции выпадающих списков — для видимости ИИ-Методологу (projectComplexCards → buildComplexEditable).
+export { winTypeOptions };

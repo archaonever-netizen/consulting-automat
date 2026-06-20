@@ -5,6 +5,7 @@ import { readProjectFrameworkSectionSnapshot, type ProjectFrameworkSectionSnapsh
 import { readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { readProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
+import { readProjectTheorySnapshot } from './projectTheorySnapshot';
 import type { RecordState } from './ProjectFrameworkSectionCanvas';
 import type { Proposal } from './projectReview';
 
@@ -100,10 +101,123 @@ describe('applyProjectEdit (section cards)', () => {
     expect(res.ok).toBe(false);
   });
 
-  it('refuses to edit theory / okr (not yet supported)', () => {
-    expect(applyProjectEdit(PROJECT_ID, { id: 'p', op: 'update_field', card_id: 'project-theory', field: 'x', value: 'y', human: 'fix' }).ok).toBe(false);
-    expect(isEditableCard('project-theory')).toBe(false);
-    expect(isEditableCard('okr-kpi')).toBe(false);
+  it('theory and okr are editable; unknown cards are not', () => {
+    expect(isEditableCard('project-theory')).toBe(true);
+    expect(isEditableCard('okr-kpi')).toBe(true);
+    expect(isEditableCard('whole-project')).toBe(false);
+    expect(applyProjectEdit(PROJECT_ID, { id: 'p', op: 'add_item', card_id: 'whole-project', human: 'x' }).ok).toBe(false);
+  });
+});
+
+describe('applyProjectEdit (theory project)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('mission: update_field patches form.mission and rebuilds blocks', () => {
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_field', card_id: 'project-theory', field: 'problem', value: 'Очереди на приёмке', human: 'fix',
+    });
+    expect(res.ok).toBe(true);
+    const snap = readProjectTheorySnapshot(PROJECT_ID)!;
+    expect((snap.form as { mission: { problem: string } }).mission.problem).toBe('Очереди на приёмке');
+    expect(snap.blocks.some(b => b.id === 'mission')).toBe(true);
+  });
+
+  it('rejects an unknown mission field', () => {
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_field', card_id: 'project-theory', field: 'nonexistent', value: 'x', human: 'fix',
+    });
+    expect(res.ok).toBe(false);
+  });
+
+  it('list: add_item to results patches form.criteria and projection', () => {
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'add_item', card_id: 'project-theory', list: 'results', human: 'add',
+      values: { statement: 'Рост NPS' },
+    });
+    expect(res.ok).toBe(true);
+    const snap = readProjectTheorySnapshot(PROJECT_ID)!;
+    const form = snap.form as { criteria: Array<{ statement: string }> };
+    expect(form.criteria.some(c => c.statement === 'Рост NPS')).toBe(true);
+    const results = snap.blocks.find(b => b.id === 'results')!;
+    expect(results.items.some(i => i.label === 'Рост NPS')).toBe(true);
+  });
+
+  it('resolves a cross-reference field from a label to the target id', () => {
+    applyProjectEdit(PROJECT_ID, {
+      id: 'a', op: 'add_item', card_id: 'project-theory', list: 'results', human: 'add', values: { statement: 'Рост NPS' },
+    });
+    const before = readProjectTheorySnapshot(PROJECT_ID)!.form as { criteria: Array<{ id: number; statement: string }> };
+    const criterionId = String(before.criteria.find(c => c.statement === 'Рост NPS')!.id);
+
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'b', op: 'update_item', card_id: 'project-theory', list: 'stakeholder', item_id: '1', human: 'link',
+      values: { resultCriterion: 'Рост NPS' },
+    });
+    expect(res.ok).toBe(true);
+    const form = readProjectTheorySnapshot(PROJECT_ID)!.form as { stakeholders: Array<{ id: number; resultCriterion: string }> };
+    expect(form.stakeholders.find(s => s.id === 1)!.resultCriterion).toBe(criterionId);
+  });
+});
+
+type OkrObjective = { id: number; objective: string; keyResults: Array<{ id: number; metric: string }>; kpis: Array<{ id: number; indicator: string }> };
+
+function okrObjectives(): OkrObjective[] {
+  return (readProjectFrameworkSectionSnapshot(PROJECT_ID, 'okr-kpi')?.form as OkrObjective[] | undefined) ?? [];
+}
+
+describe('applyProjectEdit (okr / kpi)', () => {
+  beforeEach(() => {
+    window.localStorage.clear();
+  });
+
+  it('objectives: update_item patches the objective scalar', () => {
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_item', card_id: 'okr-kpi', list: 'objectives', item_id: '1', human: 'fix',
+      values: { objective: 'Стать №1 по NPS', owner: 'CPO' },
+    });
+    expect(res.ok).toBe(true);
+    const obj = okrObjectives().find(o => o.id === 1)!;
+    expect(obj.objective).toBe('Стать №1 по NPS');
+  });
+
+  it('keyResults: add_item nests a KR into the sole objective', () => {
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'add_item', card_id: 'okr-kpi', list: 'keyResults', human: 'add kr',
+      values: { name: 'NPS 70', metric: 'NPS', target: '70' },
+    });
+    expect(res.ok).toBe(true);
+    const objective = okrObjectives()[0];
+    expect(objective.keyResults.some(kr => kr.metric === 'NPS')).toBe(true);
+  });
+
+  it('keyResults: update by composite id objId:krId', () => {
+    applyProjectEdit(PROJECT_ID, {
+      id: 'a', op: 'add_item', card_id: 'okr-kpi', list: 'keyResults', human: 'add', values: { name: 'KR', metric: 'NPS' },
+    });
+    const objective = okrObjectives()[0];
+    const kr = objective.keyResults.find(k => k.metric === 'NPS')!;
+    const compositeId = `${objective.id}:${kr.id}`;
+
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'b', op: 'update_item', card_id: 'okr-kpi', list: 'keyResults', item_id: compositeId, human: 'fix',
+      values: { target: '75' },
+    });
+    expect(res.ok).toBe(true);
+    const updated = okrObjectives()[0].keyResults.find(k => String(k.id) === String(kr.id))! as { id: number; metric: string; target: string };
+    expect(updated.target).toBe('75');
+  });
+
+  it('exposes okr as editable with three lists (objectives/keyResults/kpis)', () => {
+    const model = buildProjectEditModel(PROJECT_ID);
+    const okr = model.editable_cards.find(c => c.card_id === 'okr-kpi')!;
+    expect(okr).toBeTruthy();
+    expect(okr.lists.map(l => l.list).sort()).toEqual(['keyResults', 'kpis', 'objectives']);
+    // KR-список несёт селектор родителя и опции статуса.
+    const kr = okr.lists.find(l => l.list === 'keyResults')!;
+    expect(kr.item_fields?.some(f => f.key === 'objectiveRef')).toBe(true);
+    expect(kr.item_fields?.find(f => f.key === 'status')?.options?.length).toBeTruthy();
   });
 });
 
@@ -209,8 +323,22 @@ describe('applyProjectEdit (complex cards)', () => {
     expect(diag).toBeTruthy();
     expect(diag!.fields?.some(f => f.key === 'keyChallenge')).toBe(true);
     expect(diag!.lists.some(l => l.list === 'symptoms')).toBe(true);
-    // Теория остаётся контекстом (если заполнена).
-    expect(model.editable_cards.some(c => c.card_id === 'project-theory')).toBe(false);
+    // Теория теперь редактируема — присутствует среди editable_cards.
+    expect(model.editable_cards.some(c => c.card_id === 'project-theory')).toBe(true);
+  });
+
+  it('exposes dropdown options to the model (theory + complex cards)', () => {
+    const model = buildProjectEditModel(PROJECT_ID);
+
+    const theory = model.editable_cards.find(c => c.card_id === 'project-theory')!;
+    expect(theory.lists.some(l => l.list === 'results')).toBe(true);
+    const stakeholderList = theory.lists.find(l => l.list === 'stakeholder')!;
+    expect(stakeholderList.item_fields?.find(f => f.key === 'role')?.options?.length).toBeTruthy();
+
+    const diag = model.editable_cards.find(c => c.card_id === 'diagnosis')!;
+    expect(diag.fields?.find(f => f.key === 'requestType')?.options?.length).toBeTruthy();
+    const symptoms = diag.lists.find(l => l.list === 'symptoms')!;
+    expect(symptoms.item_fields?.find(f => f.key === 'dataSource')?.options?.length).toBeTruthy();
   });
 });
 

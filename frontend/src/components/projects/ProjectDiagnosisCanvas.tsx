@@ -769,3 +769,9 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
     </div>
   );
 }
+
+// Опции выпадающих списков — для видимости ИИ-Методологу (projectComplexCards → buildComplexEditable).
+export {
+  requestTypeOptions, obstacleTypeOptions, scaleOptions,
+  dataSourceOptions, reliabilityOptions, alternativeStatusOptions, relationStatusOptions,
+};

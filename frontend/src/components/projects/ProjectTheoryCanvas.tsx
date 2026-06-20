@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
-import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot, writeProjectTheorySnapshot, type ProjectTheorySnapshotItem } from './projectTheorySnapshot';
+import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot, writeProjectTheorySnapshot, type ProjectTheoryBlockSnapshot, type ProjectTheorySnapshotItem } from './projectTheorySnapshot';
 
 type ResultCriterion = {
   id: number;
@@ -2134,6 +2134,95 @@ type TheoryForm = {
   nextPreserveElementId: number;
 };
 
+// Чистая пересборка проекции «блоков» теории из lossless-form. Одна точка истины: её зовут
+// и автосохранение канваса, и применитель правок Методолога (projectTheoryCards) — поэтому
+// проекция, которую читает валидатор, всегда совпадает с тем, что пересоберёт канвас на монтаже.
+function buildTheorySnapshotBlocks(form: TheoryForm): ProjectTheoryBlockSnapshot[] {
+  const { mission, stakeholders, criteria, competencies, constraints, qualityIndicators, preserveElements } = form;
+
+  const resultNames = criteria.map((criterion, index) => criterion.statement.trim() || `Критерий результата ${index + 1}`);
+  const stakeholderNames = stakeholders.map((stakeholder, index) => stakeholder.details.trim() || stakeholder.role.trim() || `Стейкхолдер ${index + 1}`);
+  const constraintNames = getConstraintNames(constraints);
+  const competencyNames = competencies.map((competency, index) => competency.name.trim() || `Компетенция ${index + 1}`);
+  const preserveElementNames = preserveElements.map((element, index) => element.details.trim() || element.type.trim() || `Сохраняемый элемент ${index + 1}`);
+
+  const stakeholderOptions: RefOption[] = stakeholders.map((stakeholder, index) => ({ value: String(stakeholder.id), label: stakeholderNames[index] }));
+  const competencyOptions: RefOption[] = competencies.map((competency, index) => ({ value: String(competency.id), label: competencyNames[index] }));
+  const resultOptions: RefOption[] = criteria.map((criterion, index) => ({ value: String(criterion.id), label: resultNames[index] }));
+  const preserveOptions: RefOption[] = preserveElements.map((element, index) => ({ value: String(element.id), label: preserveElementNames[index] }));
+  const constraintOptions: RefOption[] = constraints.map((constraint, index) => ({ value: String(constraint.id), label: constraintNames[index] }));
+  const missionProtectionOptions: RefOption[] = [
+    ...preserveOptions.map(option => ({ value: `pe:${option.value}`, label: option.label })),
+    ...constraintOptions.map(option => ({ value: `c:${option.value}`, label: option.label })),
+  ];
+  const missionRefs: MissionRefs = { stakeholders: stakeholderOptions, competencies: competencyOptions, protections: missionProtectionOptions };
+
+  const blockById = Object.fromEntries(PROJECT_THEORY_BLOCKS.map(block => [block.id, block]));
+  const missionSummary = summarizeMission(mission, missionRefs);
+  const stakeholderItems = stakeholders.map((stakeholder, index) => {
+    const label = stakeholderNames[index];
+    return createSnapshotItem(String(stakeholder.id), label, summarizeStakeholder(stakeholder, label, refLabel(resultOptions, stakeholder.resultCriterion)));
+  });
+  const resultItems = criteria.map((criterion, index) => {
+    const label = resultNames[index];
+    return createSnapshotItem(String(criterion.id), label, summarizeCriterion(criterion, label));
+  });
+  const competencyItems = competencies.map((competency, index) => {
+    const label = competencyNames[index];
+    return createSnapshotItem(String(competency.id), label, summarizeCompetency(competency, label, refLabel(resultOptions, competency.resultCriterion)));
+  });
+  const constraintItems = constraints.map((constraint, index) => {
+    const label = constraintNames[index];
+    return createSnapshotItem(String(constraint.id), label, summarizeConstraint(constraint, label, refLabel(resultOptions, constraint.resultCriterion)));
+  });
+  const qualityItems = qualityIndicators.map((indicator, index) => {
+    const label = indicator.requirement.trim() || indicator.metric.trim() || indicator.object.trim() || `Показатель качества ${index + 1}`;
+    return createSnapshotItem(String(indicator.id), label, summarizeQuality(indicator, label));
+  });
+  const preserveItems = preserveElements.map((element, index) => {
+    const label = preserveElementNames[index];
+    return createSnapshotItem(String(element.id), label, summarizePreserveElement(element, label));
+  });
+
+  return [
+    {
+      ...blockById.mission,
+      expectedState: missionSummary || blockById.mission.fallbackExpectedState,
+      items: [createSnapshotItem('mission', 'Формулировка миссии', missionSummary || blockById.mission.fallbackExpectedState)],
+    },
+    {
+      ...blockById.stakeholder,
+      expectedState: stakeholderItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.stakeholder.fallbackExpectedState,
+      items: stakeholderItems,
+    },
+    {
+      ...blockById.results,
+      expectedState: resultItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.results.fallbackExpectedState,
+      items: resultItems,
+    },
+    {
+      ...blockById.competencies,
+      expectedState: competencyItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.competencies.fallbackExpectedState,
+      items: competencyItems,
+    },
+    {
+      ...blockById.constraints,
+      expectedState: constraintItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.constraints.fallbackExpectedState,
+      items: constraintItems,
+    },
+    {
+      ...blockById.quality,
+      expectedState: qualityItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.quality.fallbackExpectedState,
+      items: qualityItems,
+    },
+    {
+      ...blockById.preserve,
+      expectedState: preserveItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.preserve.fallbackExpectedState,
+      items: preserveItems,
+    },
+  ];
+}
+
 interface ProjectTheoryCanvasProps {
   projectId: number;
 }
@@ -2275,102 +2364,33 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
 
   useEffect(() => {
     const timer = setTimeout(() => {
-    const blockById = Object.fromEntries(PROJECT_THEORY_BLOCKS.map(block => [block.id, block]));
-    const missionSummary = summarizeMission(mission, missionRefs);
-    const stakeholderItems = stakeholders.map((stakeholder, index) => {
-      const label = stakeholderNames[index];
-      return createSnapshotItem(String(stakeholder.id), label, summarizeStakeholder(stakeholder, label, refLabel(resultOptions, stakeholder.resultCriterion)));
-    });
-    const resultItems = criteria.map((criterion, index) => {
-      const label = resultNames[index];
-      return createSnapshotItem(String(criterion.id), label, summarizeCriterion(criterion, label));
-    });
-    const competencyItems = competencies.map((competency, index) => {
-      const label = competencyNames[index];
-      return createSnapshotItem(String(competency.id), label, summarizeCompetency(competency, label, refLabel(resultOptions, competency.resultCriterion)));
-    });
-    const constraintItems = constraints.map((constraint, index) => {
-      const label = constraintNames[index];
-      return createSnapshotItem(String(constraint.id), label, summarizeConstraint(constraint, label, refLabel(resultOptions, constraint.resultCriterion)));
-    });
-    const qualityItems = qualityIndicators.map((indicator, index) => {
-      const label = indicator.requirement.trim() || indicator.metric.trim() || indicator.object.trim() || `Показатель качества ${index + 1}`;
-      return createSnapshotItem(String(indicator.id), label, summarizeQuality(indicator, label));
-    });
-    const preserveItems = preserveElements.map((element, index) => {
-      const label = preserveElementNames[index];
-      return createSnapshotItem(String(element.id), label, summarizePreserveElement(element, label));
-    });
-
-    writeProjectTheorySnapshot(projectId, {
-      projectId,
-      updatedAt: new Date().toISOString(),
-      blocks: [
-        {
-          ...blockById.mission,
-          expectedState: missionSummary || blockById.mission.fallbackExpectedState,
-          items: [createSnapshotItem('mission', 'Формулировка миссии', missionSummary || blockById.mission.fallbackExpectedState)],
-        },
-        {
-          ...blockById.stakeholder,
-          expectedState: stakeholderItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.stakeholder.fallbackExpectedState,
-          items: stakeholderItems,
-        },
-        {
-          ...blockById.results,
-          expectedState: resultItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.results.fallbackExpectedState,
-          items: resultItems,
-        },
-        {
-          ...blockById.competencies,
-          expectedState: competencyItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.competencies.fallbackExpectedState,
-          items: competencyItems,
-        },
-        {
-          ...blockById.constraints,
-          expectedState: constraintItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.constraints.fallbackExpectedState,
-          items: constraintItems,
-        },
-        {
-          ...blockById.quality,
-          expectedState: qualityItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.quality.fallbackExpectedState,
-          items: qualityItems,
-        },
-        {
-          ...blockById.preserve,
-          expectedState: preserveItems.map(item => item.summary).filter(Boolean).join('\n') || blockById.preserve.fallbackExpectedState,
-          items: preserveItems,
-        },
-      ],
-      form: {
+      const form: TheoryForm = {
         mission, stakeholders, nextStakeholderId, criteria, nextCriterionId, competencies, nextCompetencyId,
         constraints, nextConstraintId, qualityIndicators, nextQualityIndicatorId, preserveElements, nextPreserveElementId,
-      } satisfies TheoryForm,
-    });
+      };
+      writeProjectTheorySnapshot(projectId, {
+        projectId,
+        updatedAt: new Date().toISOString(),
+        blocks: buildTheorySnapshotBlocks(form),
+        form,
+      });
     }, 400);
     return () => clearTimeout(timer);
   }, [
-    competencies,
-    competencyNames,
-    constraints,
-    constraintNames,
-    criteria,
     mission,
-    nextCompetencyId,
-    nextConstraintId,
-    nextCriterionId,
-    nextPreserveElementId,
-    nextQualityIndicatorId,
-    nextStakeholderId,
-    missionRefs,
-    resultOptions,
-    preserveElementNames,
-    preserveElements,
-    projectId,
-    qualityIndicators,
-    resultNames,
-    stakeholderNames,
     stakeholders,
+    nextStakeholderId,
+    criteria,
+    nextCriterionId,
+    competencies,
+    nextCompetencyId,
+    constraints,
+    nextConstraintId,
+    qualityIndicators,
+    nextQualityIndicatorId,
+    preserveElements,
+    nextPreserveElementId,
+    projectId,
   ]);
 
   function addStakeholder() {
@@ -4109,3 +4129,47 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
     </div>
   );
 }
+
+// === Экспорт строительных блоков для применителя правок Методолога (projectTheoryCards.ts) ===
+// Канвас остаётся единственным источником истины по фабрикам, опциям и сборке проекции;
+// адаптер лишь переиспользует их, чтобы патчи form/blocks совпадали с живым редактированием.
+export {
+  // фабрики элементов
+  createMissionCard, createStakeholderCard, createCriterion, createCompetencyCard,
+  createConstraintCard, createQualityIndicatorCard, createPreserveElementCard,
+  // сборка проекции + хелперы ссылок/меток
+  buildTheorySnapshotBlocks, getConstraintNames, refLabel, getSelectedResultMetric,
+  // зависимые (каскадные) опции
+  getStakeholderTypeOptions, getStakeholderValueOptions, getConstraintSubtypeOptions,
+  getQualityDefectOptions, getQualityMetricOptions, getQualityControlSourceOptions,
+  getPreserveIndicatorOptions, getResultMetricOptions,
+  // статические опции — Миссия
+  missionLevelOptions, missionValueForOptions, missionValueOptions, missionTypeOptions,
+  missionReviewOptions, missionExternalChangeOptions, missionNotOptions,
+  // статические опции — Клиент / выгодоприобретатель
+  stakeholderRoleOptions, stakeholderSegmentOptions, stakeholderValuePropositionOptions,
+  stakeholderRelationMetricOptions, stakeholderInfluenceOptions, stakeholderPriorityOptions,
+  stakeholderRiskOptions, stakeholderVerificationOptions, stakeholderDataSourceOptions,
+  // статические опции — Критерии результата
+  resultPerspectiveOptions, strategicGoalOptions, resultRoleOptions, resultBeneficiaryOptions,
+  resultUnitOptions, normDirectionOptions, measurementFrequencyOptions, methodologyCheckOptions,
+  resultControlSourceFallback,
+  // статические опции — Компетенции
+  competencyTypeOptions, competencyAreaOptions, competencyStrategicChoiceOptions, competencyRoleOptions,
+  competencyHolderOptions, competencyProcessActivityOptions, competencyCurrentLevelOptions,
+  competencyRequiredLevelOptions, competencyVerificationOptions, competencyDataSourceOptions,
+  competencyActionOptions, competencySupportSystemOptions,
+  // статические опции — Ограничения
+  constraintTypeOptions, constraintRigidityOptions, constraintUnitOptions, constraintDirectionOptions,
+  constraintScopeOptions, constraintViolationOptions, constraintControlSourceOptions, constraintControlFrequencyOptions,
+  // статические опции — Качество
+  qualityRoleOptions, qualityObjectOptions, qualityUnits, qualityDirections, qualityFrequencies, qualityDeviationActions,
+  // статические опции — Что нельзя разрушить
+  preserveElementTypeOptions, preserveCoreReasonOptions, preserveForbiddenActionOptions, preserveChangeableOptions,
+  preserveUnitOptions, preserveNormDirectionOptions, preserveControlSourceOptions, preserveControlFrequencyOptions,
+  preserveThreatActionOptions,
+};
+export type {
+  TheoryForm, MissionCard, StakeholderCard, ResultCriterion, CompetencyCard,
+  ConstraintCard, QualityIndicatorCard, PreserveElementCard, RefOption,
+};
