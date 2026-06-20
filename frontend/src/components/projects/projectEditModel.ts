@@ -18,6 +18,7 @@ import {
   isComplexCard,
   itemLabel,
   itemValues,
+  listItemFields,
   type FormItem,
 } from './projectComplexCards';
 
@@ -111,7 +112,9 @@ function buildComplexEditable(projectId: number, cardId: string): EditableCard {
       label: itemLabel(item, listSpec.labelKeys, `${listSpec.title} ${index + 1}`),
       values: itemValues(item),
     }));
-    return { list: listSpec.projKey, title: listSpec.title, items };
+    // item_fields — полная схема полей элемента (даже пустых), чтобы модель заполняла окно
+    // целиком и добавляла недостающие, а не правила только видимые непустые поля.
+    return { list: listSpec.projKey, title: listSpec.title, item_fields: listItemFields(listSpec, arr), items };
   });
 
   return { card_id: cardId, title: spec.title, fields, lists };

@@ -209,3 +209,78 @@ export function itemValues(item: FormItem): Record<string, string> {
   }
   return out;
 }
+
+// Русские метки полей элементов сложных карточек. Ключи — общие на все списки (поле
+// `name` всюду «Название» и т.п.); этого достаточно, чтобы модель знала ВСЕ поля элемента
+// и заполняла его целиком, а не только видимое непустое поле. Метка лишь подсказывает —
+// если ключа здесь нет, отдаём сам ключ.
+export const COMPLEX_FIELD_LABELS: Record<string, string> = {
+  // общие
+  name: 'Название', status: 'Статус', owner: 'Ответственный', deadline: 'Срок',
+  dataSource: 'Источник данных', controlSource: 'Источник контроля',
+  metric: 'Метрика / показатель', target: 'Целевое значение', baseline: 'Базовое значение',
+  unit: 'Единица измерения', minimum: 'Минимально допустимо', reason: 'Причина',
+  gap: 'Разрыв', affected: 'Кого затрагивает', confirms: 'Что подтверждает',
+  refutes: 'Что опровергает', change: 'Изменение', competency: 'Компетенция',
+  currentLevel: 'Текущий уровень', requiredLevel: 'Требуемый уровень',
+  supportsChoice: 'Как поддерживает стратегический выбор',
+  // Диагноз: симптомы
+  description: 'Описание симптома', location: 'Где проявляется', frequency: 'Частота / масштаб',
+  relatedGap: 'Связанный разрыв',
+  // Диагноз: факты
+  indicator: 'Показатель / наблюдение', value: 'Значение', period: 'Период',
+  reliability: 'Надёжность источника',
+  // Диагноз: последствия
+  deterioration: 'Что ухудшится', timing: 'Срок наступления', damage: 'Возможный ущерб',
+  source: 'Источник оценки',
+  // Диагноз: разрывы (gaps)
+  theoryBlock: 'Блок теории проекта', expectedState: 'Ожидаемое состояние',
+  observedReality: 'Наблюдаемая реальность', confirmingFact: 'Подтверждающий факт',
+  // Стратвыбор: способности
+  strengthen: 'Как усилить', external: 'Что взять извне',
+  // Стратвыбор: trade-off
+  refusal: 'От чего отказываемся', releasedResource: 'Высвобождаемый ресурс',
+  reducedRisk: 'Снижаемый риск', approver: 'Кто утверждает',
+  // Стратвыбор: действия
+  action: 'Действие', resource: 'Необходимый ресурс', dependency: 'Зависимость',
+  futureLink: 'Связь с будущим',
+  // Стратвыбор: гипотезы
+  assumption: 'Предположение', choiceLink: 'Связь со стратегическим выбором',
+  // Целевое: результаты
+  criterion: 'Критерий успеха', perspective: 'Перспектива (BSC)',
+  // Целевое: ценности стейкхолдеров
+  stakeholder: 'Стейкхолдер', valueType: 'Тип ценности', measurement: 'Как измеряем',
+  // Целевое: операционные модели
+  process: 'Процесс', targetWork: 'Как должно работать',
+  // Целевое: способности
+  developmentAction: 'Действие по развитию',
+  // Целевое: системы управления
+  systemType: 'Тип системы управления',
+  // Целевое: качество
+  qualityIndicator: 'Показатель качества', deviationAction: 'Действие при отклонении',
+  // Целевое: сохранить
+  preserveElement: 'Что сохраняем', targetLook: 'Как должно выглядеть',
+  forbiddenChange: 'Что нельзя менять',
+  // Целевое: ограничения
+  constraint: 'Ограничение', compliance: 'Требование соответствия', limit: 'Предел',
+  violationConsequence: 'Последствие нарушения',
+  // Целевое: key results
+  statement: 'Формулировка', indisputable: 'Бесспорный признак достижения',
+};
+
+export interface ComplexFieldSchema { key: string; label: string }
+
+/** Полная схема полей элемента списка: ключи берём из фабрики createItem (или из union
+ * ключей существующих элементов, если фабрики нет), метки — из COMPLEX_FIELD_LABELS.
+ * Нужна модели Методолога, чтобы заполнять элемент ЦЕЛИКОМ, а не только видимые поля. */
+export function listItemFields(listSpec: ComplexListSpec, items: FormItem[]): ComplexFieldSchema[] {
+  let keys: string[];
+  if (listSpec.createItem) {
+    keys = Object.keys(listSpec.createItem(0)).filter(k => k !== 'id');
+  } else {
+    const set = new Set<string>();
+    for (const it of items) for (const k of Object.keys(it)) if (k !== 'id') set.add(k);
+    keys = [...set];
+  }
+  return keys.map(key => ({ key, label: COMPLEX_FIELD_LABELS[key] ?? key }));
+}
