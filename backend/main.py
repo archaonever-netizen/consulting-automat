@@ -201,7 +201,8 @@ def _ensure_yandex_tracker_columns(conn):
         'refresh_token_encrypted': (
             "ALTER TABLE yandex_tracker_connections ADD COLUMN refresh_token_encrypted TEXT"
         ),
-        'token_expires_at': "ALTER TABLE yandex_tracker_connections ADD COLUMN token_expires_at DATETIME",
+        # TIMESTAMP, а не DATETIME: в Postgres типа datetime нет (SQLite примет оба).
+        'token_expires_at': "ALTER TABLE yandex_tracker_connections ADD COLUMN token_expires_at TIMESTAMP",
         'tracker_user_id': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_user_id VARCHAR(255)",
         'tracker_user_name': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_user_name VARCHAR(255)",
         'tracker_email': "ALTER TABLE yandex_tracker_connections ADD COLUMN tracker_email VARCHAR(255)",
