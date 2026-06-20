@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Project } from '../../types/projects';
 import ProjectCanvas from './ProjectCanvas';
 import { seedFrameworkSectionSnapshots } from './ProjectFrameworkSectionCanvas';
@@ -63,6 +63,39 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   // открытый канвас и подхватить свежий снапшот из localStorage.
   const [reloadNonce, setReloadNonce] = useState(0);
 
+  // Ширина правой панели (чат Методолога) — тянется мышью, запоминается в localStorage.
+  const RP_MIN = 300;
+  const RP_MAX = 760;
+  const gridRef = useRef<HTMLDivElement | null>(null);
+  const [rightWidth, setRightWidth] = useState<number>(() => {
+    const v = Number(localStorage.getItem('project-rp-width'));
+    return v >= RP_MIN && v <= RP_MAX ? v : 360;
+  });
+  useEffect(() => {
+    localStorage.setItem('project-rp-width', String(rightWidth));
+  }, [rightWidth]);
+
+  function startResize(e: React.MouseEvent) {
+    e.preventDefault();
+    const prevCursor = document.body.style.cursor;
+    const prevSelect = document.body.style.userSelect;
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    const onMove = (ev: MouseEvent) => {
+      const rect = gridRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      setRightWidth(Math.max(RP_MIN, Math.min(RP_MAX, rect.right - ev.clientX)));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevSelect;
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  }
+
   useEffect(() => {
     let cancelled = false;
     const resetTimer = window.setTimeout(() => {
@@ -110,7 +143,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   return (
     <div className="project-workspace">
       <ProjectToolbar project={project} />
-      <div className="project-workspace-grid">
+      <div className="project-workspace-grid" ref={gridRef} style={{ '--rp-width': `${rightWidth}px` } as React.CSSProperties}>
         <ProjectLeftPanel
           project={project}
           sections={PROJECT_SECTIONS}
@@ -130,6 +163,11 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
             </div>
           </section>
         )}
+        <div
+          className="project-rp-resizer"
+          onMouseDown={startResize}
+          title="Потяните, чтобы изменить ширину панели"
+        />
         <ProjectRightPanel
           projectId={project.id}
           focusCardId={activeSection ? null : activeFrameworkCard.id}

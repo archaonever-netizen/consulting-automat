@@ -256,8 +256,6 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
 
   return (
     <aside className="project-side project-right-panel project-methodologist">
-      <div className="project-panel-title">ИИ-Методолог проекта</div>
-
       {isWholeProject && (<>
       <p className="project-methodologist-lead">
         Полный анализ проекта по методологиям с оценкой-светофором. После проверки уточните детали в чате —

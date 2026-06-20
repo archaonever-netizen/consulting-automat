@@ -1231,10 +1231,21 @@ a:hover { color: var(--accent-hover); }
 .project-toolbar-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .project-workspace-grid {
-  flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr) 360px;
-  background: var(--surface-2);
+  flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr) var(--rp-width, 360px);
+  background: var(--surface-2); position: relative;
 }
-.project-modal-page .project-workspace-grid { grid-template-columns: 230px minmax(0, 1fr) 340px; }
+.project-modal-page .project-workspace-grid { grid-template-columns: 230px minmax(0, 1fr) var(--rp-width, 340px); }
+/* Ручка изменения ширины правой панели (перетаскивание мышью). */
+.project-rp-resizer {
+  position: absolute; top: 0; bottom: 0; width: 8px; z-index: 6; cursor: col-resize;
+  right: calc(var(--rp-width, 360px) - 4px);
+}
+.project-rp-resizer::after {
+  content: ''; position: absolute; top: 0; bottom: 0; left: 3px; width: 2px;
+  background: transparent; transition: background .15s;
+}
+.project-rp-resizer:hover::after, .project-rp-resizer:active::after { background: var(--accent); }
+@media (max-width: 1100px) { .project-rp-resizer { display: none; } }
 .project-side {
   min-width: 0; padding: 14px; background: var(--card-bg); border-right: 1px solid var(--line);
   overflow-y: auto;
@@ -1242,7 +1253,7 @@ a:hover { color: var(--accent-hover); }
 .project-right-panel { border-right: none; border-left: 1px solid var(--line); }
 
 /* === ИИ-Методолог проекта (правая панель) === */
-.project-methodologist { display: flex; flex-direction: column; gap: 12px; }
+.project-methodologist { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; }
 .project-methodologist-lead { margin: 0; color: var(--text-secondary); font-size: 12.5px; line-height: 1.5; }
 .project-methodologist .project-card-validator-btn { width: 100%; justify-content: center; }
 
@@ -1261,7 +1272,7 @@ a:hover { color: var(--accent-hover); }
 .rag-dot.bad { background: var(--danger); }
 .rag-tag { margin-left: auto; font-size: 10.5px; font-weight: 800; letter-spacing: .04em; opacity: .8; }
 
-.project-review { display: flex; flex-direction: column; gap: 10px; }
+.project-review { display: flex; flex-direction: column; gap: 10px; min-height: 0; max-height: 55vh; overflow-y: auto; flex: 0 1 auto; }
 .project-review-summary { margin: 0; font-size: 13px; line-height: 1.5; color: var(--text-primary); }
 .project-review-sections { display: flex; flex-direction: column; gap: 8px; }
 .project-review-section {
@@ -1276,8 +1287,8 @@ a:hover { color: var(--accent-hover); }
 .project-review-line span { font-weight: 700; color: var(--text-primary); }
 
 /* Чат */
-.project-methodologist-chat { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
-.project-chat-messages { display: flex; flex-direction: column; gap: 10px; max-height: 420px; overflow-y: auto; }
+.project-methodologist-chat { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--line); padding-top: 12px; flex: 1; min-height: 0; }
+.project-chat-messages { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; overflow-y: auto; }
 .project-chat-empty { color: var(--text-secondary); font-size: 12.5px; text-align: center; padding: 14px 8px; }
 .project-chat-msg { display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
 .project-chat-msg.user { align-items: flex-end; }
@@ -1358,6 +1369,7 @@ a:hover { color: var(--accent-hover); }
 .project-plan-qa {
   margin-top: 4px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
   background: var(--surface-2); display: flex; flex-direction: column; gap: 10px;
+  flex: 0 0 auto; max-height: 40vh; overflow-y: auto;
 }
 .project-plan-qa-title {
   display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800;
