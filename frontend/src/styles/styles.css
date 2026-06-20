@@ -1326,6 +1326,24 @@ a:hover { color: var(--accent-hover); }
 .project-chat-deep input { cursor: pointer; margin: 0; }
 .project-chat-toggles { display: flex; flex-wrap: wrap; gap: 14px; align-self: flex-start; }
 
+.project-review-toggle {
+  width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  border: none; font: inherit; cursor: pointer; text-align: left;
+}
+.project-review-caret { font-size: 12px; opacity: .75; }
+
+.project-chat-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.project-chat-head-title {
+  font-size: 11.5px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3);
+}
+.project-chat-new {
+  display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); background: var(--surface-1); color: var(--text-secondary);
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; transition: var(--transition);
+}
+.project-chat-new:hover:not(:disabled) { background: var(--surface-2); color: var(--text-primary); }
+.project-chat-new:disabled { opacity: .55; cursor: not-allowed; }
+
 .project-chat-fill {
   margin-top: 8px; align-self: stretch; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   padding: 9px 12px; border: 1px solid var(--accent); border-radius: var(--radius-sm);

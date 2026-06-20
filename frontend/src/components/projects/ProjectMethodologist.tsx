@@ -7,6 +7,7 @@ import { buildProjectEditModel } from './projectEditModel';
 import {
   fetchProjectReview,
   projectHasContent,
+  resetProjectChat,
   runProjectReview,
   sendProjectChat,
   type ChatMessage,
@@ -95,18 +96,20 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
   // Согласованный план + вопросы/ответы (персистится на сервере, гидрируется при открытии).
   const [plan, setPlan] = useState<ProjectPlan | null>(null);
   const [proposalStates, setProposalStates] = useState<Record<string, ProposalState>>({});
+  // Сворачивание блока проверки RAG, чтобы не скроллить до чата.
+  const [reviewOpen, setReviewOpen] = useState(true);
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
-  // Гидрация сохранённого ревью + истории чата при открытии проекта.
+  // Гидрация: оценка проекта (общая) + чат/план КАРТОЧКИ-ФОКУСА. Перезагружается при смене
+  // открытой карточки, поэтому у каждой карточки свой чат и план — контексты не смешиваются.
   useEffect(() => {
     let cancelled = false;
-    setReview(null);
     setMessages([]);
     setPlan(null);
     setProposalStates({});
     setReviewError('');
-    fetchProjectReview(projectId)
+    fetchProjectReview(projectId, focusCardId)
       .then(({ review: r, messages: m, plan: p }) => {
         if (cancelled) return;
         setReview(r);
@@ -115,7 +118,7 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
       })
       .catch(() => { /* офлайн/первый заход — просто пустая панель */ });
     return () => { cancelled = true; };
-  }, [projectId]);
+  }, [projectId, focusCardId]);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -177,6 +180,18 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     setPlan(prev => (prev ? { ...prev, answers: prev.questions.map((_, j) => (j === i ? val : (prev.answers[j] ?? ''))) } : prev));
   }
 
+  // «Новый чат»: очистить чат и план текущей карточки (на сервере и локально).
+  async function resetChat() {
+    if (sending) return;
+    if (messages.length > 0 && !window.confirm('Начать новый чат по этой карточке? Текущая переписка и план будут удалены.')) return;
+    setMessages([]);
+    setPlan(null);
+    setProposalStates({});
+    try {
+      await resetProjectChat(projectId, focusCardId);
+    } catch { /* офлайн — локально уже очищено */ }
+  }
+
   function applyProposal(key: string, proposal: Proposal) {
     let result: { ok: boolean; message: string };
     try {
@@ -219,9 +234,17 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
 
       {review && (
         <div className="project-review">
-          <div className={`rag-badge big ${RAG_META[review.overall].tone}`}>
-            Проект в целом: {RAG_META[review.overall].label}
-          </div>
+          <button
+            type="button"
+            className={`rag-badge big ${RAG_META[review.overall].tone} project-review-toggle`}
+            onClick={() => setReviewOpen(o => !o)}
+            aria-expanded={reviewOpen}
+            title={reviewOpen ? 'Свернуть проверку' : 'Развернуть проверку'}
+          >
+            <span>Проект в целом: {RAG_META[review.overall].label}</span>
+            <span className="project-review-caret">{reviewOpen ? '▾' : '▸'}</span>
+          </button>
+          {reviewOpen && (<>
           {review.summary && <p className="project-review-summary">{review.summary}</p>}
 
           <div className="project-review-sections">
@@ -256,10 +279,17 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
               </ul>
             </div>
           )}
+          </>)}
         </div>
       )}
 
       <div className="project-methodologist-chat">
+        <div className="project-chat-head">
+          <span className="project-chat-head-title">Чат по карточке</span>
+          <button type="button" className="project-chat-new" onClick={resetChat} disabled={sending} title="Очистить чат и план этой карточки">
+            <Icon name="plus" size={13} /> Новый чат
+          </button>
+        </div>
         <div className="project-chat-messages">
           {messages.length === 0 && (
             <div className="project-chat-empty">Задайте вопрос по проекту или попросите внести правку.</div>

@@ -92,13 +92,23 @@ export function projectHasContent(projectId: number): boolean {
 
 export async function fetchProjectReview(
   projectId: number,
+  cardId: string | null,
 ): Promise<{ review: ProjectReview | null; messages: ChatMessage[]; plan: ProjectPlan | null }> {
-  const { data } = await api.get(`/api/projects/${projectId}/review`);
+  const { data } = await api.get(`/api/projects/${projectId}/review`, {
+    params: cardId ? { card_id: cardId } : undefined,
+  });
   return {
     review: (data?.review as ProjectReview) ?? null,
     messages: Array.isArray(data?.messages) ? (data.messages as ChatMessage[]) : [],
     plan: (data?.plan as ProjectPlan) ?? null,
   };
+}
+
+/** «Новый чат»: очистить чат и план карточки-фокуса на сервере. */
+export async function resetProjectChat(projectId: number, cardId: string | null): Promise<void> {
+  await api.post(`/api/projects/${projectId}/review/chat/reset`, null, {
+    params: cardId ? { card_id: cardId } : undefined,
+  });
 }
 
 // Страховочный таймаут на медленные ИИ-вызовы: бэкенд и сам ограничивает время и

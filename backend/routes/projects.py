@@ -91,13 +91,14 @@ async def validate_card(
 @router.get("/{project_id}/review")
 async def get_project_review(
     project_id: int,
+    card_id: str | None = Query(default=None),
     current_user=Depends(get_current_user_dep),
     db: AsyncSession = Depends(get_db),
 ):
-    """Сохранённая оценка всего проекта и история чата Методолога (для гидрации панели)."""
+    """Сохранённая оценка проекта (общая) и чат/план карточки-фокуса (для гидрации панели)."""
     if not await project_cards.project_exists(db, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
-    return await project_cards.get_review(db, project_id)
+    return await project_cards.get_review(db, project_id, card_id)
 
 
 @router.post(
@@ -184,13 +185,29 @@ async def review_chat(
         {"role": "user", "content": data.message},
         {"role": "assistant", "content": result["reply"]},
     ]
-    await project_cards.save_chat_messages(db, project_id, messages, plan=saved_plan)
+    await project_cards.save_chat_messages(
+        db, project_id, messages, card_id=data.focus_card_id, plan=saved_plan,
+    )
     return {
         "reply": result["reply"],
         "proposals": result["proposals"],
         "questions": result.get("questions") or [],
         "evidence": result["evidence"],
     }
+
+
+@router.post("/{project_id}/review/chat/reset")
+async def reset_review_chat(
+    project_id: int,
+    card_id: str | None = Query(default=None),
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """«Новый чат»: очистить чат и план карточки-фокуса."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    await project_cards.reset_chat(db, project_id, card_id)
+    return {"ok": True}
 
 
 @router.get("")
