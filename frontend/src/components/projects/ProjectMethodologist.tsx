@@ -180,6 +180,20 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     setPlan(prev => (prev ? { ...prev, answers: prev.questions.map((_, j) => (j === i ? val : (prev.answers[j] ?? ''))) } : prev));
   }
 
+  // Кол-во заполненных ответов — для активации кнопки «Ответить».
+  const answeredCount = plan ? plan.answers.filter(a => (a ?? '').trim()).length : 0;
+
+  // «Ответить»: отправить ответы методологу (фаза планирования — он уточнит/дополнит план).
+  function submitAnswers() {
+    if (!plan || sending) return;
+    const pairs = plan.questions
+      .map((q, i) => ({ q, a: (plan.answers[i] ?? '').trim() }))
+      .filter(x => x.a);
+    if (pairs.length === 0) return;
+    const text = 'Ответы на уточняющие вопросы:\n' + pairs.map(x => `• ${x.q}\n  ${x.a}`).join('\n');
+    submit(text, 'plan');
+  }
+
   // «Новый чат»: очистить чат и план текущей карточки (на сервере и локально).
   async function resetChat() {
     if (sending) return;
@@ -357,6 +371,15 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
                 />
               </div>
             ))}
+            <button
+              type="button"
+              className="project-plan-qa-send"
+              onClick={submitAnswers}
+              disabled={sending || answeredCount === 0}
+              title="Отправить ответы методологу — он уточнит и дополнит план"
+            >
+              <Icon name="send" size={14} /> Ответить{answeredCount > 0 ? ` (${answeredCount})` : ''}
+            </button>
           </div>
         )}
 
