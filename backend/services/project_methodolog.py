@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 
 from .knowledge_search import search, SearchHit
@@ -25,6 +26,8 @@ from .methodolog import (
     _citation,
     _evidence_block,
 )
+
+logger = logging.getLogger(__name__)
 
 RAG_VALUES = {"green", "amber", "red"}
 VALID_OPS = {"update_field", "update_item", "add_item", "delete_item"}
@@ -411,6 +414,10 @@ async def chat_methodolog(
     intent = classify_intent(message)
     if deep and intent == "light":
         intent = "heavy"
+    # Заполнение по согласованному плану — всегда сильная модель, даже если команда короткая
+    # («приступай», «заполняй»): иначе классификатор примет её за light и возьмёт слабую модель.
+    if not planning and intent == "light" and isinstance(plan, dict) and (plan.get("text") or plan.get("questions")):
+        intent = "heavy"
     if planning:
         # Планирование — всегда сильная модель и развёрнутый ответ; фокус-карточку видим целиком.
         model = strong_model
@@ -418,7 +425,9 @@ async def chat_methodolog(
         model_for_prompt = _compact_project_model(project_model, focus_card_id)
     else:
         model = strong_model if intent in ("heavy", "whole") else fast_model
-        max_tokens = 4000 if intent in ("heavy", "whole") else 1500
+        # Заполнение целой карточки — это десятки правок; даём большой потолок вывода,
+        # чтобы JSON не обрывался (а если всё же оборвётся — спасаем готовое в _chat_json).
+        max_tokens = 15000 if intent in ("heavy", "whole") else 1500
         # whole — нужен весь проект; light/heavy — фокус-карточка целиком, прочие сжато.
         model_for_prompt = project_model if intent == "whole" else _compact_project_model(project_model, focus_card_id)
     focused = model_for_prompt is not project_model and focus_card_id and focus_card_id != "whole-project"
@@ -456,13 +465,20 @@ async def chat_methodolog(
     if planning:
         parts.append(PLAN_INSTRUCTION)
     else:
-        parts.append("Ответь по схеме. Предлагай правки только как proposals, ничего не применяй сам.")
+        parts.append(
+            "Ответь по схеме. Предлагай правки только как proposals, ничего не применяй сам. "
+            "human и rationale держи КОРОТКИМИ (одна строка), без воды — это экономит место для правок."
+        )
     user = "\n\n".join(parts)
 
     usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
     try:
         raw, usage = await asyncio.to_thread(_chat_json, model, CHAT_SYSTEM_PROMPT, user, max_tokens=max_tokens)
     except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "chat_methodolog: вызов модели упал (mode=%s, intent=%s, model=%s): %s: %s",
+            mode, intent, model, type(e).__name__, str(e)[:300],
+        )
         raw = {"reply": "Не удалось получить ответ модели. Попробуйте ещё раз.", "proposals": [],
                "_error": f"{type(e).__name__}: {str(e)[:160]}"}
 

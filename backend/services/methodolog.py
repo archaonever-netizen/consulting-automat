@@ -93,12 +93,68 @@ def _stream_text(client, model: str, system: str, user: str, max_tokens: int) ->
     return "".join(parts), usage
 
 
+def _salvage_json(raw: str) -> dict:
+    """Спасти максимум из оборванного JSON (упёрлись в max_tokens): reply + завершённые
+    proposals. Возвращает {} если спасать нечего → caller покажет честный фолбэк."""
+    out: dict = {}
+    m = re.search(r'"reply"\s*:\s*"((?:[^"\\]|\\.)*)"', raw, re.DOTALL)
+    if m:
+        try:
+            out["reply"] = json.loads('"' + m.group(1) + '"')
+        except Exception:  # noqa: BLE001
+            out["reply"] = m.group(1)
+    pm = re.search(r'"proposals"\s*:\s*\[', raw)
+    if pm:
+        props: list = []
+        i, n = pm.end(), len(raw)
+        while i < n:
+            while i < n and raw[i] in " \t\r\n,":
+                i += 1
+            if i >= n or raw[i] != "{":
+                break
+            depth = 0
+            in_str = esc = False
+            j = i
+            closed = False
+            while j < n:
+                ch = raw[j]
+                if in_str:
+                    if esc:
+                        esc = False
+                    elif ch == "\\":
+                        esc = True
+                    elif ch == '"':
+                        in_str = False
+                elif ch == '"':
+                    in_str = True
+                elif ch == "{":
+                    depth += 1
+                elif ch == "}":
+                    depth -= 1
+                    if depth == 0:
+                        j += 1
+                        closed = True
+                        break
+                j += 1
+            if not closed:  # объект оборван — дальше спасать нечего
+                break
+            try:
+                props.append(json.loads(raw[i:j]))
+            except Exception:  # noqa: BLE001
+                break
+            i = j
+        if props:
+            out["proposals"] = props
+    return out
+
+
 def _chat_json(model: str, system: str, user: str, *, max_tokens: int = 1200) -> tuple[dict, dict]:
     """Вызвать модель и вернуть (распарсенный JSON, расход токенов).
 
     Стриминг включён (защита от зависаний на сильной модели). Если провайдер/модель
     стрим не поддержали — однократный фолбэк на обычный вызов, поведение не меняется.
-    max_tokens поднимается для объёмных ответов (например, ревью всего проекта).
+    При обрыве JSON по лимиту вывода спасаем уже готовые правки (_salvage_json), а не
+    падаем целиком. max_tokens поднимается для объёмных ответов (заполнение, ревью).
     """
     from openai import OpenAI
     settings = get_settings()
@@ -109,7 +165,7 @@ def _chat_json(model: str, system: str, user: str, *, max_tokens: int = 1200) ->
         max_retries=_LLM_MAX_RETRIES,
     )
     try:
-        raw, usage = _stream_text(client, model, system, user, max_tokens)
+        text, usage = _stream_text(client, model, system, user, max_tokens)
     except Exception:  # noqa: BLE001 — провайдер мог не принять stream/stream_options
         resp = client.chat.completions.create(
             model=model,
@@ -117,15 +173,21 @@ def _chat_json(model: str, system: str, user: str, *, max_tokens: int = 1200) ->
             temperature=0.2,
             max_tokens=max_tokens,
         )
-        raw = resp.choices[0].message.content or ""
+        text = resp.choices[0].message.content or ""
         usage = _usage_dict(resp)
-    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.DOTALL)
+    m = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
     if m:
-        raw = m.group(1)
+        candidate = m.group(1)
     else:
-        i, j = raw.find("{"), raw.rfind("}")
-        raw = raw[i:j + 1] if i != -1 and j != -1 else "{}"
-    return json.loads(raw), usage
+        i, j = text.find("{"), text.rfind("}")
+        candidate = text[i:j + 1] if i != -1 and j != -1 else "{}"
+    try:
+        return json.loads(candidate), usage
+    except json.JSONDecodeError:
+        salvaged = _salvage_json(text) or _salvage_json(candidate)
+        if salvaged:
+            return salvaged, usage
+        raise
 
 
 def _evidence_block(hits: list[SearchHit]) -> tuple[str, dict[str, SearchHit]]:

@@ -166,9 +166,21 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     }
   }
 
+  // Явная команда-исполнение после готового плана («приступай», «заполняй», «поехали»…)
+  // запускает заполнение, а не очередной план.
+  function looksLikeExecute(text: string): boolean {
+    const t = text.trim().toLowerCase();
+    if (/^(приступ|заполняй|заполнить|выполн|применяй|примен[ия]|поехали|действуй|начинай|готово|впер[её]д|го|ок|ok)\b/.test(t)) return true;
+    if (/^давай(те)?\b/.test(t) && t.length <= 30) return true;
+    return false;
+  }
+
   // Обычная отправка: в режиме планирования — фаза «план/уточнения», иначе сразу правки.
+  // Если план уже есть и сообщение — команда-исполнение, переходим к заполнению.
   function send() {
-    submit(input.trim(), planning ? 'plan' : 'fill');
+    const text = input.trim();
+    const execute = planning && plan !== null && looksLikeExecute(text);
+    submit(text, execute ? 'fill' : planning ? 'plan' : 'fill');
   }
 
   // «Заполнить по плану»: фаза внесения правок с учётом плана и ответов (план шлётся в submit).
@@ -398,7 +410,7 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
           <textarea
             className="form-textarea"
             value={input}
-            placeholder={planning ? 'Опишите задачу или ответьте на вопросы методолога…' : 'Спросите методолога или попросите правку…'}
+            placeholder={planning ? 'Опишите задачу, ответьте на вопросы или напишите «приступай»…' : 'Спросите методолога или попросите правку…'}
             rows={2}
             onChange={e => setInput(e.target.value)}
             onKeyDown={e => {
