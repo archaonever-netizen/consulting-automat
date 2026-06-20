@@ -10,6 +10,7 @@ import {
   runProjectReview,
   sendProjectChat,
   type ChatMessage,
+  type ProjectPlan,
   type ProjectReview,
   type Proposal,
   type Rag,
@@ -91,6 +92,8 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
   // «Режим планирования»: модель сперва составляет план и задаёт уточняющие вопросы
   // (без правок). Внесение правок — отдельной кнопкой «Заполнить по плану».
   const [planning, setPlanning] = useState(true);
+  // Согласованный план + вопросы/ответы (персистится на сервере, гидрируется при открытии).
+  const [plan, setPlan] = useState<ProjectPlan | null>(null);
   const [proposalStates, setProposalStates] = useState<Record<string, ProposalState>>({});
 
   const chatEndRef = useRef<HTMLDivElement | null>(null);
@@ -100,13 +103,15 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     let cancelled = false;
     setReview(null);
     setMessages([]);
+    setPlan(null);
     setProposalStates({});
     setReviewError('');
     fetchProjectReview(projectId)
-      .then(({ review: r, messages: m }) => {
+      .then(({ review: r, messages: m, plan: p }) => {
         if (cancelled) return;
         setReview(r);
         setMessages(m);
+        setPlan(p);
       })
       .catch(() => { /* офлайн/первый заход — просто пустая панель */ });
     return () => { cancelled = true; };
@@ -139,8 +144,18 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     setInput('');
     setSending(true);
     try {
-      const res = await sendProjectChat(projectId, text, history, buildProjectEditModel(projectId), review, focusCardId, deep, mode);
+      const res = await sendProjectChat(projectId, text, history, buildProjectEditModel(projectId), review, focusCardId, deep, mode, plan);
       setMessages(cur => [...cur, { role: 'assistant', content: res.reply, proposals: res.proposals }]);
+      if (mode === 'plan') {
+        // Обновляем план: новый текст + вопросы; ответы сохраняем для совпадающих вопросов.
+        const qs = res.questions ?? [];
+        setPlan(prev => ({
+          card_id: focusCardId,
+          text: res.reply,
+          questions: qs,
+          answers: qs.map((q, i) => (prev && prev.questions[i] === q ? (prev.answers[i] ?? '') : '')),
+        }));
+      }
     } catch (e) {
       setMessages(cur => [...cur, { role: 'assistant', content: errText(e) }]);
     } finally {
@@ -153,9 +168,13 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
     submit(input.trim(), planning ? 'plan' : 'fill');
   }
 
-  // «Заполнить по плану»: фаза внесения правок с учётом плана и ответов из истории.
+  // «Заполнить по плану»: фаза внесения правок с учётом плана и ответов (план шлётся в submit).
   function fillFromPlan() {
-    submit(input.trim() || 'Заполни карточку по согласованному плану с учётом моих ответов выше.', 'fill');
+    submit(input.trim() || 'Заполни карточку по согласованному плану с учётом моих ответов.', 'fill');
+  }
+
+  function setAnswer(i: number, val: string) {
+    setPlan(prev => (prev ? { ...prev, answers: prev.questions.map((_, j) => (j === i ? val : (prev.answers[j] ?? ''))) } : prev));
   }
 
   function applyProposal(key: string, proposal: Proposal) {
@@ -290,6 +309,27 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
           <div ref={chatEndRef} />
         </div>
 
+        {plan && plan.questions.length > 0 && (
+          <div className="project-plan-qa">
+            <div className="project-plan-qa-title">
+              <Icon name="sparkle" size={14} /> Уточняющие вопросы методолога
+            </div>
+            <p className="project-plan-qa-hint">Впишите ответ под каждым вопросом, затем нажмите «Заполнить по плану».</p>
+            {plan.questions.map((q, i) => (
+              <div className="project-plan-qa-item" key={i}>
+                <div className="project-plan-qa-q"><b>{i + 1}.</b> {q}</div>
+                <textarea
+                  className="form-textarea"
+                  rows={2}
+                  value={plan.answers[i] ?? ''}
+                  placeholder="Ваш ответ…"
+                  onChange={e => setAnswer(i, e.target.value)}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="project-chat-toggles">
           <label className="project-chat-deep" title="Сначала план и уточняющие вопросы, без правок. Внесение — кнопкой «Заполнить по плану».">
             <input type="checkbox" checked={planning} onChange={e => setPlanning(e.target.checked)} />
@@ -320,7 +360,7 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
           </button>
         </div>
 
-        {planning && messages.some(m => m.role === 'assistant') && (
+        {planning && (plan !== null || messages.some(m => m.role === 'assistant')) && (
           <button type="button" className="project-chat-fill" onClick={fillFromPlan} disabled={sending}>
             <Icon name="check" size={15} /> Заполнить по плану
           </button>

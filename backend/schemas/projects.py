@@ -91,6 +91,9 @@ class ProjectChatRequest(BaseModel):
     focus_card_id: Optional[str] = None
     # "plan" — фаза планирования (план + уточняющие вопросы, без правок); "fill" — внесение правок.
     mode: Optional[str] = "fill"
+    # Согласованный план Методолога: {card_id, text, questions[], answers[]} — подкладывается в
+    # каждый запрос (мимо лимита истории) и персистится; см. фазу планирования.
+    plan: Optional[dict] = None
     # «Глубокий разбор»: принудительно сильная модель (без эвристики-роутера).
     deep: bool = False
 

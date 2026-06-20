@@ -51,7 +51,17 @@ export interface ChatMessage {
 export interface ChatResponse {
   reply: string;
   proposals: Proposal[];
+  questions?: string[];
   evidence: EvidenceRef[];
+}
+
+// Согласованный план Методолога: текст плана + уточняющие вопросы и ответы пользователя.
+// Персистится на сервере и подкладывается в каждый запрос (мимо лимита истории).
+export interface ProjectPlan {
+  card_id: string | null;
+  text: string;
+  questions: string[];
+  answers: string[];
 }
 
 interface ReviewSectionPayload {
@@ -82,11 +92,12 @@ export function projectHasContent(projectId: number): boolean {
 
 export async function fetchProjectReview(
   projectId: number,
-): Promise<{ review: ProjectReview | null; messages: ChatMessage[] }> {
+): Promise<{ review: ProjectReview | null; messages: ChatMessage[]; plan: ProjectPlan | null }> {
   const { data } = await api.get(`/api/projects/${projectId}/review`);
   return {
     review: (data?.review as ProjectReview) ?? null,
     messages: Array.isArray(data?.messages) ? (data.messages as ChatMessage[]) : [],
+    plan: (data?.plan as ProjectPlan) ?? null,
   };
 }
 
@@ -110,6 +121,7 @@ export async function sendProjectChat(
   focusCardId: string | null,
   deep: boolean,
   mode: 'plan' | 'fill',
+  plan: ProjectPlan | null,
 ): Promise<ChatResponse> {
   const { data } = await api.post(`/api/projects/${projectId}/review/chat`, {
     message,
@@ -119,6 +131,7 @@ export async function sendProjectChat(
     focus_card_id: focusCardId,
     deep,
     mode,
+    plan,
   }, { timeout: AI_CALL_TIMEOUT_MS });
   return data as ChatResponse;
 }

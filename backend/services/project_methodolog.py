@@ -79,6 +79,26 @@ def _compact_card(card: dict) -> dict:
     return out
 
 
+def _format_plan(plan: dict | None) -> str:
+    """Текст согласованного плана + вопросы/ответы — подкладываем в КАЖДЫЙ запрос, чтобы план
+    был у модели независимо от лимита истории (history[-10:])."""
+    if not isinstance(plan, dict):
+        return ""
+    text = str(plan.get("text") or "").strip()
+    questions = plan.get("questions") or []
+    answers = plan.get("answers") or []
+    out = []
+    if text:
+        out.append("СОГЛАСОВАННЫЙ ПЛАН (карточка " + str(plan.get("card_id") or "") + "):\n" + text)
+    qa = []
+    for i, q in enumerate(questions):
+        a = answers[i] if isinstance(answers, list) and i < len(answers) else ""
+        qa.append(f"{i + 1}. {str(q).strip()}\n   Ответ пользователя: {str(a).strip() or '(пока без ответа)'}")
+    if qa:
+        out.append("УТОЧНЯЮЩИЕ ВОПРОСЫ И ОТВЕТЫ:\n" + "\n".join(qa))
+    return "\n\n".join(out)
+
+
 def _compact_project_model(model: dict | None, focus_card_id: str | None) -> dict | None:
     """Фокус-карточка — целиком, остальные редактируемые — сжато; context_cards — короче.
 
@@ -348,15 +368,16 @@ def _sanitize_proposals(raw_proposals) -> list[dict]:
 
 
 PLAN_INSTRUCTION = (
-    "РЕЖИМ ПЛАНИРОВАНИЯ. НЕ предлагай правки: поле proposals ОБЯЗАТЕЛЬНО оставь пустым ([]). "
-    "Вместо этого в reply:\n"
-    "1) Составь короткий ПЛАН заполнения фокус-карточки — по разделам/спискам и ключевым полям: "
-    "что и в каком объёме заполнишь, сколько элементов добавишь.\n"
-    "2) Задай ВСЕ существенные уточняющие вопросы (нумерованным списком), ответы на которые нужны "
-    "для конкретного и качественного заполнения — не выдумывай факты сам.\n"
-    "Пользователь ответит на вопросы в чате, после чего нажмёт «Заполнить по плану» — и только тогда "
-    "ты внесёшь правки. Если это ответ пользователя на твои вопросы — уточни/дополни план и при "
-    "необходимости задай оставшиеся вопросы. Пиши по-русски, по делу."
+    "РЕЖИМ ПЛАНИРОВАНИЯ. НЕ предлагай правки: поле proposals ОБЯЗАТЕЛЬНО оставь пустым ([]).\n"
+    "Верни ДВА поля:\n"
+    "• reply — краткий ПЛАН заполнения фокус-карточки по разделам/спискам и ключевым полям "
+    "(что и в каком объёме заполнишь, сколько элементов добавишь). БЕЗ списка вопросов внутри reply.\n"
+    "• questions — МАССИВ СТРОК: все существенные уточняющие вопросы, ответы на которые нужны для "
+    "конкретного и качественного заполнения. Не выдумывай факты сам — спрашивай. Каждый вопрос — "
+    "отдельная строка массива, кратко и по делу.\n"
+    "Если в контексте есть СОГЛАСОВАННЫЙ ПЛАН и ОТВЕТЫ пользователя — учти их, обнови план и оставь в "
+    "questions только реально оставшиеся вопросы (пустой массив [], если всё ясно для заполнения). "
+    "Пользователь ответит на вопросы и нажмёт «Заполнить по плану». Пиши по-русски."
 )
 
 
@@ -371,6 +392,7 @@ async def chat_methodolog(
     focus_card_id: str | None = None,
     deep: bool = False,
     mode: str = "fill",
+    plan: dict | None = None,
     source_keys: list[str] | None = None,
 ) -> dict:
     """Диалог-уточнение с предложениями правок (без самостоятельного применения).
@@ -422,6 +444,9 @@ async def chat_methodolog(
         parts.append("REVIEW (последняя оценка):\n" + json.dumps(
             {"overall": review.get("overall"), "summary": review.get("summary"),
              "sections": review.get("sections")}, ensure_ascii=False)[:6000])
+    plan_block = _format_plan(plan)
+    if plan_block:
+        parts.append(plan_block)
     if history_text:
         parts.append("ИСТОРИЯ ДИАЛОГА:\n" + history_text)
     parts.append("СООБЩЕНИЕ ПОЛЬЗОВАТЕЛЯ:\n" + (message or "").strip())
@@ -443,9 +468,13 @@ async def chat_methodolog(
 
     # В режиме планирования правки НЕ отдаём, даже если модель их вернула вопреки инструкции.
     proposals = [] if planning else _sanitize_proposals(raw.get("proposals"))
+    questions: list[str] = []
+    if planning and isinstance(raw.get("questions"), list):
+        questions = [str(q).strip() for q in raw["questions"] if str(q).strip()][:12]
     return {
         "reply": str(raw.get("reply") or "").strip() or "—",
         "proposals": proposals,
+        "questions": questions,
         "evidence": _evidence_out(hits),
         "intent": intent,
         "model": model,

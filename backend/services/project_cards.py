@@ -83,10 +83,11 @@ async def get_review(db: AsyncSession, project_id: int) -> dict:
     )).first()
     if row is None:
         return {"review": None, "messages": []}
-    messages = (row.content_json or {}).get("messages", []) if isinstance(row.content_json, dict) else []
+    content = row.content_json if isinstance(row.content_json, dict) else {}
     return {
         "review": row.validation_json,
-        "messages": messages,
+        "messages": content.get("messages", []),
+        "plan": content.get("plan"),
         "reviewed_at": row.validated_at.isoformat() if row.validated_at else None,
     }
 
@@ -99,8 +100,14 @@ async def save_review(db: AsyncSession, project_id: int, review: dict) -> None:
     await db.commit()
 
 
-async def save_chat_messages(db: AsyncSession, project_id: int, messages: list[dict]) -> None:
-    """Сохранить (обрезанную) историю чата Методолога."""
+async def save_chat_messages(
+    db: AsyncSession, project_id: int, messages: list[dict], *, plan: dict | None = None,
+) -> None:
+    """Сохранить (обрезанную) историю чата Методолога и, при наличии, согласованный план."""
     row = await _get_or_create(db, project_id, REVIEW_CARD_ID)
-    row.content_json = {"messages": messages[-_MAX_CHAT_MESSAGES:]}
+    content = dict(row.content_json) if isinstance(row.content_json, dict) else {}
+    content["messages"] = messages[-_MAX_CHAT_MESSAGES:]
+    if plan is not None:
+        content["plan"] = plan
+    row.content_json = content
     await db.commit()

@@ -162,17 +162,35 @@ async def review_chat(
             focus_card_id=data.focus_card_id,
             deep=data.deep,
             mode=data.mode or "fill",
+            plan=data.plan,
         )
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
+
+    # Согласованный план для персиста: в фазе планирования берём свежие вопросы из ответа
+    # (ответы пользователя — из присланного плана); иначе сохраняем план как есть.
+    if (data.mode or "fill") == "plan":
+        saved_plan = {
+            "card_id": data.focus_card_id,
+            "text": result["reply"],
+            "questions": result.get("questions") or [],
+            "answers": (data.plan or {}).get("answers") or [],
+        }
+    else:
+        saved_plan = data.plan
 
     # История чата = прошлые сообщения + новое сообщение пользователя + ответ методолога.
     messages = history + [
         {"role": "user", "content": data.message},
         {"role": "assistant", "content": result["reply"]},
     ]
-    await project_cards.save_chat_messages(db, project_id, messages)
-    return {"reply": result["reply"], "proposals": result["proposals"], "evidence": result["evidence"]}
+    await project_cards.save_chat_messages(db, project_id, messages, plan=saved_plan)
+    return {
+        "reply": result["reply"],
+        "proposals": result["proposals"],
+        "questions": result.get("questions") or [],
+        "evidence": result["evidence"],
+    }
 
 
 @router.get("")

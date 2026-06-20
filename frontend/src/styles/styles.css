@@ -1335,6 +1335,19 @@ a:hover { color: var(--accent-hover); }
 .project-chat-fill:hover:not(:disabled) { background: var(--accent); color: #fff; }
 .project-chat-fill:disabled { opacity: .55; cursor: not-allowed; }
 
+.project-plan-qa {
+  margin-top: 4px; padding: 12px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface-2); display: flex; flex-direction: column; gap: 10px;
+}
+.project-plan-qa-title {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; font-weight: 800;
+  letter-spacing: .08em; text-transform: uppercase; color: var(--accent-ink);
+}
+.project-plan-qa-hint { margin: 0; font-size: 12px; color: var(--text-secondary); }
+.project-plan-qa-item { display: flex; flex-direction: column; gap: 5px; }
+.project-plan-qa-q { font-size: 13px; color: var(--text-primary); line-height: 1.4; }
+.project-plan-qa-item .form-textarea { resize: vertical; font-size: 13px; }
+
 .project-chat-input { display: flex; gap: 8px; align-items: flex-end; }
 .project-chat-input .form-textarea { flex: 1; resize: none; }
 .project-chat-send {
