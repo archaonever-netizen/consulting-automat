@@ -211,6 +211,9 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
       { projKey: 'managementSystems', formKey: 'managementTargets', title: 'Система управления', labelKeys: ['name', 'systemType'], createItem: cast<FormItem>(createManagementSystemTarget), fieldOptions: { systemType: managementSystemOptions, dataSource: targetDataSourceOptions } },
       { projKey: 'qualityTargets', formKey: 'qualityTargets', title: 'Цель по качеству', labelKeys: ['name', 'qualityIndicator'], createItem: cast<FormItem>(createQualityTarget), fieldOptions: { controlSource: targetDataSourceOptions } },
       { projKey: 'preserveTargets', formKey: 'preserveTargets', title: 'Что сохраняем', labelKeys: ['name', 'preserveElement'], createItem: cast<FormItem>(createPreserveTarget) },
+      // Таблица «Что изменится / что сохранится» — 8 фиксированных областей (createItem: null,
+      // как у diagnosis.gaps): методолог заполняет change/preserve у существующих строк, новых не плодит.
+      { projKey: 'comparisonRows', formKey: 'comparisonRows', title: 'Что изменится / что сохранится', labelKeys: ['area'], createItem: null },
       { projKey: 'constraints', formKey: 'constraintTargets', title: 'Ограничение', labelKeys: ['name', 'constraint'], createItem: cast<FormItem>(createConstraintTarget), fieldOptions: { controlSource: targetDataSourceOptions } },
       { projKey: 'keyResults', formKey: 'keyResults', title: 'Key result', labelKeys: ['name', 'statement'], createItem: cast<FormItem>(createKeyResult), fieldOptions: { controlSource: targetDataSourceOptions, indisputable: yesNoOptions } },
     ],
@@ -315,6 +318,8 @@ export const COMPLEX_FIELD_LABELS: Record<string, string> = {
   // Целевое: сохранить
   preserveElement: 'Что сохраняем', targetLook: 'Как должно выглядеть',
   forbiddenChange: 'Что нельзя менять',
+  // Целевое: что изменится / сохранится (таблица сравнения)
+  area: 'Область сравнения', preserve: 'Что сохранится',
   // Целевое: ограничения
   constraint: 'Ограничение', compliance: 'Требование соответствия', limit: 'Предел',
   violationConsequence: 'Последствие нарушения',

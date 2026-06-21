@@ -128,6 +128,20 @@ function buildStrategicChoice(projectId: number): string {
 function buildTargetState(projectId: number): string {
   const s = readProjectTargetStateSnapshot(projectId);
   if (!s) return '';
+  // Таблица «что изменится / что сохранится» лежит только в lossless-form (без top-level проекции);
+  // показываем валидатору лишь заполненные строки, чтобы пустая таблица не выглядела заполненной.
+  const form = (s.form && typeof s.form === 'object' ? s.form : {}) as {
+    comparisonRows?: Array<{ area?: string; change?: string; preserve?: string }>;
+  };
+  const comparison = items(
+    'Что изменится / что сохранится',
+    (form.comparisonRows ?? [])
+      .filter(row => clean(row.change) || clean(row.preserve))
+      .map(row => ({
+        label: clean(row.area),
+        summary: [field('изменится', row.change), field('сохранится', row.preserve)].filter(Boolean).join('; '),
+      })),
+  );
   return compose([
     field('Формулировка целевого состояния', s.statement),
     field('Тип', s.type),
@@ -142,6 +156,7 @@ function buildTargetState(projectId: number): string {
     items('Системы управления', s.managementSystems),
     items('Цели по качеству', s.qualityTargets),
     items('Что сохраняем', s.preserveTargets),
+    comparison,
     items('Ограничения', s.constraints),
     items('Key results', s.keyResults),
   ]);

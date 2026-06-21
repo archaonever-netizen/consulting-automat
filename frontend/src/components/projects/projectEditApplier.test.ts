@@ -4,7 +4,7 @@ import { buildProjectEditModel, isEditableCard } from './projectEditModel';
 import { readProjectFrameworkSectionSnapshot, type ProjectFrameworkSectionSnapshotItem } from './projectFrameworkSectionSnapshot';
 import { readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
-import { readProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
+import { getFallbackProjectTargetStateSnapshot, readProjectTargetStateSnapshot, writeProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
 import { readProjectTheorySnapshot } from './projectTheorySnapshot';
 import type { RecordState } from './ProjectFrameworkSectionCanvas';
 import type { Proposal } from './projectReview';
@@ -299,6 +299,33 @@ describe('applyProjectEdit (complex cards)', () => {
     expect(snap.results.some(r => r.label === 'Рост выручки')).toBe(true);
     // form хранит под ключом targetResults.
     expect((snap.form as { targetResults: unknown[] }).targetResults).toHaveLength(1);
+  });
+
+  it('target-state: methodologist sees and fills the comparison table (change/preserve)', () => {
+    // Канвас сохраняет фиксированные строки сравнения только в lossless-form; сидим минимальный снапшот.
+    writeProjectTargetStateSnapshot(PROJECT_ID, {
+      ...getFallbackProjectTargetStateSnapshot(PROJECT_ID),
+      form: { comparisonRows: [{ id: 1, area: 'Изменяемые практики', change: '', preserve: '' }] },
+    });
+
+    // Таблица сравнения теперь видна модели как редактируемый список с полями area/change/preserve.
+    const model = buildProjectEditModel(PROJECT_ID);
+    const target = model.editable_cards.find(c => c.card_id === 'target-state')!;
+    const cmp = target.lists.find(l => l.list === 'comparisonRows')!;
+    expect(cmp).toBeTruthy();
+    expect(cmp.item_fields?.map(f => f.key).sort()).toEqual(['area', 'change', 'preserve']);
+
+    // И методолог может заполнить change/preserve существующей строки.
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_item', card_id: 'target-state', list: 'comparisonRows', item_id: '1', human: 'fill',
+      values: { change: 'переход на конвейер', preserve: 'культура качества' },
+    });
+    expect(res.ok).toBe(true);
+    const form = readProjectTargetStateSnapshot(PROJECT_ID)!.form as {
+      comparisonRows: Array<{ id: number; change: string; preserve: string }>;
+    };
+    expect(form.comparisonRows[0].change).toBe('переход на конвейер');
+    expect(form.comparisonRows[0].preserve).toBe('культура качества');
   });
 
   it('infers the list from value keys when list is omitted', () => {
