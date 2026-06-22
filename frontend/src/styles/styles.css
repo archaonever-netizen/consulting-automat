@@ -2080,6 +2080,36 @@ a:hover { color: var(--accent-hover); }
 }
 .pg-mini:hover { filter: brightness(.96); }
 
+/* Узел-Миссия (корень Теории) */
+.pg-mission {
+  width: 300px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;
+  padding: 13px 16px; border: 1px solid var(--accent); border-radius: var(--radius-lg);
+  background: var(--accent-weak); box-shadow: var(--sh-md, 0 6px 18px rgba(20,30,50,.12));
+  cursor: pointer; transition: var(--transition);
+}
+.pg-mission:hover { box-shadow: 0 8px 22px rgba(20,30,50,.16); transform: translateY(-1px); }
+.pg-mission.is-empty { border-color: var(--ink-3, #9aa3b2); background: var(--surface-2); opacity: .9; }
+.pg-mission-kicker {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
+}
+.pg-mission-title { font-size: 15px; font-weight: 800; letter-spacing: -.01em; color: var(--text-primary); line-height: 1.2; }
+.pg-mission-statement {
+  font-size: 12px; line-height: 1.4; color: var(--text-secondary);
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Узел-блок Теории */
+.pg-block {
+  width: 200px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;
+  padding: 10px 12px; border: 1px solid var(--accent-weak); border-top: 3px solid var(--accent);
+  border-radius: var(--radius-md); background: var(--card-bg); box-shadow: var(--sh-sm);
+}
+.pg-block.is-empty { border-top-color: var(--ink-3, #9aa3b2); opacity: .82; }
+.pg-block-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pg-block-head b { font-size: 13px; font-weight: 800; color: var(--text-primary); cursor: pointer; line-height: 1.2; }
+.pg-block-head b:hover { color: var(--accent); }
+.pg-block-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
 /* Узел-элемент */
 .pg-item {
   position: relative; width: 168px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px;
@@ -2107,6 +2137,8 @@ a:hover { color: var(--accent-hover); }
 .project-graph .react-flow__edges svg { width: 100%; height: 100%; overflow: visible; }
 /* Рёбра (non-scaling-stroke — линии не истончаются при отдалении) */
 .project-graph .react-flow__edge-path { vector-effect: non-scaling-stroke; stroke: var(--accent); stroke-width: 2.5; }
+/* Структурные рёбра Миссия→блок — сплошной акцент */
+.project-graph .react-flow__edge.pg-edge-origin .react-flow__edge-path { stroke: var(--accent); stroke-width: 2.5; }
 .project-graph .react-flow__edge.pg-edge-feedback .react-flow__edge-path { stroke: var(--ink-3, #9aa3b2); stroke-width: 2.5; stroke-dasharray: 6 4; }
 .project-graph .react-flow__edge.pg-edge-containment .react-flow__edge-path,
 .project-graph .react-flow__edge.pg-edge-hierarchy .react-flow__edge-path { stroke: #64748b; stroke-width: 2.5; }
