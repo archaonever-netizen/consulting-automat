@@ -2007,3 +2007,66 @@ a:hover { color: var(--accent-hover); }
   .project-theory-table-row.three { grid-template-columns: 1fr; }
   .project-theory-subhead { align-items: flex-start; flex-direction: column; }
 }
+
+/* === Граф зависимостей проекта («Весь проект») === */
+.project-graph {
+  width: 100%; height: min(72vh, 720px); min-height: 460px;
+  border: 1px solid var(--line); border-radius: var(--radius-lg);
+  background: var(--surface-2); box-shadow: var(--sh-sm); overflow: hidden;
+}
+.project-graph-loading {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  color: var(--text-secondary); font-size: 13.5px; font-weight: 700;
+}
+.project-graph-loading .spinner { border-color: rgba(0,0,0,.18); border-top-color: var(--accent); }
+.project-graph .react-flow__attribution { display: none; }
+
+/* Узел-карточка */
+.pg-card {
+  width: 230px; box-sizing: border-box; display: flex; flex-direction: column; gap: 6px;
+  padding: 11px 13px; border: 1px solid var(--line); border-left: 4px solid var(--accent);
+  border-radius: var(--radius-md); background: var(--card-bg); box-shadow: var(--sh-sm);
+  cursor: pointer; transition: var(--transition);
+}
+.pg-card:hover { box-shadow: 0 6px 18px rgba(20,30,50,.12); transform: translateY(-1px); }
+.pg-card.is-empty { border-left-color: var(--ink-3, #9aa3b2); opacity: .82; }
+.pg-card.has-gap { border-left-color: var(--danger); }
+.pg-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.pg-card-head b { font-size: 13.5px; font-weight: 800; letter-spacing: -.01em; color: var(--text-primary); line-height: 1.2; }
+.pg-card-headline {
+  font-size: 11.5px; line-height: 1.4; color: var(--text-secondary);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.pg-card-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: 2px; }
+.pg-chip {
+  font-size: 10.5px; font-weight: 800; letter-spacing: .03em; text-transform: uppercase;
+  color: var(--text-secondary); background: var(--surface-2); border-radius: 999px; padding: 2px 8px;
+}
+.pg-badge-gap {
+  display: inline-flex; align-items: center; justify-content: center; min-width: 18px; height: 18px;
+  padding: 0 5px; border-radius: 999px; background: var(--danger-weak); color: var(--danger);
+  font-size: 11px; font-weight: 800;
+}
+.pg-expand {
+  font: inherit; font-size: 11px; font-weight: 800; color: var(--accent);
+  background: var(--accent-weak); border: none; border-radius: 999px; padding: 3px 9px; cursor: pointer;
+}
+.pg-expand:hover { filter: brightness(.96); }
+
+/* Узел-элемент */
+.pg-item {
+  width: 196px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px;
+  padding: 8px 11px; border: 1px solid var(--line); border-radius: var(--radius-sm);
+  background: var(--card-bg); box-shadow: var(--sh-sm); cursor: pointer; transition: var(--transition);
+}
+.pg-item:hover { border-color: var(--accent); }
+.pg-item.has-gap { border-color: var(--danger); background: var(--danger-weak); }
+.pg-item-sub { font-size: 9.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); }
+.pg-item-label {
+  font-size: 12px; font-weight: 700; color: var(--text-primary); line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+
+/* Рёбра */
+.project-graph .react-flow__edge.pg-edge-feedback .react-flow__edge-path { stroke: var(--ink-3, #9aa3b2); }
+.project-graph .react-flow__handle { opacity: 0; }

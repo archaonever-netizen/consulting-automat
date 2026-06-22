@@ -21,6 +21,8 @@ interface ProjectCanvasProps {
   view: ProjectCanvasView;
   // Меняется после применённой Методологом правки — форсирует перечтение снапшота канвасом.
   reloadNonce?: number;
+  // Открыть каркасную карточку по id (граф зависимостей на «Весь проект» → клик по узлу).
+  onSelectFrameworkCard?: (cardId: string) => void;
 }
 
 const SECTION_CARD_IDS = [
@@ -34,13 +36,18 @@ const SECTION_CARD_IDS = [
   'facts-learning',
 ];
 
-function renderCanvasBody(projectId: number, frameworkCardId: string, nonce: number): ReactNode {
+function renderCanvasBody(
+  projectId: number,
+  frameworkCardId: string,
+  nonce: number,
+  onSelectFrameworkCard?: (cardId: string) => void,
+): ReactNode {
   const k = `${projectId}:${nonce}`;
   if (frameworkCardId === 'project-theory') return <ProjectTheoryCanvas key={k} projectId={projectId} />;
   if (frameworkCardId === 'diagnosis') return <ProjectDiagnosisCanvas key={k} projectId={projectId} />;
   if (frameworkCardId === 'strategic-choice') return <ProjectStrategicChoiceCanvas key={k} projectId={projectId} />;
   if (frameworkCardId === 'target-state') return <ProjectTargetStateCanvas key={k} projectId={projectId} />;
-  if (frameworkCardId === 'whole-project') return <ProjectWholeProjectCanvas key={k} projectId={projectId} />;
+  if (frameworkCardId === 'whole-project') return <ProjectWholeProjectCanvas key={k} projectId={projectId} onSelectCard={onSelectFrameworkCard} />;
   if (frameworkCardId === 'okr-kpi') return <ProjectOkrCanvas key={k} projectId={projectId} />;
   if (SECTION_CARD_IDS.includes(frameworkCardId)) {
     return <ProjectFrameworkSectionCanvas key={`${projectId}-${frameworkCardId}:${nonce}`} projectId={projectId} screenId={frameworkCardId} />;
@@ -48,9 +55,9 @@ function renderCanvasBody(projectId: number, frameworkCardId: string, nonce: num
   return null;
 }
 
-export default function ProjectCanvas({ projectId, view, reloadNonce = 0 }: ProjectCanvasProps) {
+export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSelectFrameworkCard }: ProjectCanvasProps) {
   const cardId = view.frameworkCardId;
-  const body = cardId ? renderCanvasBody(projectId, cardId, reloadNonce) : null;
+  const body = cardId ? renderCanvasBody(projectId, cardId, reloadNonce, onSelectFrameworkCard) : null;
 
   if (cardId && body) {
     return (

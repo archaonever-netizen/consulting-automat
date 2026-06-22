@@ -154,7 +154,12 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           onSelectFrameworkCard={selectFrameworkCard}
         />
         {hydrated ? (
-          <ProjectCanvas projectId={project.id} view={canvasView} reloadNonce={reloadNonce} />
+          <ProjectCanvas
+            projectId={project.id}
+            view={canvasView}
+            reloadNonce={reloadNonce}
+            onSelectFrameworkCard={selectFrameworkCard}
+          />
         ) : (
           <section className="project-canvas">
             <div className="project-canvas-empty">
