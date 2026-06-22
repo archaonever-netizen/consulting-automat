@@ -21,27 +21,28 @@ const HEADLINE_KEYS = [
 // KR/KPI, а createObjective сидирует source/level — по ним нельзя судить о наличии контента.
 const OKR_SYNTHETIC_KEYS = new Set(['objectiveRef', 'source', 'level']);
 
-// Зависимости карточка→карточка (каркас методологии). feedback=true — обратная связь (пунктир).
-type BackboneEdge = [source: string, target: string, feedback?: boolean];
+// Зависимости карточка→карточка (каркас методологии). Линейная спина из соседних шагов
+// (раскладывается в одну прямую) + одна дуга обратной связи. label поясняет смысл связи.
+interface BackboneEdge {
+  source: string;
+  target: string;
+  label: string;
+  feedback?: boolean;
+}
 export const BACKBONE_EDGES: BackboneEdge[] = [
-  ['project-theory', 'diagnosis'],
-  ['diagnosis', 'strategic-choice'],
-  ['strategic-choice', 'target-state'],
-  ['target-state', 'strategy-map'],
-  ['strategy-map', 'hypotheses'],
-  ['hypotheses', 'experiments'],
-  ['experiments', 'decisions'],
-  ['decisions', 'okr-kpi'],
-  ['target-state', 'okr-kpi'],
-  ['strategic-choice', 'initiatives'],
-  ['okr-kpi', 'initiatives'],
-  ['initiatives', 'business-processes'],
-  ['initiatives', 'tasks'],
-  ['business-processes', 'tasks'],
-  ['tasks', 'facts-learning'],
-  ['facts-learning', 'project-theory', true],
-  ['facts-learning', 'diagnosis', true],
-  ['facts-learning', 'strategic-choice', true],
+  { source: 'project-theory', target: 'diagnosis', label: 'проверяется' },
+  { source: 'diagnosis', target: 'strategic-choice', label: 'обосновывает' },
+  { source: 'strategic-choice', target: 'target-state', label: 'задаёт' },
+  { source: 'target-state', target: 'strategy-map', label: 'раскладывается' },
+  { source: 'strategy-map', target: 'hypotheses', label: 'опирается на' },
+  { source: 'hypotheses', target: 'experiments', label: 'проверяются' },
+  { source: 'experiments', target: 'decisions', label: 'дают факты для' },
+  { source: 'decisions', target: 'okr-kpi', label: 'переводятся в' },
+  { source: 'okr-kpi', target: 'initiatives', label: 'реализуются через' },
+  { source: 'initiatives', target: 'business-processes', label: 'закрепляются в' },
+  { source: 'business-processes', target: 'tasks', label: 'дробятся на' },
+  { source: 'tasks', target: 'facts-learning', label: 'дают факты' },
+  { source: 'facts-learning', target: 'project-theory', label: 'обновляет модель', feedback: true },
 ];
 
 export type GraphNodeKind = 'card' | 'item';
@@ -56,6 +57,7 @@ export interface GraphCardData {
   gapCount: number;
   expanded: boolean;
   expandable: boolean;
+  column: number;   // позиция в линейной спине (для ровной горизонтальной раскладки)
 }
 
 export interface GraphItemData {
@@ -78,6 +80,7 @@ export interface GraphEdge {
   source: string;
   target: string;
   kind: GraphEdgeKind;
+  label?: string;
 }
 
 export interface GraphGap {
@@ -222,7 +225,7 @@ export function buildProjectGraph(projectId: number, expanded: ReadonlySet<strin
   }
 
   // Узлы-карточки
-  const nodes: GraphNode[] = cards.map(card => {
+  const nodes: GraphNode[] = cards.map((card, column) => {
     const editable = byId.get(card.id);
     const itemCount = countMap.get(card.id) ?? 0;
     return {
@@ -238,16 +241,18 @@ export function buildProjectGraph(projectId: number, expanded: ReadonlySet<strin
         gapCount: gapCountByCard.get(card.id) ?? 0,
         expanded: expanded.has(card.id),
         expandable: itemCount > 0,
+        column,
       },
     };
   });
 
   // Рёбра-каркас
-  const edges: GraphEdge[] = BACKBONE_EDGES.map(([s, t, feedback]) => ({
-    id: `${feedback ? 'feedback' : 'backbone'}:${s}->${t}`,
-    source: cardNodeId(s),
-    target: cardNodeId(t),
+  const edges: GraphEdge[] = BACKBONE_EDGES.map(({ source, target, label, feedback }) => ({
+    id: `${feedback ? 'feedback' : 'backbone'}:${source}->${target}`,
+    source: cardNodeId(source),
+    target: cardNodeId(target),
     kind: feedback ? 'feedback' : 'backbone',
+    label,
   }));
 
   // Узлы-элементы + структурные рёбра для раскрытых карточек
