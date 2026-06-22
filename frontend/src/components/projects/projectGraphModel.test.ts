@@ -130,4 +130,15 @@ describe('buildProjectGraph — группы и кластеры', () => {
     const g = buildProjectGraph(PID);
     expect(g.edges.some(e => e.kind === 'ref' && e.source.includes(':stakeholder:') && e.target.includes(':results:'))).toBe(true);
   });
+
+  it('меж-карточная связь: альтернатива Стратвыбора → симптом Диагноза (фолбэк-матч по тексту)', () => {
+    add('diagnosis', { description: 'Падение продаж' }, 'symptoms');
+    add('strategic-choice', { name: 'Альт A', diagnosisFit: 'Падение продаж' }, 'alternatives');
+    const g = buildProjectGraph(PID);
+    expect(g.edges.some(e =>
+      e.kind === 'ref' &&
+      e.source.includes('item:strategic-choice:alternatives:') &&
+      e.target.includes('item:diagnosis:symptoms:'),
+    )).toBe(true);
+  });
 });

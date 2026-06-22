@@ -3,6 +3,8 @@ import DraftCard from './DraftCard';
 import Icon from '../Icon';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectStrategicChoiceSnapshot, writeProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
+import ProjectLinkField from './ProjectLinkField';
+import { crossRefOptions } from './projectCrossRefs';
 import { getFallbackProjectTheorySnapshot, readProjectTheorySnapshot, type ProjectTheoryBlockId } from './projectTheorySnapshot';
 
 type StrategicChoiceState = {
@@ -54,6 +56,7 @@ type AlternativeCard = {
   id: number;
   name: string;
   diagnosisFit: string;
+  diagnosisFitRef: string; // составной id связанного элемента Диагноза (прямая связь)
   whereToPlay: string;
   howToWin: string;
   capabilities: string[];
@@ -149,6 +152,7 @@ export const createAlternative = (id: number): AlternativeCard => ({
   id,
   name: '',
   diagnosisFit: '',
+  diagnosisFitRef: '',
   whereToPlay: '',
   howToWin: '',
   capabilities: [],
@@ -348,6 +352,8 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
   const competencyOptions = itemLabels(competencies.items, 'Сначала заполните компетенции в Теории проекта');
   const constraintOptions = itemLabels(constraints.items, 'Сначала заполните ограничения в Теории проекта');
   const preserveOptions = itemLabels(preserve.items, 'Сначала заполните сохраняемое ядро в Теории проекта');
+  // Опции прямой связи альтернативы с элементом Диагноза (симптомы) — реальные элементы по id.
+  const diagnosisSymptomOptions = useMemo(() => crossRefOptions(projectId, 'diagnosis', 'symptoms'), [projectId]);
   const resultOptions = itemLabels(results.items, 'Сначала заполните критерии результата в Теории проекта');
   const stakeholderOptions = itemLabels(stakeholder.items, 'Сначала заполните выгодоприобретателей в Теории проекта');
 
@@ -637,6 +643,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
                     <TextField label="Название альтернативы" value={draft.name} onChange={value => patch({ name: value })} />
                     <SelectField label="Статус альтернативы" options={alternativeStatusOptions} value={draft.status} onChange={value => patch({ status: value })} />
                     <TextField label="Как отвечает на Диагноз" value={draft.diagnosisFit} onChange={value => patch({ diagnosisFit: value })} multiline />
+                    <ProjectLinkField label="→ Связь: симптом Диагноза" value={draft.diagnosisFitRef} options={diagnosisSymptomOptions} onChange={value => patch({ diagnosisFitRef: value })} />
                     <TextField label="Where to play альтернативы" value={draft.whereToPlay} onChange={value => patch({ whereToPlay: value })} multiline />
                     <TextField label="How to win альтернативы" value={draft.howToWin} onChange={value => patch({ howToWin: value })} multiline />
                     <TextField label="Management systems" value={draft.managementSystems} onChange={value => patch({ managementSystems: value })} multiline />

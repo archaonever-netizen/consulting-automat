@@ -12,6 +12,7 @@ import { buildCardValidationText } from './projectCardValidation';
 import { buildProjectEditModel, type EditableCard, type EditableItem } from './projectEditModel';
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
 import { PROJECT_CLUSTERS, isClusteredList, type ClusterSpec } from './projectGraphClusters';
+import { crossRefEdges } from './projectCrossRefs';
 
 const WHOLE_PROJECT_ID = 'whole-project';
 
@@ -51,19 +52,7 @@ export const BACKBONE_EDGES: BackboneEdge[] = [
   { source: 'facts-learning', target: 'project-theory', label: 'обновляет модель', feedback: true },
 ];
 
-// Надёжные ref-связи внутри Теории (Теория хранит ссылки как разрешённые ЛЕЙБЛЫ — матчим по метке).
-interface TheoryRef { sourceList: string; field: string; targetList: string; label: string; }
-const THEORY_REFS: TheoryRef[] = [
-  { sourceList: 'stakeholder', field: 'resultCriterion', targetList: 'results', label: 'отвечает за' },
-  { sourceList: 'results', field: 'requiredCompetencies', targetList: 'competencies', label: 'требует' },
-  { sourceList: 'competencies', field: 'resultCriterion', targetList: 'results', label: 'обеспечивает' },
-  { sourceList: 'constraints', field: 'resultCriterion', targetList: 'results', label: 'ограничивает' },
-  { sourceList: 'quality', field: 'resultCriterion', targetList: 'results', label: 'контролирует' },
-  { sourceList: 'quality', field: 'beneficiary', targetList: 'stakeholder', label: 'для' },
-  { sourceList: 'preserve', field: 'stakeholder', targetList: 'stakeholder', label: 'защищает' },
-  { sourceList: 'preserve', field: 'resultCriterion', targetList: 'results', label: 'сохраняет' },
-  { sourceList: 'preserve', field: 'constraint', targetList: 'constraints', label: 'связано с' },
-];
+// Надёжные ref-связи теперь в реестре projectCrossRefs (Теория + меж-карточные).
 
 // === Типы графа ===
 
@@ -157,38 +146,6 @@ function collectElementGaps(byId: Map<string, EditableCard>): GraphGap[] {
     }
   }
   return gaps;
-}
-
-// Надёжные ref-связи Теории: матчим значение поля (метку) с меткой целевого элемента.
-function collectTheoryRefEdges(theory: EditableCard | undefined): GraphEdge[] {
-  if (!theory) return [];
-  const edges: GraphEdge[] = [];
-  const byLabel = (list: string) => {
-    const map = new Map<string, EditableItem>();
-    for (const it of contentItems('project-theory', listById(theory, list)?.items ?? [])) {
-      map.set(it.label.trim().toLowerCase(), it);
-    }
-    return map;
-  };
-  const targetMaps = new Map<string, Map<string, EditableItem>>();
-  for (const ref of THEORY_REFS) if (!targetMaps.has(ref.targetList)) targetMaps.set(ref.targetList, byLabel(ref.targetList));
-
-  for (const ref of THEORY_REFS) {
-    const sources = contentItems('project-theory', listById(theory, ref.sourceList)?.items ?? []);
-    const targets = targetMaps.get(ref.targetList)!;
-    for (const src of sources) {
-      const raw = trimmed(src.values[ref.field]);
-      if (!raw) continue;
-      for (const token of raw.split(/[;,]\s*/).map(t => t.trim()).filter(Boolean)) {
-        const tgt = targets.get(token.toLowerCase());
-        if (!tgt || (ref.sourceList === ref.targetList && String(tgt.id) === String(src.id))) continue;
-        const s = itemNodeId('project-theory', ref.sourceList, String(src.id));
-        const t = itemNodeId('project-theory', ref.targetList, String(tgt.id));
-        edges.push({ id: `ref:${s}->${t}:${ref.field}`, source: s, target: t, kind: 'ref', label: ref.label });
-      }
-    }
-  }
-  return edges;
 }
 
 // === Сборка ===
@@ -294,8 +251,10 @@ export function buildProjectGraph(projectId: number, expanded: ReadonlySet<strin
     }
   }
 
-  // Надёжные ref-связи Теории (показываются компонентом, когда оба конца видимы)
-  edges.push(...collectTheoryRefEdges(byId.get('project-theory')));
+  // Надёжные ref-связи из реестра (Теория + меж-карточные); показываются компонентом по наведению.
+  crossRefEdges(projectId, model).forEach((r, i) => {
+    edges.push({ id: `ref:${i}:${r.source}->${r.target}`, source: r.source, target: r.target, kind: 'ref', label: r.label });
+  });
 
   return { nodes, edges, gaps };
 }
