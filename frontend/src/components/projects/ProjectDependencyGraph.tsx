@@ -5,7 +5,7 @@
 //     objective с доп. отступом), связь идёт от низа родителя к левому краю элемента.
 // Рёбра подписаны смыслом связи; обратная связь — дугой снизу. Линии не масштабируются
 // зумом (non-scaling-stroke), поэтому видны даже при полном отдалении.
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   Background,
   Controls,
@@ -15,6 +15,8 @@ import {
   Position,
   ReactFlow,
   ReactFlowProvider,
+  useEdgesState,
+  useNodesState,
   useReactFlow,
   type Edge,
   type Node,
@@ -31,12 +33,12 @@ import {
 
 const CARD_H = 108;
 const ITEM_H = 54;
-const COL_W = 440;          // шаг между колонками-карточками
+const COL_W = 380;          // шаг между колонками-карточками
 const SPINE_Y = 60;         // y линии карточек
 const ITEM_TOP = SPINE_Y + CARD_H + 44;
 const ITEM_GAP_Y = 14;
-const INDENT_L0 = 120;      // отступ элементов верхнего уровня от левого края карточки
-const INDENT_L1 = 210;      // отступ дочерних элементов OKR (KR / KPI)
+const INDENT_L0 = 110;      // отступ элементов верхнего уровня от левого края карточки
+const INDENT_L1 = 190;      // отступ дочерних элементов OKR (KR / KPI)
 
 const ACCENT = '#2563EB';
 const MUTED = '#64748b';
@@ -154,6 +156,8 @@ interface GraphProps {
 
 function GraphInner({ projectId, onOpenCard }: GraphProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
+  const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { fitView } = useReactFlow();
 
   const toggle = useCallback((cardId: string) => {
@@ -165,7 +169,10 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     });
   }, []);
 
-  const { nodes, edges } = useMemo(() => {
+  // Пересобираем узлы/рёбра при смене проекта/раскрытия. Через useNodesState/useEdgesState,
+  // чтобы React Flow применил измерение размеров узлов — иначе «ручки» без координат и у
+  // рёбер пустая геометрия (линии не рисуются).
+  useEffect(() => {
     const graph = buildProjectGraph(projectId, expanded);
     const pos = computePositions(graph.nodes);
     const rfNodes: Node[] = graph.nodes.map(n =>
@@ -188,12 +195,13 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
         markerEnd: { type: MarkerType.ArrowClosed, color: accent ? ACCENT : MUTED, width: 18, height: 18 },
       };
     });
-    return { nodes: rfNodes, edges: rfEdges };
-  }, [projectId, expanded, onOpenCard, toggle]);
+    setNodes(rfNodes);
+    setEdges(rfEdges);
+  }, [projectId, expanded, onOpenCard, toggle, setNodes, setEdges]);
 
   // Перецентровать вид после раскрытия/сворачивания (число узлов меняется).
   useEffect(() => {
-    const t = window.setTimeout(() => fitView({ duration: 300, padding: 0.12 }), 0);
+    const t = window.setTimeout(() => fitView({ duration: 300, padding: 0.12 }), 50);
     return () => window.clearTimeout(t);
   }, [nodes.length, fitView]);
 
@@ -201,6 +209,8 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     <ReactFlow
       nodes={nodes}
       edges={edges}
+      onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes}
       fitView
       fitViewOptions={{ padding: 0.12 }}
