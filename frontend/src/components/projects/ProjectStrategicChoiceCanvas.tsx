@@ -83,6 +83,7 @@ type ActionCard = {
   name: string;
   action: string;
   supportsChoice: string;
+  supportsChoiceRef: string;
   resource: string;
   owner: string;
   deadline: string;
@@ -95,6 +96,7 @@ type HypothesisCard = {
   name: string;
   assumption: string;
   choiceLink: string;
+  choiceLinkRef: string;
   confirms: string;
   refutes: string;
 };
@@ -179,6 +181,7 @@ export const createAction = (id: number): ActionCard => ({
   name: '',
   action: '',
   supportsChoice: '',
+  supportsChoiceRef: '',
   resource: '',
   owner: '',
   deadline: '',
@@ -191,6 +194,7 @@ export const createHypothesis = (id: number): HypothesisCard => ({
   name: '',
   assumption: '',
   choiceLink: '',
+  choiceLinkRef: '',
   confirms: '',
   refutes: '',
 });
@@ -354,6 +358,8 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
   const preserveOptions = itemLabels(preserve.items, 'Сначала заполните сохраняемое ядро в Теории проекта');
   // Опции прямой связи альтернативы с элементом Диагноза (симптомы) — реальные элементы по id.
   const diagnosisSymptomOptions = useMemo(() => crossRefOptions(projectId, 'diagnosis', 'symptoms'), [projectId]);
+  // Опции связи действия/гипотезы с альтернативой (реальные альтернативы по id).
+  const alternativeOptions = useMemo(() => crossRefOptions(projectId, 'strategic-choice', 'alternatives'), [projectId]);
   const resultOptions = itemLabels(results.items, 'Сначала заполните критерии результата в Теории проекта');
   const stakeholderOptions = itemLabels(stakeholder.items, 'Сначала заполните выгодоприобретателей в Теории проекта');
 
@@ -729,6 +735,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
                     <div className="project-theory-grid two">
                       <TextField label="Действие" value={draft.action} onChange={value => patch({ action: value })} />
                       <TextField label="Какой выбор поддерживает" value={draft.supportsChoice} onChange={value => patch({ supportsChoice: value })} />
+                      <ProjectLinkField label="→ Связь: стратегическая альтернатива" value={draft.supportsChoiceRef} options={alternativeOptions} onChange={value => patch({ supportsChoiceRef: value })} />
                       <TextField label="Какой ресурс требуется" value={draft.resource} onChange={value => patch({ resource: value })} />
                       <TextField label="Владелец" value={draft.owner} onChange={value => patch({ owner: value })} />
                       <TextField label="Срок" value={draft.deadline} onChange={value => patch({ deadline: value })} />
@@ -765,6 +772,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
                   <div className="project-theory-grid two">
                     <TextField label="Предположение" value={draft.assumption} onChange={value => patch({ assumption: value })} multiline />
                     <TextField label="На какой выбор влияет" value={draft.choiceLink} onChange={value => patch({ choiceLink: value })} />
+                    <ProjectLinkField label="→ Связь: стратегическая альтернатива" value={draft.choiceLinkRef} options={alternativeOptions} onChange={value => patch({ choiceLinkRef: value })} />
                     <TextField label="Что подтвердит" value={draft.confirms} onChange={value => patch({ confirms: value })} multiline />
                     <TextField label="Что опровергнет" value={draft.refutes} onChange={value => patch({ refutes: value })} multiline />
                   </div>

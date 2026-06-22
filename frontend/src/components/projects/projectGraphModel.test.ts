@@ -141,4 +141,15 @@ describe('buildProjectGraph — группы и кластеры', () => {
       e.target.includes('item:diagnosis:symptoms:'),
     )).toBe(true);
   });
+
+  it('внутри кластера: ценность (Целевое) связана со стейкхолдером (Теория)', () => {
+    add('project-theory', { details: 'Генеральный директор' }, 'stakeholder');
+    add('target-state', { name: 'Прозрачность P&L', stakeholder: 'Генеральный директор' }, 'stakeholderValues');
+    const g = buildProjectGraph(PID);
+    expect(g.edges.some(e =>
+      e.kind === 'ref' &&
+      e.source.includes('item:target-state:stakeholderValues:') &&
+      e.target.includes('item:project-theory:stakeholder:'),
+    )).toBe(true);
+  });
 });
