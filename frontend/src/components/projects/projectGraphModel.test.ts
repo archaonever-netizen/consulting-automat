@@ -81,3 +81,53 @@ describe('buildProjectGraph', () => {
     expect(g.gaps.some(x => x.id.startsWith('okr-obj-no-kr'))).toBe(false);
   });
 });
+
+type ClusterNode = Extract<GraphNode, { type: 'clusterNode' }>;
+type GroupNode = Extract<GraphNode, { type: 'groupNode' }>;
+const clusterNodes = (g: ProjectGraph) => g.nodes.filter((n): n is ClusterNode => n.type === 'clusterNode');
+const groupNodes = (g: ProjectGraph) => g.nodes.filter((n): n is GroupNode => n.type === 'groupNode');
+const clusterNode = (g: ProjectGraph, id: string) => clusterNodes(g).find(n => n.data.clusterId === id);
+
+describe('buildProjectGraph — группы и кластеры', () => {
+  beforeEach(() => window.localStorage.clear());
+
+  it('создаёт 5 фазовых групп и 7 кластеров', () => {
+    const g = buildProjectGraph(PID);
+    expect(groupNodes(g)).toHaveLength(5);
+    expect(clusterNodes(g)).toHaveLength(7);
+  });
+
+  it('кластер «Стейкхолдеры» агрегирует элементы из Теории и Целевого; есть ребро карточка→кластер', () => {
+    add('project-theory', { details: 'Клиент A' }, 'stakeholder');
+    add('target-state', { name: 'Ценность для X', stakeholder: 'Розничный клиент' }, 'stakeholderValues');
+    const g = buildProjectGraph(PID);
+    const cl = clusterNode(g, 'stakeholders');
+    expect(cl?.data.itemCount).toBeGreaterThanOrEqual(2);
+    expect(cl?.data.sourceCardIds).toEqual(expect.arrayContaining(['project-theory', 'target-state']));
+    expect(g.edges.some(e => e.kind === 'cluster' && e.source === 'card:project-theory' && e.target === 'cluster:stakeholders')).toBe(true);
+    expect(g.edges.some(e => e.kind === 'cluster' && e.source === 'card:target-state' && e.target === 'cluster:stakeholders')).toBe(true);
+  });
+
+  it('раскрытие кластера добавляет узлы-элементы из источников', () => {
+    add('project-theory', { details: 'Клиент A' }, 'stakeholder');
+    const collapsed = buildProjectGraph(PID);
+    expect(itemNodes(collapsed).filter(n => n.data.clusterId === 'stakeholders')).toHaveLength(0);
+    const expanded = buildProjectGraph(PID, new Set(['stakeholders']));
+    const members = itemNodes(expanded).filter(n => n.data.clusterId === 'stakeholders');
+    expect(members.length).toBeGreaterThanOrEqual(1);
+    expect(members.some(m => m.data.cardId === 'project-theory')).toBe(true);
+  });
+
+  it('Теория не раскрывается в свои элементы — они живут в кластерах', () => {
+    add('project-theory', { details: 'Клиент A' }, 'stakeholder');
+    const g = buildProjectGraph(PID, new Set(['project-theory']));
+    expect(itemNodes(g).filter(n => n.data.cardId === 'project-theory' && n.data.clusterId === null)).toHaveLength(0);
+  });
+
+  it('рисует надёжную ref-связь Теории stakeholder→criterion по совпадению метки', () => {
+    add('project-theory', { statement: 'Рост выручки' }, 'results');
+    add('project-theory', { details: 'Клиент A', resultCriterion: 'Рост выручки' }, 'stakeholder');
+    const g = buildProjectGraph(PID);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes(':stakeholder:') && e.target.includes(':results:'))).toBe(true);
+  });
+});
