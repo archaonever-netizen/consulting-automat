@@ -1,8 +1,10 @@
 // Интерактивный граф зависимостей проекта (экран «Весь проект»).
-// Данные — из buildProjectGraph. Раскладка ручная и предсказуемая: карточки стоят строго
-// в одну горизонтальную линию по порядку методологии, элементы раскрытой карточки —
-// вертикально под ней (у OKR сгруппированы по objective). Рёбра подписаны смыслом связи,
-// обратная связь уведена дугой снизу через нижние «ручки».
+// Данные — из buildProjectGraph. Раскладка ручная и предсказуемая:
+//   • карточки стоят строго в одну горизонтальную линию по порядку методологии;
+//   • элементы раскрытой карточки уходят деревом вправо-вниз (у OKR KR/KPI — под своим
+//     objective с доп. отступом), связь идёт от низа родителя к левому краю элемента.
+// Рёбра подписаны смыслом связи; обратная связь — дугой снизу. Линии не масштабируются
+// зумом (non-scaling-stroke), поэтому видны даже при полном отдалении.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Background,
@@ -27,17 +29,17 @@ import {
   type GraphNode,
 } from './projectGraphModel';
 
-const CARD_W = 230;
 const CARD_H = 108;
-const ITEM_W = 200;
-const ITEM_H = 56;
-const COL_W = 340;          // шаг между колонками-карточками
+const ITEM_H = 54;
+const COL_W = 440;          // шаг между колонками-карточками
 const SPINE_Y = 60;         // y линии карточек
-const ITEM_TOP = SPINE_Y + CARD_H + 64;
+const ITEM_TOP = SPINE_Y + CARD_H + 44;
 const ITEM_GAP_Y = 14;
+const INDENT_L0 = 120;      // отступ элементов верхнего уровня от левого края карточки
+const INDENT_L1 = 210;      // отступ дочерних элементов OKR (KR / KPI)
 
 const ACCENT = '#2563EB';
-const MUTED = '#c4ccda';
+const MUTED = '#64748b';
 
 type CardNodeData = GraphCardData & {
   onOpen: (cardId: string) => void;
@@ -87,7 +89,7 @@ function ItemNode({ data }: NodeProps) {
       onClick={() => d.onOpen(d.cardId)}
       title={d.subtitle}
     >
-      <Handle type="target" position={Position.Top} id="t" />
+      <Handle type="target" position={Position.Left} id="l" />
       <Handle type="source" position={Position.Bottom} id="b" />
       <span className="pg-item-sub">{d.subtitle}</span>
       <span className="pg-item-label">{d.label}</span>
@@ -99,8 +101,10 @@ const nodeTypes = { cardNode: CardNode, itemNode: ItemNode };
 
 const listRank = (list: string) => (list === 'objectives' ? 0 : list === 'keyResults' ? 1 : 2);
 const okrObjId = (nodeId: string) => nodeId.split(':')[3] ?? '';
+const isOkrChild = (cardId: string, list: string) =>
+  cardId === 'okr-kpi' && (list === 'keyResults' || list === 'kpis');
 
-// Ручная раскладка: карточки в линию по колонке, элементы — стопкой под своей карточкой.
+// Ручная раскладка: карточки в линию по колонке, элементы — деревом под своей карточкой.
 function computePositions(nodes: GraphNode[]): Map<string, { x: number; y: number }> {
   const pos = new Map<string, { x: number; y: number }>();
   const colByCard = new Map<string, number>();
@@ -120,7 +124,7 @@ function computePositions(nodes: GraphNode[]): Map<string, { x: number; y: numbe
   }
 
   for (const [cardId, items] of itemsByCard) {
-    const baseX = (colByCard.get(cardId) ?? 0) * COL_W + (CARD_W - ITEM_W) / 2;
+    const colX = (colByCard.get(cardId) ?? 0) * COL_W;
     const ordered = cardId === 'okr-kpi'
       ? [...items].sort((a, b) => {
           const oa = Number(okrObjId(a.id)); const ob = Number(okrObjId(b.id));
@@ -128,8 +132,8 @@ function computePositions(nodes: GraphNode[]): Map<string, { x: number; y: numbe
         })
       : items;
     ordered.forEach((n, i) => {
-      const indent = n.data.list === 'keyResults' || n.data.list === 'kpis' ? 28 : 0;
-      pos.set(n.id, { x: baseX + indent, y: ITEM_TOP + i * (ITEM_H + ITEM_GAP_Y) });
+      const indent = isOkrChild(cardId, n.data.list) ? INDENT_L1 : INDENT_L0;
+      pos.set(n.id, { x: colX + indent, y: ITEM_TOP + i * (ITEM_H + ITEM_GAP_Y) });
     });
   }
 
@@ -139,8 +143,8 @@ function computePositions(nodes: GraphNode[]): Map<string, { x: number; y: numbe
 const HANDLES: Record<GraphEdgeKind, [source: string, target: string]> = {
   backbone: ['r', 'l'],
   feedback: ['b', 'fb'],
-  containment: ['b', 't'],
-  hierarchy: ['b', 't'],
+  containment: ['b', 'l'],
+  hierarchy: ['b', 'l'],
 };
 
 interface GraphProps {
@@ -180,9 +184,8 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
         targetHandle,
         type: 'smoothstep',
         label: e.label,
-        labelShowBg: true,
         className: `pg-edge pg-edge-${e.kind}`,
-        markerEnd: { type: MarkerType.ArrowClosed, color: accent ? ACCENT : MUTED, width: 16, height: 16 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: accent ? ACCENT : MUTED, width: 18, height: 18 },
       };
     });
     return { nodes: rfNodes, edges: rfEdges };
@@ -201,7 +204,7 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
       nodeTypes={nodeTypes}
       fitView
       fitViewOptions={{ padding: 0.12 }}
-      minZoom={0.2}
+      minZoom={0.15}
       proOptions={{ hideAttribution: true }}
       nodesConnectable={false}
       edgesFocusable={false}

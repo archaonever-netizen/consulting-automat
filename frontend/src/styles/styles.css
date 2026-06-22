@@ -2067,11 +2067,11 @@ a:hover { color: var(--accent-hover); }
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
 
-/* Рёбра */
-.project-graph .react-flow__edge-path { stroke: var(--accent); stroke-width: 2; }
-.project-graph .react-flow__edge.pg-edge-feedback .react-flow__edge-path { stroke: var(--ink-3, #9aa3b2); stroke-width: 1.5; stroke-dasharray: 6 4; }
+/* Рёбра — non-scaling-stroke: линии не истончаются при отдалении, видны на любом зуме */
+.project-graph .react-flow__edge-path { vector-effect: non-scaling-stroke; stroke: var(--accent); stroke-width: 2.5; }
+.project-graph .react-flow__edge.pg-edge-feedback .react-flow__edge-path { stroke: var(--ink-3, #9aa3b2); stroke-width: 2; stroke-dasharray: 6 4; }
 .project-graph .react-flow__edge.pg-edge-containment .react-flow__edge-path,
-.project-graph .react-flow__edge.pg-edge-hierarchy .react-flow__edge-path { stroke: #c4ccda; stroke-width: 1.5; }
+.project-graph .react-flow__edge.pg-edge-hierarchy .react-flow__edge-path { stroke: #64748b; stroke-width: 2; }
 /* Подписи связей */
 .project-graph .react-flow__edge-text { font-size: 10.5px; font-weight: 800; fill: var(--accent); }
 .project-graph .react-flow__edge.pg-edge-feedback .react-flow__edge-text { fill: var(--text-secondary); }
