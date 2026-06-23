@@ -188,8 +188,50 @@ export default function ProjectMethodologist({ projectId, focusCardId, onProject
   }
 
   // «Заполнить по плану»: внесение правок по плану/ответам. quiet — без сообщения в чате.
-  function fillFromPlan() {
-    submit('Заполни карточку по согласованному плану с учётом моих ответов.', 'fill', true);
+  // Заполняем ПО ЧАСТЯМ — по одному списку за запрос (плюс отдельный запрос на скалярные поля),
+  // чтобы ни один вызов не был большим и не упирался в таймаут. Каждая часть заполняется целиком,
+  // модель в каждом запросе видит всю карточку (контекст не теряется). Узкие планы (например только
+  // связи) остаются узкими внутри каждой части. Однолистовые/без фокуса карточки — одним запросом.
+  async function fillFromPlan() {
+    if (sending) return;
+    const model = buildProjectEditModel(projectId);
+    const card = focusCardId ? model.editable_cards.find(c => c.card_id === focusCardId) : undefined;
+    const lists = card?.lists ?? [];
+
+    if (!card || lists.length <= 1) {
+      submit('Внеси правки СТРОГО по согласованному плану и моим ответам — только то, что в плане, без расширения объёма.', 'fill', true);
+      return;
+    }
+
+    const chunks: { label: string; text: string }[] = [];
+    if (card.fields && card.fields.length) {
+      chunks.push({ label: 'Основные поля', text: 'Заполни СТРОГО по согласованному плану и моим ответам ТОЛЬКО скалярные поля (fields) этой карточки. Списки не трогай.' });
+    }
+    for (const l of lists) {
+      chunks.push({
+        label: l.title,
+        text: `Заполни СТРОГО по согласованному плану и моим ответам ТОЛЬКО список «${l.title}» (list="${l.list}"): пройди по всем его элементам, проставь недостающие значения и связи (значения связей — строго из options). Другие списки и скалярные поля не трогай.`,
+      });
+    }
+
+    setSending(true);
+    try {
+      let history = messages;
+      for (const ch of chunks) {
+        try {
+          const res = await sendProjectChat(projectId, ch.text, history, model, review, focusCardId, deep, 'fill', plan, true);
+          const msg: ChatMessage = { role: 'assistant', content: `**${ch.label}**\n${(res.reply || '').trim()}`.trim(), proposals: res.proposals };
+          history = [...history, msg];
+          setMessages(cur => [...cur, msg]);
+        } catch (e) {
+          const msg: ChatMessage = { role: 'assistant', content: `**${ch.label}**\n${errText(e)}` };
+          history = [...history, msg];
+          setMessages(cur => [...cur, msg]);
+        }
+      }
+    } finally {
+      setSending(false);
+    }
   }
 
   function setAnswer(i: number, val: string) {
