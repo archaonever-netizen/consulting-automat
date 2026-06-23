@@ -13,6 +13,44 @@ const SECTION_LABEL: Record<string, string> = {
   info: 'Информация',
 };
 
+// Иконки в едином стиле дизайн-системы ШЕФ (line, 24×24, stroke). Портал
+// автономен, поэтому набор инлайнится здесь, а не импортируется из приложения.
+const ICON_PATHS: Record<string, string> = {
+  project: '<rect x="3.5" y="3.5" width="17" height="17" rx="3"/><path d="M3.5 9h17"/><path d="M9 9v11.5"/>',
+  stages: '<path d="M9 5h11"/><path d="M9 12h11"/><path d="M9 19h11"/><circle cx="4.5" cy="5" r="1.4"/><circle cx="4.5" cy="12" r="1.4"/><circle cx="4.5" cy="19" r="1.4"/>',
+  status: '<path d="M3 12h4l2.5-7 5 14 2.5-7H21"/>',
+  documents: '<path d="M6 2h8l4 4v14a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Z"/><path d="M13 2v5h5"/>',
+  events: '<rect x="3.5" y="5" width="17" height="16" rx="2.5"/><path d="M3.5 10h17"/><path d="M8 3v4M16 3v4"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6h.01"/>',
+  download: '<path d="M12 3v12"/><path d="m7 11 5 5 5-5"/><path d="M5 20h14"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
+  close: '<path d="M18 6 6 18M6 6l12 12"/>',
+  eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+};
+
+function PlIcon({ name, size = 18 }: { name: string; size?: number }) {
+  const d = ICON_PATHS[name];
+  if (!d) return null;
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"
+      dangerouslySetInnerHTML={{ __html: d }} />
+  );
+}
+
+// Монограмма ШЕФ (тёмная плашка задаётся CSS-классом .pl-mono).
+function ShefGlyph() {
+  return (
+    <svg viewBox="-20 -18 268 236" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g fill="#fff">
+        <path d="M0 0H46V200H0Z" /><path d="M91 0H137V200H91Z" />
+        <path d="M182 0H228V200H182Z" /><path d="M0 156H228V200H0Z" />
+      </g>
+      <path d="M188 156H228L184 200H144Z" fill="#2563EB" />
+    </svg>
+  );
+}
+
 function humanSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} КБ`;
@@ -84,8 +122,11 @@ export default function PortalApp() {
     <div className="pl-shell">
       <div className="pl-topbar">
         <div className="pl-brand">
-          {me.client_name || 'Портал проекта'}
-          <small>Портал клиента</small>
+          <span className="pl-mono"><ShefGlyph /></span>
+          <div className="pl-brand-text">
+            <b>{me.client_name || 'Портал проекта'}</b>
+            <small>Портал клиента</small>
+          </div>
         </div>
         <div className="pl-topbar-right">
           <div className="pl-user">
@@ -93,6 +134,7 @@ export default function PortalApp() {
             {!me.is_preview && <span>сотрудник клиента</span>}
           </div>
           <button className="pl-btn pl-btn-ghost" onClick={logout}>
+            <PlIcon name={me.is_preview ? 'close' : 'logout'} size={16} />
             {me.is_preview ? 'Закрыть' : 'Выйти'}
           </button>
         </div>
@@ -100,6 +142,7 @@ export default function PortalApp() {
 
       {me.is_preview && (
         <div className="pl-preview-banner">
+          <PlIcon name="eye" size={15} />
           Режим предпросмотра — так портал видит клиент. Видны все разделы.
         </div>
       )}
@@ -112,6 +155,7 @@ export default function PortalApp() {
               className={`pl-nav-item${active === s ? ' active' : ''}`}
               onClick={() => setActive(s)}
             >
+              <PlIcon name={s} size={18} />
               {SECTION_LABEL[s] || s}
             </button>
           ))}
@@ -120,6 +164,11 @@ export default function PortalApp() {
           <SectionView section={active} data={data} />
         </main>
       </div>
+
+      <footer className="pl-foot">
+        <span className="pl-mono sm"><ShefGlyph /></span>
+        Портал клиента · работает на ШЕФ
+      </footer>
     </div>
   );
 }
@@ -138,7 +187,7 @@ function SectionView({ section, data }: { section: string; data: PortalData }) {
         <h2 className="pl-h2">{title}</h2>
         <p className="pl-sub">Проекты по вашей компании.</p>
         {projects.length === 0 ? (
-          <Empty title="Проектов пока нет" text="Здесь появятся проекты по мере их запуска." />
+          <Empty icon="project" title="Проектов пока нет" text="Здесь появятся проекты по мере их запуска." />
         ) : (
           projects.map(p => (
             <div key={p.id} className="pl-proj">
@@ -162,7 +211,7 @@ function SectionView({ section, data }: { section: string; data: PortalData }) {
   return (
     <div className="pl-card">
       <h2 className="pl-h2">{title}</h2>
-      <Empty title="Раздел в подготовке" text={placeholders[section] || 'Раздел скоро наполнится.'} />
+      <Empty icon={section} title="Раздел в подготовке" text={placeholders[section] || 'Раздел скоро наполнится.'} />
     </div>
   );
 }
@@ -189,16 +238,18 @@ function DocumentsSection({ docs }: { docs: PortalDocument[] }) {
       <p className="pl-sub">Материалы, которые ваша команда проекта подготовила для вас.</p>
       {error && <div className="pl-error">{error}</div>}
       {docs.length === 0 ? (
-        <Empty title="Документов пока нет" text="Здесь появятся файлы, которыми с вами поделится команда." />
+        <Empty icon="documents" title="Документов пока нет" text="Здесь появятся файлы, которыми с вами поделится команда." />
       ) : (
         <div>
           {docs.map(d => (
             <div key={d.id} className="pl-item">
+              <span className="pl-item-ic"><PlIcon name="documents" size={19} /></span>
               <div className="pl-item-main">
                 <b>{d.title}</b>
                 <span>{d.original_filename} · {humanSize(d.size_bytes)} · {d.created_at_fmt}</span>
               </div>
               <button className="pl-btn pl-btn-soft" disabled={busyId === d.id} onClick={() => download(d)}>
+                <PlIcon name="download" size={15} />
                 {busyId === d.id ? 'Скачивание…' : 'Скачать'}
               </button>
             </div>
@@ -209,9 +260,10 @@ function DocumentsSection({ docs }: { docs: PortalDocument[] }) {
   );
 }
 
-function Empty({ title, text }: { title: string; text: string }) {
+function Empty({ title, text, icon }: { title: string; text: string; icon?: string }) {
   return (
     <div className="pl-empty">
+      {icon && <span className="pl-empty-ic"><PlIcon name={icon} size={24} /></span>}
       <b>{title}</b>
       <span>{text}</span>
     </div>
@@ -245,6 +297,13 @@ function LoginScreen({ onSuccess, initialError }: { onSuccess: () => void; initi
   return (
     <div className="pl-login">
       <form className="pl-login-card" onSubmit={submit}>
+        <div className="pl-login-brand">
+          <span className="pl-mono lg"><ShefGlyph /></span>
+          <div>
+            <b>ШЕФ</b>
+            <span>Портал клиента</span>
+          </div>
+        </div>
         <h1>Вход в портал</h1>
         <p className="sub">Введите логин и пароль, которые вам выдала команда проекта.</p>
         {error && <div className="pl-error">{error}</div>}
