@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { applyProjectEdit } from './projectEditApplier';
 import { buildProjectEditModel, isEditableCard } from './projectEditModel';
 import { readProjectFrameworkSectionSnapshot, type ProjectFrameworkSectionSnapshotItem } from './projectFrameworkSectionSnapshot';
-import { readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
+import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot, writeProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { getFallbackProjectTargetStateSnapshot, readProjectTargetStateSnapshot, writeProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
 import { readProjectTheorySnapshot } from './projectTheorySnapshot';
@@ -267,6 +267,45 @@ describe('applyProjectEdit (complex cards)', () => {
   it('diagnosis: cannot add gaps (no factory)', () => {
     const res = applyProjectEdit(PROJECT_ID, { id: 'p', op: 'add_item', card_id: 'diagnosis', list: 'gaps', human: 'add gap' });
     expect(res.ok).toBe(false);
+  });
+
+  // Засеять Диагноз формой напрямую (разрывы засеяны экраном, фабрики нет).
+  const seedDiagnosis = (form: Record<string, unknown>) =>
+    writeProjectDiagnosisSnapshot(PROJECT_ID, {
+      ...getFallbackProjectDiagnosisSnapshot(PROJECT_ID),
+      form: { diagnosis: {}, gaps: [], symptoms: [], facts: [], alternatives: [], verifications: [], consequences: [], ...form },
+    });
+
+  it('diagnosis: модель видит динамические опции связи relatedGap', () => {
+    seedDiagnosis({ gaps: [{ id: 1, theoryBlock: 'results', observedReality: 'x', gap: 'y' }] });
+    const model = buildProjectEditModel(PROJECT_ID);
+    const diag = model.editable_cards.find(c => c.card_id === 'diagnosis')!;
+    const symptoms = diag.lists.find(l => l.list === 'symptoms')!;
+    const relatedGap = symptoms.item_fields!.find(f => f.key === 'relatedGap')!;
+    expect(relatedGap.options).toContain('1. Критерии результата');
+  });
+
+  it('diagnosis: нормализует неточную связь relatedGap к существующему разрыву', () => {
+    seedDiagnosis({ gaps: [{ id: 1, theoryBlock: 'results', observedReality: 'Срыв', gap: 'X≠Y' }] });
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'add_item', card_id: 'diagnosis', list: 'symptoms', human: 'add',
+      values: { description: 'Жалобы клиентов', relatedGap: 'критерии результата' },
+    });
+    expect(res.ok).toBe(true);
+    const form = readProjectDiagnosisSnapshot(PROJECT_ID)!.form as { symptoms: Array<{ relatedGap: string }> };
+    expect(form.symptoms[0].relatedGap).toBe('1. Критерии результата');
+  });
+
+  it('diagnosis: невалидную связь не пишет, а просит добавить цель', () => {
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'add_item', card_id: 'diagnosis', list: 'facts', human: 'add',
+      values: { indicator: 'Конверсия 2%', confirms: 'Несуществующий симптом' },
+    });
+    expect(res.ok).toBe(true); // факт добавлен…
+    const form = readProjectDiagnosisSnapshot(PROJECT_ID)!.form as { facts: Array<{ indicator: string; confirms: string }> };
+    expect(form.facts[0].indicator).toBe('Конверсия 2%');
+    expect(form.facts[0].confirms).toBe(''); // …но битая связь не записана
+    expect(res.message).toContain('Не нашёл цель для связи');
   });
 
   it('strategic-choice: add a capability window', () => {

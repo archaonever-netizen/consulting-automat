@@ -66,6 +66,7 @@ import {
   readProjectTargetStateSnapshot,
   writeProjectTargetStateSnapshot,
 } from './projectTargetStateSnapshot';
+import { PROJECT_THEORY_BLOCKS } from './projectTheorySnapshot';
 
 export type Snapshot = Record<string, unknown>;
 export type FormItem = { id: number; [key: string]: unknown };
@@ -77,6 +78,15 @@ export interface ComplexScalarField {
   options?: string[]; // опции выпадающего списка — чтобы модель выбирала валидное значение
 }
 
+// Поле-ссылка на элемент другого списка (выпадашка-связь). Его допустимые значения зависят от
+// текущих данных проекта, поэтому считаются динамически из form. Нужно, чтобы Методолог выбирал
+// СУЩЕСТВУЮЩИЙ элемент (как опции редактора), а на применении значение нормализовалось/отвергалось.
+export interface ComplexRefField {
+  field: string;                                          // ключ поля-ссылки в элементе
+  targetTitle: string;                                    // что выбираем (для просьбы «сначала добавьте …»)
+  options: (form: Record<string, unknown>) => string[];  // допустимые значения из текущих данных
+}
+
 export interface ComplexListSpec {
   projKey: string;    // ключ списка в проекции (его читает валидатор)
   formKey: string;    // ключ списка в form
@@ -84,6 +94,7 @@ export interface ComplexListSpec {
   labelKeys: string[]; // поля-кандидаты для метки элемента
   createItem: ((id: number) => FormItem) | null; // null → добавление не поддержано
   fieldOptions?: Record<string, string[]>; // ключ поля элемента → опции выпадающего списка
+  refFields?: ComplexRefField[]; // поля-ссылки с динамическими опциями (связи между списками)
 }
 
 export interface ComplexCardSpec {
@@ -99,6 +110,23 @@ export interface ComplexCardSpec {
 }
 
 const cast = <T>(fn: (id: number) => unknown) => fn as (id: number) => T;
+
+// === Динамические варианты для полей-ссылок Диагноза ===
+// Повторяют опции выпадашек редактора, чтобы Методолог выбирал существующий элемент.
+const DIAG_THEORY_TITLE = new Map<string, string>(PROJECT_THEORY_BLOCKS.map(b => [b.id, b.title]));
+const formList = (form: Record<string, unknown>, key: string): Record<string, unknown>[] =>
+  (Array.isArray(form[key]) ? (form[key] as Record<string, unknown>[]) : []);
+const trimStr = (v: unknown): string => (typeof v === 'string' ? v.trim() : '');
+// Имя разрыва как в редакторе: «N. <блок Теории>» (по всем разрывам — это структурные цели).
+const diagGapNames = (form: Record<string, unknown>): string[] =>
+  formList(form, 'gaps').map((g, i) => `${i + 1}. ${DIAG_THEORY_TITLE.get(trimStr(g.theoryBlock)) || trimStr(g.theoryBlock) || 'разрыв'}`);
+// Факты/симптомы — только названные (пустая строка-заготовка не цель для связи).
+const diagFactNames = (form: Record<string, unknown>): string[] =>
+  formList(form, 'facts').map(f => trimStr(f.indicator)).filter(Boolean);
+const diagSymptomNames = (form: Record<string, unknown>): string[] =>
+  formList(form, 'symptoms').map(s => trimStr(s.description)).filter(Boolean);
+const diagFactConfirmsOptions = (form: Record<string, unknown>): string[] =>
+  [...diagSymptomNames(form), ...diagGapNames(form), 'Диагностическое суждение'];
 
 export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
   diagnosis: {
@@ -122,11 +150,11 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
       { key: 'finalStatement', label: 'Итоговая формулировка' },
     ],
     lists: [
-      { projKey: 'symptoms', formKey: 'symptoms', title: 'Симптом', labelKeys: ['description'], createItem: cast<FormItem>(createSymptom), fieldOptions: { dataSource: diagDataSourceOptions } },
-      { projKey: 'facts', formKey: 'facts', title: 'Факт', labelKeys: ['indicator'], createItem: cast<FormItem>(createFact), fieldOptions: { dataSource: diagDataSourceOptions, reliability: reliabilityOptions } },
-      { projKey: 'alternatives', formKey: 'alternatives', title: 'Альтернативное объяснение', labelKeys: ['reason'], createItem: cast<FormItem>(createAlternative), fieldOptions: { status: diagAlternativeStatusOptions } },
+      { projKey: 'symptoms', formKey: 'symptoms', title: 'Симптом', labelKeys: ['description'], createItem: cast<FormItem>(createSymptom), fieldOptions: { dataSource: diagDataSourceOptions }, refFields: [{ field: 'relatedGap', targetTitle: 'разрыв теории и реальности', options: diagGapNames }] },
+      { projKey: 'facts', formKey: 'facts', title: 'Факт', labelKeys: ['indicator'], createItem: cast<FormItem>(createFact), fieldOptions: { dataSource: diagDataSourceOptions, reliability: reliabilityOptions }, refFields: [{ field: 'confirms', targetTitle: 'симптом, разрыв или «Диагностическое суждение»', options: diagFactConfirmsOptions }] },
+      { projKey: 'alternatives', formKey: 'alternatives', title: 'Альтернативное объяснение', labelKeys: ['reason'], createItem: cast<FormItem>(createAlternative), fieldOptions: { status: diagAlternativeStatusOptions }, refFields: [{ field: 'confirms', targetTitle: 'факт', options: diagFactNames }, { field: 'refutes', targetTitle: 'факт', options: diagFactNames }] },
       { projKey: 'consequences', formKey: 'consequences', title: 'Последствие', labelKeys: ['deterioration'], createItem: cast<FormItem>(createConsequence), fieldOptions: { source: diagDataSourceOptions } },
-      { projKey: 'gaps', formKey: 'gaps', title: 'Разрыв теории и реальности', labelKeys: ['gap', 'observedReality'], createItem: null, fieldOptions: { status: relationStatusOptions } },
+      { projKey: 'gaps', formKey: 'gaps', title: 'Разрыв теории и реальности', labelKeys: ['gap', 'observedReality'], createItem: null, fieldOptions: { status: relationStatusOptions }, refFields: [{ field: 'confirmingFact', targetTitle: 'факт', options: diagFactNames }] },
       { projKey: 'verifications', formKey: 'verifications', title: 'Проверка диагноза', labelKeys: ['subject'], createItem: cast<FormItem>(createVerification), fieldOptions: { method: verificationMethodOptions } },
     ],
   },
@@ -334,7 +362,7 @@ export interface ComplexFieldSchema { key: string; label: string; options?: stri
  * ключей существующих элементов, если фабрики нет), метки — из COMPLEX_FIELD_LABELS,
  * опции выпадающих списков — из listSpec.fieldOptions (чтобы модель выбирала валидное значение).
  * Нужна модели Методолога, чтобы заполнять элемент ЦЕЛИКОМ, а не только видимые поля. */
-export function listItemFields(listSpec: ComplexListSpec, items: FormItem[]): ComplexFieldSchema[] {
+export function listItemFields(listSpec: ComplexListSpec, items: FormItem[], form?: Record<string, unknown>): ComplexFieldSchema[] {
   let keys: string[];
   if (listSpec.createItem) {
     keys = Object.keys(listSpec.createItem(0)).filter(k => k !== 'id');
@@ -343,8 +371,60 @@ export function listItemFields(listSpec: ComplexListSpec, items: FormItem[]): Co
     for (const it of items) for (const k of Object.keys(it)) if (k !== 'id') set.add(k);
     keys = [...set];
   }
+  // Динамические опции полей-ссылок (варианты зависят от текущих данных проекта).
+  const refOpts = new Map<string, string[]>();
+  if (form && listSpec.refFields) {
+    for (const rf of listSpec.refFields) {
+      refOpts.set(rf.field, rf.options(form));
+      if (!keys.includes(rf.field)) keys.push(rf.field);
+    }
+  }
   return keys.map(key => {
-    const options = listSpec.fieldOptions?.[key];
-    return { key, label: COMPLEX_FIELD_LABELS[key] ?? key, ...(options ? { options } : {}) };
+    const options = refOpts.get(key) ?? listSpec.fieldOptions?.[key];
+    return { key, label: COMPLEX_FIELD_LABELS[key] ?? key, ...(options && options.length ? { options } : {}) };
   });
+}
+
+/** Сопоставить присланное значение поля-ссылки с допустимым вариантом: точное → без регистра →
+ *  однозначное частичное вхождение. Возвращает канонический вариант или null. */
+export function resolveRefOption(options: string[], raw: unknown): string | null {
+  const t = (typeof raw === 'string' ? raw : String(raw ?? '')).trim();
+  if (!t) return null;
+  const exact = options.find(o => o === t) ?? options.find(o => o.toLowerCase() === t.toLowerCase());
+  if (exact) return exact;
+  if (t.length >= 3) {
+    const hits = options.filter(o => o.toLowerCase().includes(t.toLowerCase()));
+    if (hits.length === 1) return hits[0];
+  }
+  return null;
+}
+
+export interface RefMiss { field: string; targetTitle: string; text: string; }
+
+/** Нормализовать поля-ссылки в values по текущему form: валидные → канонический вариант;
+ *  невалидные убираем из values (чтобы не записать «битую» связь) и копим в missing.
+ *  Пустую строку трактуем как очистку связи — оставляем как есть. */
+export function normalizeRefFields(
+  listSpec: ComplexListSpec,
+  form: Record<string, unknown>,
+  values: Record<string, unknown> | undefined,
+): { values: Record<string, unknown> | undefined; missing: RefMiss[] } {
+  if (!values || !listSpec.refFields?.length) return { values, missing: [] };
+  const out = { ...values };
+  const missing: RefMiss[] = [];
+  for (const rf of listSpec.refFields) {
+    if (!(rf.field in out)) continue;
+    const raw = out[rf.field];
+    if (raw == null || String(raw).trim() === '') continue;
+    const canon = resolveRefOption(rf.options(form), raw);
+    if (canon) out[rf.field] = canon;
+    else { delete out[rf.field]; missing.push({ field: rf.field, targetTitle: rf.targetTitle, text: String(raw).trim() }); }
+  }
+  return { values: out, missing };
+}
+
+/** Просьба дозаполнить недостающие цели связей (вместо записи битого значения). */
+export function refMissingMessage(missing: RefMiss[]): string {
+  const uniq = Array.from(new Set(missing.map(m => `«${m.text}» (${m.targetTitle})`)));
+  return `Не нашёл цель для связи: ${uniq.join(', ')}. Сначала добавьте/назовите этот элемент, затем повторите привязку.`;
 }

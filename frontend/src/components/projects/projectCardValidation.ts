@@ -5,7 +5,7 @@ import { readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectFrameworkSectionSnapshot } from './projectFrameworkSectionSnapshot';
 import { readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { readProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
-import { readProjectTheorySnapshot } from './projectTheorySnapshot';
+import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot } from './projectTheorySnapshot';
 
 type Item = { label?: string; summary?: string; status?: string };
 
@@ -69,9 +69,70 @@ function buildTheory(projectId: number): string {
   );
 }
 
+// Заголовок разрыва как в редакторе Диагноза: «N. <блок Теории>».
+const THEORY_BLOCK_TITLE = new Map<string, string>(PROJECT_THEORY_BLOCKS.map(b => [b.id, b.title]));
+type FormRow = Record<string, unknown>;
+
+// Аудит связей Диагноза. Поля-ссылки (relatedGap/confirmingFact/confirms/refutes) задаются
+// выпадашками и НЕ попадают в обычную выжимку (summary), поэтому Методолог их «не видит».
+// Здесь мы делаем их видимыми и явно отмечаем незаполненные (⚠) + формулируем правило, чтобы
+// Методолог понижал RAG и предлагал заполнить недостающие связи.
+function buildDiagnosisLinks(form: Record<string, unknown>): string {
+  const arr = (k: string): FormRow[] => (Array.isArray(form[k]) ? (form[k] as FormRow[]) : []);
+  let missing = 0;
+  const warn = () => { missing += 1; return '⚠ '; };
+  const gapTitle = (g: FormRow, i: number) =>
+    `${i + 1}. ${THEORY_BLOCK_TITLE.get(clean(g.theoryBlock)) || clean(g.theoryBlock) || 'разрыв'}`;
+
+  // Симптом → разрыв (поле relatedGap). Считаем только реальные симптомы (с описанием).
+  const symptomRows = arr('symptoms')
+    .filter(s => clean(s.description))
+    .map(s => {
+      const link = clean(s.relatedGap);
+      return `  • «${clean(s.description)}»: ${link ? `связан с разрывом «${link}»` : `${warn()}разрыв не выбран`}`;
+    });
+
+  // Разрыв → подтверждающий факт (поле confirmingFact). Считаем разрывы с пользовательским контентом.
+  const gapRows = arr('gaps')
+    .map((g, i) => ({ g, i }))
+    .filter(({ g }) => clean(g.observedReality) || clean(g.gap))
+    .map(({ g, i }) => {
+      const link = clean(g.confirmingFact);
+      return `  • «${gapTitle(g, i)}»: ${link ? `подтверждается фактом «${link}»` : `${warn()}подтверждающий факт не выбран`}`;
+    });
+
+  // Альтернативное объяснение → факт (confirms/refutes).
+  const altRows = arr('alternatives')
+    .filter(a => clean(a.reason))
+    .map(a => {
+      const conf = clean(a.confirms), ref = clean(a.refutes);
+      const parts = [conf && `подтверждается фактом «${conf}»`, ref && `опровергается фактом «${ref}»`].filter(Boolean);
+      return `  • «${clean(a.reason)}»: ${parts.length ? parts.join('; ') : `${warn()}нет подтверждающего/опровергающего факта`}`;
+    });
+
+  const sections = compose([
+    symptomRows.length ? `Симптом → разрыв:\n${symptomRows.join('\n')}` : '',
+    gapRows.length ? `Разрыв → подтверждающий факт:\n${gapRows.join('\n')}` : '',
+    altRows.length ? `Альтернативное объяснение → факт:\n${altRows.join('\n')}` : '',
+  ]);
+  if (!sections) return '';
+
+  return compose([
+    'Проверка связей Диагноза (методологическое требование):',
+    'Правило: каждый симптом должен быть связан с разрывом; каждый разрыв — подтверждён фактом; '
+      + 'у каждого альтернативного объяснения должен быть подтверждающий или опровергающий факт. '
+      + 'Отметка ⚠ означает, что связь не настроена (выпадающий список пуст) — это методологический пробел. '
+      + 'Если есть хотя бы одна ⚠, не ставь раздел в GREEN: при единичных пробелах — AMBER, при системных — RED; '
+      + 'перечисли незаполненные связи в «missing» и предложи их заполнить.',
+    sections,
+    `Незаполненных связей: ${missing}.`,
+  ]);
+}
+
 function buildDiagnosis(projectId: number): string {
   const s = readProjectDiagnosisSnapshot(projectId);
   if (!s) return '';
+  const form = s.form && typeof s.form === 'object' ? (s.form as Record<string, unknown>) : null;
   return compose([
     field('Сырой запрос клиента', s.rawRequest),
     field('Тип запроса', s.requestType),
@@ -90,6 +151,7 @@ function buildDiagnosis(projectId: number): string {
     items('Альтернативные объяснения', s.alternatives),
     items('Последствия без изменений', s.consequences),
     items('Проверка диагноза', s.verifications),
+    form ? buildDiagnosisLinks(form) : '',
   ]);
 }
 

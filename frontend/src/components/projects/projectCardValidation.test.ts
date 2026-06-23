@@ -33,6 +33,35 @@ describe('buildCardValidationText', () => {
     expect(text).toContain('Конверсия — Конверсия — 2% за квартал');
   });
 
+  it('аудит связей Диагноза: показывает поля-ссылки и помечает незаполненные ⚠', () => {
+    const snap = getFallbackProjectDiagnosisSnapshot(PROJECT_ID);
+    snap.keyChallenge = 'Узкое место в процессе';
+    snap.form = {
+      diagnosis: {},
+      gaps: [
+        { id: 1, theoryBlock: 'results', observedReality: 'Срыв сроков', gap: 'Ожидалось X, фактически Y', confirmingFact: '' },
+        { id: 2, theoryBlock: 'stakeholder', observedReality: '', gap: '' }, // пустой разрыв — не аудируем
+      ],
+      symptoms: [
+        { id: 1, description: 'Жалобы клиентов', relatedGap: '1. Критерии результата' },
+        { id: 2, description: 'Текучка кадров', relatedGap: '' },
+      ],
+      facts: [],
+      alternatives: [{ id: 1, reason: 'Сезонность спроса', confirms: '', refutes: '' }],
+      verifications: [],
+      consequences: [],
+    };
+    writeProjectDiagnosisSnapshot(PROJECT_ID, snap);
+
+    const text = buildCardValidationText(PROJECT_ID, 'diagnosis');
+    expect(text).toContain('Проверка связей Диагноза');
+    expect(text).toContain('связан с разрывом «1. Критерии результата»'); // заполненная связь видна
+    expect(text).toContain('⚠ разрыв не выбран');
+    expect(text).toContain('⚠ подтверждающий факт не выбран');
+    expect(text).toContain('⚠ нет подтверждающего/опровергающего факта');
+    expect(text).toContain('Незаполненных связей: 3.');
+  });
+
   it('serializes generic framework section cards (incl. OKR) via section snapshot', () => {
     writeProjectFrameworkSectionSnapshot(PROJECT_ID, 'okr-kpi', {
       projectId: PROJECT_ID,

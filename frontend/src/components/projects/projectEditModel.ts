@@ -118,7 +118,8 @@ function buildComplexEditable(projectId: number, cardId: string): EditableCard {
     }));
     // item_fields — полная схема полей элемента (даже пустых), чтобы модель заполняла окно
     // целиком и добавляла недостающие, а не правила только видимые непустые поля.
-    return { list: listSpec.projKey, title: listSpec.title, item_fields: listItemFields(listSpec, arr), items };
+    // form передаём для динамических опций полей-ссылок (варианты = существующие элементы).
+    return { list: listSpec.projKey, title: listSpec.title, item_fields: listItemFields(listSpec, arr, form), items };
   });
 
   return { card_id: cardId, title: spec.title, fields, lists };

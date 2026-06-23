@@ -22,9 +22,12 @@ import {
   deriveProjItem,
   isComplexCard,
   itemLabel,
+  normalizeRefFields,
+  refMissingMessage,
   type ComplexCardSpec,
   type ComplexListSpec,
   type FormItem,
+  type RefMiss,
   type Snapshot,
 } from './projectComplexCards';
 import { mergeItemValues, pickIndex } from './projectEditShared';
@@ -176,16 +179,24 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
   const arr = (Array.isArray(form[listSpec.formKey]) ? [...(form[listSpec.formKey] as FormItem[])] : []) as FormItem[];
   const labelOf = (it: FormItem, index = 0) => itemLabel(it, listSpec.labelKeys, `${listSpec.title} ${index + 1}`);
 
+  // Поля-ссылки нормализуем к существующему элементу (выбор из реальных вариантов); ненайденные
+  // не пишем «как есть», а просим дозаполнить — чтобы Методолог не плодил «битые» связи.
+  const refMiss: RefMiss[] = [];
+
   if (proposal.op === 'add_item') {
     if (!listSpec.createItem) return fail(`В список «${listSpec.title}» нельзя добавлять элементы автоматически.`);
     const item = listSpec.createItem(nextItemId(arr));
-    mergeItemValues(item, proposal.values);
+    const norm = normalizeRefFields(listSpec, form, proposal.values);
+    refMiss.push(...norm.missing);
+    mergeItemValues(item, norm.values);
     arr.push(item);
   } else if (proposal.op === 'update_item') {
     const idx = pickIndex(arr, proposal.item_id, i => String(i.id), it => labelOf(it));
     if (idx === -1) return fail('Не найден элемент для изменения.');
     const item = { ...arr[idx] };
-    mergeItemValues(item, proposal.values ?? (proposal.field ? { [proposal.field]: proposal.value } : undefined));
+    const norm = normalizeRefFields(listSpec, form, proposal.values ?? (proposal.field ? { [proposal.field]: proposal.value } : undefined));
+    refMiss.push(...norm.missing);
+    mergeItemValues(item, norm.values);
     arr[idx] = item;
   } else if (proposal.op === 'delete_item') {
     const idx = pickIndex(arr, proposal.item_id, i => String(i.id), it => labelOf(it));
@@ -199,7 +210,8 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
   base.form = form;
   base[listSpec.projKey] = arr.map((it, index) => deriveProjItem(it, listSpec, index));
   spec.write(projectId, base);
-  return ok(proposal.op === 'add_item' ? 'Добавлено новое окно.' : proposal.op === 'delete_item' ? 'Окно удалено.' : 'Формулировка обновлена.');
+  const base_msg = proposal.op === 'add_item' ? 'Добавлено новое окно.' : proposal.op === 'delete_item' ? 'Окно удалено.' : 'Формулировка обновлена.';
+  return ok(refMiss.length ? `${base_msg} ${refMissingMessage(refMiss)}` : base_msg);
 }
 
 // Модель иногда присылает в card_id название карточки вместо её id — сопоставляем.
