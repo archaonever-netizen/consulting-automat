@@ -391,6 +391,26 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
   const missionFields = new Map((card?.fields ?? []).map(f => [f.key, f.value] as const));
   let seq = 0;
 
+  // Фолбэк межсекционных связей: если блок-цель свёрнут (его элемента нет на холсте), ведём
+  // ref-связь к УЗЛУ БЛОКА цели (он виден всегда) вместо отбрасывания связи. Раскрытие блока
+  // уточняет связь до конкретного элемента. Применяется к Стратвыбору/Целевому/generic-разделам:
+  // их связи в основном межсекционные (на Теорию/Стратвыбор), и без фолбэка исчезали, когда
+  // дальняя колонка-цель свёрнута. Теория/Диагноз остаются строгими (нужны оба раскрытых блока).
+  const blockFallbackSeen = new Set<string>();
+  const pushRefEdge = (prefix: string, source: string, targetCardId: string, targetList: string, targetItemId: string, family: string, verb: string) => {
+    const itemNode = itemNodeId(targetCardId, targetList, targetItemId);
+    if (itemNode === source) return;
+    if (presentItems.has(itemNode)) {
+      edges.push({ id: `ref:${prefix}:${seq++}:${source}->${itemNode}`, source, target: itemNode, kind: 'ref', family: familyLabel(family), verb });
+      return;
+    }
+    const blockNode = blockNodeId(targetCardId, targetList);
+    const key = `${source}->${blockNode}`;
+    if (blockFallbackSeen.has(key)) return; // одну связь источник→свёрнутый-блок не дублируем
+    blockFallbackSeen.add(key);
+    edges.push({ id: `ref:${prefix}:${seq++}:${source}->${blockNode}`, source, target: blockNode, kind: 'ref', family: familyLabel(family), verb });
+  };
+
   for (const link of MISSION_LINKS) {
     const idx = labelIndex.get(link.targetList);
     if (!idx) continue;
@@ -608,20 +628,14 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
   const alternativeIdx = strategyLabelIndex.get('alternatives') ?? new Map();
   const selectedAlternative = resolveByRefOrLabel(strategyFields.get('selectedAlternative'), undefined, STRATEGY_CARD_ID, 'alternatives', alternativeIdx);
   if (selectedAlternative) {
-    const target = itemNodeId(STRATEGY_CARD_ID, 'alternatives', selectedAlternative);
-    if (presentItems.has(target)) {
-      edges.push({ id: `ref:s:${seq++}:selected`, source: STRATEGY_ROOT_NODE_ID, target, kind: 'ref', family: familyLabel('defines'), verb: 'выбрана' });
-    }
+    pushRefEdge('s', STRATEGY_ROOT_NODE_ID, STRATEGY_CARD_ID, 'alternatives', selectedAlternative, 'defines', 'выбрана');
   }
 
   for (const action of strategyItemsByList.get('actions') ?? []) {
     const source = itemNodeId(STRATEGY_CARD_ID, 'actions', String(action.id));
     if (!presentItems.has(source)) continue;
     const targetId = resolveByRefOrLabel(action.values.supportsChoice, action.values.supportsChoiceRef, STRATEGY_CARD_ID, 'alternatives', alternativeIdx);
-    if (!targetId) continue;
-    const target = itemNodeId(STRATEGY_CARD_ID, 'alternatives', targetId);
-    if (!presentItems.has(target)) continue;
-    edges.push({ id: `ref:s:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel('supportsChoice'), verb: 'поддерживает' });
+    if (targetId) pushRefEdge('s', source, STRATEGY_CARD_ID, 'alternatives', targetId, 'supportsChoice', 'поддерживает');
   }
 
   const competencyIdx = labelIndex.get('competencies') ?? new Map();
@@ -630,10 +644,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     if (!presentItems.has(source)) continue;
     for (const token of tokenize(capability.values.competency)) {
       const targetId = competencyIdx.get(token);
-      if (!targetId) continue;
-      const target = itemNodeId(THEORY_CARD_ID, 'competencies', targetId);
-      if (!presentItems.has(target)) continue;
-      edges.push({ id: `ref:s:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel('needsCapability'), verb: 'требует' });
+      if (targetId) pushRefEdge('s', source, THEORY_CARD_ID, 'competencies', targetId, 'needsCapability', 'требует');
     }
   }
 
@@ -641,10 +652,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     const source = itemNodeId(STRATEGY_CARD_ID, 'hypotheses', String(hypothesis.id));
     if (!presentItems.has(source)) continue;
     const targetId = resolveByRefOrLabel(hypothesis.values.choiceLink, hypothesis.values.choiceLinkRef, STRATEGY_CARD_ID, 'alternatives', alternativeIdx);
-    if (!targetId) continue;
-    const target = itemNodeId(STRATEGY_CARD_ID, 'alternatives', targetId);
-    if (!presentItems.has(target)) continue;
-    edges.push({ id: `ref:s:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel('testsChoice'), verb: 'влияет на' });
+    if (targetId) pushRefEdge('s', source, STRATEGY_CARD_ID, 'alternatives', targetId, 'testsChoice', 'влияет на');
   }
 
   // Целевое состояние: финальная колонка общей карты. Каркас строится всегда; смысловые связи —
@@ -699,17 +707,13 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     if (!presentItems.has(source)) return;
     for (const token of tokenize(raw)) {
       const id = idx.get(token);
-      if (!id) continue;
-      const target = itemNodeId(targetCardId, targetList, id);
-      if (target !== source && presentItems.has(target)) targetRef(source, target, family, verb);
+      if (id) pushRefEdge('t', source, targetCardId, targetList, id, family, verb);
     }
   };
 
   for (const token of tokenize(targetFields.get('whereClient'))) {
     const id = (labelIndex.get('stakeholder') ?? new Map()).get(token);
-    if (!id) continue;
-    const target = itemNodeId(THEORY_CARD_ID, 'stakeholder', id);
-    if (presentItems.has(target)) targetRef(TARGET_ROOT_NODE_ID, target, 'forStakeholder', 'для');
+    if (id) pushRefEdge('t', TARGET_ROOT_NODE_ID, THEORY_CARD_ID, 'stakeholder', id, 'forStakeholder', 'для');
   }
 
   const stakeholderIdx = labelIndex.get('stakeholder') ?? new Map();

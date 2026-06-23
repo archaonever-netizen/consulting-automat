@@ -136,13 +136,17 @@ describe('buildTheoryGraph', () => {
     expect(g.edges.filter(e => e.kind === 'origin' && e.source === STRATEGY_ROOT_NODE_ID)).toHaveLength(STRATEGY_BLOCKS.length);
   });
 
-  it('стратегические ref-связи строятся из реальных полей связи и только при раскрытых блоках', () => {
+  it('стратегические ref-связи: к элементу при раскрытой цели, к блоку-цели при свёрнутой (фолбэк)', () => {
     addStrategy('alternatives', { name: 'Фокус на enterprise', status: 'выбрана' });
     addStrategy('actions', { name: 'Перенастроить продажи', supportsChoiceRef: 'strategic-choice:alternatives:1' });
 
+    // Блок-цель свёрнут → связь ведёт к УЗЛУ БЛОКА альтернатив (не исчезает).
     const partial = buildTheoryGraph(PID, new Set(['strategic-choice:actions']));
-    expect(partial.edges.some(e => e.kind === 'ref' && e.source.includes(':actions:'))).toBe(false);
+    const toBlock = partial.edges.find(e => e.kind === 'ref' && e.source.includes(':actions:') && e.target === 'block:strategic-choice:alternatives');
+    expect(toBlock).toBeDefined();
+    expect(toBlock?.family).toBe('поддерживает выбор');
 
+    // Оба блока раскрыты → связь уточняется до конкретной альтернативы.
     const g = buildTheoryGraph(PID, new Set(['strategic-choice:alternatives', 'strategic-choice:actions']));
     const edge = g.edges.find(e => e.kind === 'ref' && e.source.includes(':actions:') && e.target.includes(':alternatives:'));
     expect(edge).toBeDefined();
@@ -150,15 +154,16 @@ describe('buildTheoryGraph', () => {
     expect(edge?.verb).toBe('поддерживает');
   });
 
-  it('связывает capability стратегического выбора с компетенцией Теории проекта', () => {
+  it('связывает capability стратегического выбора с компетенцией Теории проекта (с фолбэком на блок)', () => {
     add('competencies', { name: 'Опыт создания подразделений' });
     addStrategy('capabilities', {
       name: 'Интеграция данных без слома IT ГО',
       competency: 'Опыт создания подразделений',
     });
 
+    // Колонка Теории свёрнута → межсекционная связь ведёт к УЗЛУ БЛОКА компетенций.
     const partial = buildTheoryGraph(PID, new Set(['strategic-choice:capabilities']));
-    expect(partial.edges.some(e => e.kind === 'ref' && e.source.includes(':capabilities:') && e.target.includes(':competencies:'))).toBe(false);
+    expect(partial.edges.some(e => e.kind === 'ref' && e.source.includes(':capabilities:') && e.target === 'block:competencies')).toBe(true);
 
     const g = buildTheoryGraph(PID, new Set(['competencies', 'strategic-choice:capabilities']));
     const edge = g.edges.find(e => e.kind === 'ref' && e.source.includes(':capabilities:') && e.target.includes(':competencies:'));
@@ -274,6 +279,19 @@ describe('buildTheoryGraph', () => {
     expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:keyResults:') && e.target.includes('item:project-theory:results:'))).toBe(true);
   });
 
+  it('целевое состояние: межсекционные связи не исчезают при свёрнутой Теории (фолбэк на блок)', () => {
+    add('results', { statement: 'Рост выручки' });
+    add('preserve', { details: 'Доверие команды' });
+    addTarget('results', { name: 'Выручка 150%', criterion: 'Рост выручки' });
+    addTarget('preserveTargets', { name: 'Сохранить доверие', preserveElement: 'Доверие команды' });
+
+    // Раскрыты ТОЛЬКО блоки самого Целевого состояния; колонка Теории свёрнута —
+    // раньше связи исчезали, теперь ведут к узлам блоков Теории (block:results / block:preserve).
+    const g = buildTheoryGraph(PID, new Set(['target-state:results', 'target-state:preserveTargets']));
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:results:') && e.target === 'block:results')).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:preserveTargets:') && e.target === 'block:preserve')).toBe(true);
+  });
+
   it('добавляет раздел «Стратегическая карта» между Целевым состоянием и Гипотезами', () => {
     const g = buildTheoryGraph(PID);
     expect(g.nodes.find(n => n.id === STRATEGY_MAP_SECTION_NODE_ID)?.type).toBe('sectionNode');
@@ -291,9 +309,9 @@ describe('buildTheoryGraph', () => {
     addSection(STRATEGY_MAP_CARD_ID, { __cardName: 'Ускорить онбординг', goal: 'Ускорить онбординг', effect: 'Рост выручки' });
     addSection(HYPOTHESES_CARD_ID, { __cardName: 'H1', statement: 'Если ускорим онбординг, вырастет выручка', mapNode: 'Ускорить онбординг' });
 
-    // Связи появляются только при раскрытых блоках источника и цели.
+    // Блок-цель (результаты Теории) свёрнут → связь цели карты ведёт к УЗЛУ БЛОКА (фолбэк).
     const partial = buildTheoryGraph(PID, new Set(['strategy-map:strategy-map']));
-    expect(partial.edges.some(e => e.kind === 'ref' && e.source.includes('item:strategy-map:strategy-map:'))).toBe(false);
+    expect(partial.edges.some(e => e.kind === 'ref' && e.source.includes('item:strategy-map:strategy-map:') && e.target === 'block:results')).toBe(true);
 
     const g = buildTheoryGraph(PID, new Set([
       'results', 'strategy-map:strategy-map', 'hypotheses:hypotheses',
