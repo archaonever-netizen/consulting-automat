@@ -22,6 +22,9 @@ import {
   STRATEGY_CARD_ID,
   STRATEGY_ROOT_NODE_ID,
   STRATEGY_SECTION_NODE_ID,
+  STRATEGY_MAP_CARD_ID,
+  STRATEGY_MAP_ROOT_NODE_ID,
+  STRATEGY_MAP_SECTION_NODE_ID,
   TARGET_BLOCKS,
   TARGET_CARD_ID,
   TARGET_ROOT_NODE_ID,
@@ -271,6 +274,40 @@ describe('buildTheoryGraph', () => {
     expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:keyResults:') && e.target.includes('item:project-theory:results:'))).toBe(true);
   });
 
+  it('добавляет раздел «Стратегическая карта» между Целевым состоянием и Гипотезами', () => {
+    const g = buildTheoryGraph(PID);
+    expect(g.nodes.find(n => n.id === STRATEGY_MAP_SECTION_NODE_ID)?.type).toBe('sectionNode');
+    expect(g.nodes.find(n => n.id === STRATEGY_MAP_ROOT_NODE_ID)?.type).toBe('missionNode');
+    expect(g.edges.some(e => e.kind === 'section' && e.source === STRATEGY_MAP_SECTION_NODE_ID && e.target === STRATEGY_MAP_ROOT_NODE_ID)).toBe(true);
+    // Цепочка: Целевое состояние → Стратегическая карта → Гипотезы.
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === TARGET_SECTION_NODE_ID && e.target === STRATEGY_MAP_SECTION_NODE_ID)).toBe(true);
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === STRATEGY_MAP_SECTION_NODE_ID && e.target === HYPOTHESES_SECTION_NODE_ID)).toBe(true);
+    expect(blockNodes(g, STRATEGY_MAP_CARD_ID)).toHaveLength(1);
+    expect(g.edges.some(e => e.kind === 'origin' && e.source === STRATEGY_MAP_ROOT_NODE_ID)).toBe(true);
+  });
+
+  it('стратегическая карта: цель влияет на результат, гипотеза проверяет узел карты', () => {
+    add('results', { statement: 'Рост выручки' });
+    addSection(STRATEGY_MAP_CARD_ID, { __cardName: 'Ускорить онбординг', goal: 'Ускорить онбординг', effect: 'Рост выручки' });
+    addSection(HYPOTHESES_CARD_ID, { __cardName: 'H1', statement: 'Если ускорим онбординг, вырастет выручка', mapNode: 'Ускорить онбординг' });
+
+    // Связи появляются только при раскрытых блоках источника и цели.
+    const partial = buildTheoryGraph(PID, new Set(['strategy-map:strategy-map']));
+    expect(partial.edges.some(e => e.kind === 'ref' && e.source.includes('item:strategy-map:strategy-map:'))).toBe(false);
+
+    const g = buildTheoryGraph(PID, new Set([
+      'results', 'strategy-map:strategy-map', 'hypotheses:hypotheses',
+    ]));
+
+    const goalToResult = g.edges.find(e => e.kind === 'ref' && e.source.includes('item:strategy-map:strategy-map:') && e.target.includes('item:project-theory:results:'));
+    expect(goalToResult).toBeDefined();
+    expect(goalToResult?.family).toBe('вклад в результат');
+
+    const hypoToMap = g.edges.find(e => e.kind === 'ref' && e.source.includes('item:hypotheses:hypotheses:') && e.target.includes('item:strategy-map:strategy-map:'));
+    expect(hypoToMap).toBeDefined();
+    expect(hypoToMap?.verb).toBe('проверяет узел карты');
+  });
+
   it('добавляет разделы «Гипотезы», «Проверки», «Решения» с корнями, блоками и методологической цепочкой', () => {
     const g = buildTheoryGraph(PID);
     expect(g.nodes.find(n => n.id === HYPOTHESES_SECTION_NODE_ID)?.type).toBe('sectionNode');
@@ -279,7 +316,7 @@ describe('buildTheoryGraph', () => {
     expect(g.nodes.find(n => n.id === EXPERIMENTS_ROOT_NODE_ID)?.type).toBe('missionNode');
     expect(g.nodes.find(n => n.id === DECISIONS_SECTION_NODE_ID)?.type).toBe('sectionNode');
     expect(g.nodes.find(n => n.id === DECISIONS_ROOT_NODE_ID)?.type).toBe('missionNode');
-    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === TARGET_SECTION_NODE_ID && e.target === HYPOTHESES_SECTION_NODE_ID)).toBe(true);
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === STRATEGY_MAP_SECTION_NODE_ID && e.target === HYPOTHESES_SECTION_NODE_ID)).toBe(true);
     expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === HYPOTHESES_SECTION_NODE_ID && e.target === EXPERIMENTS_SECTION_NODE_ID)).toBe(true);
     expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === EXPERIMENTS_SECTION_NODE_ID && e.target === DECISIONS_SECTION_NODE_ID)).toBe(true);
     for (const section of GENERIC_GRAPH_SECTIONS) {

@@ -256,7 +256,7 @@ export function createConfigs(sources: SourceContext): Record<string, ScreenConf
         { key: 'perspective', label: 'Перспектива', type: 'select', options: ['Финансы', 'Клиенты', 'Внутренние процессы', 'Обучение и развитие'] },
         { key: 'goal', label: 'Стратегическая цель', type: 'textarea', placeholder: 'Что должно измениться в этой перспективе' },
         { key: 'cause', label: 'Причина / фактор достижения', type: 'textarea' },
-        { key: 'effect', label: 'На какой результат влияет', type: 'select', options: resultOptions },
+        { key: 'effect', label: 'На какой результат влияет', type: 'select', options: resultOptions, refOptions: resultRefOptions, refTargetTitle: 'критерий результата' },
         { key: 'metric', label: 'Показатель', placeholder: 'Метрика результата или фактора' },
         { key: 'target', label: 'Целевое значение' },
         { key: 'initiative', label: 'Связанные инициативы', type: 'multiselect', options: initiativeOptions },

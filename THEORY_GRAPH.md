@@ -335,3 +335,32 @@ ProjectDependencyGraph (React Flow)          ← раскладка + касто
 появился `refOptions`/`refTargetTitle` — динамические опции + гарда в `applyComplexEdit`
 (`update_field`), как у списочных `refFields`. Диагноз не затронут (его опции — из своего `form`).
 Тесты — в [`projectEditApplier.test.ts`](frontend/src/components/projects/projectEditApplier.test.ts).
+
+---
+
+## 12. Стратегическая карта (по образцу §7)
+
+«Стратегическая карта» — **generic-секция** (`strategy-map` в `GENERIC_SECTION_IDS`), а не сложная
+карточка. В графе она встроена через общий `GENERIC_GRAPH_SECTIONS`
+([`projectTheoryGraph.ts`](frontend/src/components/projects/projectTheoryGraph.ts)) — как «Гипотезы /
+Проверки / Решения»: `section:strategy-map` → корень `root:strategy-map` («Карта стратегических целей»)
+→ один блок «Стратегические цели» → элементы (повторяемые карточки экрана). Колонка — в `SECTION_ORDER`
+([`ProjectDependencyGraph.tsx`](frontend/src/components/projects/ProjectDependencyGraph.tsx)) **между
+Целевым состоянием и Гипотезами**; цепочка разделов (`SECTION_LINKS`):
+`Целевое состояние →"раскладывает в карту"→ Стратегическая карта →"порождает гипотезы"→ Гипотезы`.
+
+**Смысловые связи (`ref`) — из реальных полей-ссылок экрана** (резолв по лейблу, как у других
+generic-разделов):
+
+| Поле-источник | → цель | семейство | глагол |
+|---|---|---|---|
+| `strategy-map.effect` | результат Теории / Целевого (results, keyResults) | вклад в результат | влияет на результат / KR |
+| `hypotheses.mapNode` | узел Стратегической карты | проверяет выбор | проверяет узел карты |
+
+**Соответствие §7/§8 (инвариант).** Обе связи берут только **структурные поля-ссылки** (`select` из
+существующих элементов), а не словарные опции: у `effect` и `mapNode` есть `refOptions`/`refTargetTitle`,
+поэтому `normalizeSectionRefFields` (§7 п.6) гардит правки Методолога — ненайденную цель не пишет и
+просит дозаполнить. Атрибуты-классификаторы (`perspective`, `cause`, `metric`) и связи на разделы без
+узла в графе (`initiative` → Инициативы) **намеренно не визуализируются** (§8). Цвет сущности
+`strategy-map` — в `ENTITY_COLORS`. Тесты — в
+[`projectTheoryGraph.test.ts`](frontend/src/components/projects/projectTheoryGraph.test.ts).

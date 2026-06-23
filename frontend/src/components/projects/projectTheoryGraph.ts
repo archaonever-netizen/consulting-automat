@@ -1,5 +1,6 @@
 // Модель графа экрана «Весь проект» для содержательных разделов.
-// Базовый слой — Теория проекта; рядом подключаются Диагноз, Стратегический выбор и Целевое состояние.
+// Цепочка разделов: Теория проекта → Диагноз → Стратегический выбор → Целевое состояние →
+//   Стратегическая карта → Гипотезы → Проверки → Решения.
 // Без бэкбона методологии и чужих кластеров.
 // Чистая функция buildTheoryGraph — только данные, без раскладки/UI.
 //
@@ -24,6 +25,9 @@ export const DIAGNOSIS_ROOT_NODE_ID = 'root:diagnosis';
 export const TARGET_CARD_ID = 'target-state';
 export const TARGET_SECTION_NODE_ID = 'section:target-state';
 export const TARGET_ROOT_NODE_ID = 'root:target-state';
+export const STRATEGY_MAP_CARD_ID = 'strategy-map';
+export const STRATEGY_MAP_SECTION_NODE_ID = 'section:strategy-map';
+export const STRATEGY_MAP_ROOT_NODE_ID = 'root:strategy-map';
 export const HYPOTHESES_CARD_ID = 'hypotheses';
 export const HYPOTHESES_SECTION_NODE_ID = 'section:hypotheses';
 export const HYPOTHESES_ROOT_NODE_ID = 'root:hypotheses';
@@ -40,7 +44,8 @@ const SECTION_LINKS: SectionLink[] = [
   { source: SECTION_NODE_ID, target: DIAGNOSIS_SECTION_NODE_ID, label: 'проверяется диагнозом' },
   { source: DIAGNOSIS_SECTION_NODE_ID, target: STRATEGY_SECTION_NODE_ID, label: 'обосновывает выбор' },
   { source: STRATEGY_SECTION_NODE_ID, target: TARGET_SECTION_NODE_ID, label: 'задаёт цель' },
-  { source: TARGET_SECTION_NODE_ID, target: HYPOTHESES_SECTION_NODE_ID, label: 'порождает гипотезы' },
+  { source: TARGET_SECTION_NODE_ID, target: STRATEGY_MAP_SECTION_NODE_ID, label: 'раскладывает в карту' },
+  { source: STRATEGY_MAP_SECTION_NODE_ID, target: HYPOTHESES_SECTION_NODE_ID, label: 'порождает гипотезы' },
   { source: HYPOTHESES_SECTION_NODE_ID, target: EXPERIMENTS_SECTION_NODE_ID, label: 'проверяются' },
   { source: EXPERIMENTS_SECTION_NODE_ID, target: DECISIONS_SECTION_NODE_ID, label: 'обосновывают решения' },
 ];
@@ -93,6 +98,7 @@ export const TARGET_BLOCKS: TargetBlockSpec[] = [
 
 export interface GenericSectionSpec { cardId: string; sectionId: string; rootId: string; title: string; rootTitle: string; blockTitle: string; primaryField: string; }
 export const GENERIC_GRAPH_SECTIONS: GenericSectionSpec[] = [
+  { cardId: STRATEGY_MAP_CARD_ID, sectionId: STRATEGY_MAP_SECTION_NODE_ID, rootId: STRATEGY_MAP_ROOT_NODE_ID, title: 'Стратегическая карта', rootTitle: 'Карта стратегических целей', blockTitle: 'Стратегические цели', primaryField: 'goal' },
   { cardId: HYPOTHESES_CARD_ID, sectionId: HYPOTHESES_SECTION_NODE_ID, rootId: HYPOTHESES_ROOT_NODE_ID, title: 'Гипотезы', rootTitle: 'Реестр гипотез', blockTitle: 'Гипотезы', primaryField: 'statement' },
   { cardId: EXPERIMENTS_CARD_ID, sectionId: EXPERIMENTS_SECTION_NODE_ID, rootId: EXPERIMENTS_ROOT_NODE_ID, title: 'Проверки', rootTitle: 'План проверок', blockTitle: 'Проверки', primaryField: 'subject' },
   { cardId: DECISIONS_CARD_ID, sectionId: DECISIONS_SECTION_NODE_ID, rootId: DECISIONS_ROOT_NODE_ID, title: 'Решения', rootTitle: 'Реестр решений', blockTitle: 'Решения', primaryField: 'statement' },
@@ -153,6 +159,7 @@ export const ENTITY_COLORS: { list: string; title: string; color: string }[] = [
   { list: 'keyResults', title: 'Key results', color: '#0891B2' },
   { list: 'experiments', title: 'Проверки', color: '#0D9488' },
   { list: 'decisions', title: 'Решения', color: '#16A34A' },
+  { list: 'strategy-map', title: 'Стратегическая карта', color: '#0E7490' },
 ];
 const ENTITY_COLOR = new Map(ENTITY_COLORS.map(e => [e.list, e.color] as const));
 export const NEUTRAL_COLOR = '#475569';
@@ -828,12 +835,23 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
   const targetPreserveIdx = targetLabelIndex.get('preserveTargets') ?? new Map();
   const hypothesesIdx = genericLabelIndex.get(HYPOTHESES_CARD_ID) ?? new Map();
   const experimentsIdx = genericLabelIndex.get(EXPERIMENTS_CARD_ID) ?? new Map();
+  const strategyMapIdx = genericLabelIndex.get(STRATEGY_MAP_CARD_ID) ?? new Map();
+
+  // Стратегическая карта: причинно-следственная цель влияет на измеримый результат
+  // (поле effect — выбор из критериев Теории / целевых результатов / key results).
+  for (const goal of genericItemsByCard.get(STRATEGY_MAP_CARD_ID) ?? []) {
+    const source = itemNodeId(STRATEGY_MAP_CARD_ID, STRATEGY_MAP_CARD_ID, String(goal.id));
+    refToItem(source, goal.values.effect, THEORY_CARD_ID, 'results', resultIdx, 'toResult', 'влияет на результат');
+    refToItem(source, goal.values.effect, TARGET_CARD_ID, 'results', targetResultIdx, 'toResult', 'влияет на результат');
+    refToItem(source, goal.values.effect, TARGET_CARD_ID, 'keyResults', targetKeyResultIdx, 'toResult', 'влияет на KR');
+  }
 
   for (const hypothesis of genericItemsByCard.get(HYPOTHESES_CARD_ID) ?? []) {
     const source = itemNodeId(HYPOTHESES_CARD_ID, HYPOTHESES_CARD_ID, String(hypothesis.id));
     refToItem(source, hypothesis.values.strategicChoice, STRATEGY_CARD_ID, 'capabilities', strategyCapabilityIdx, 'testsChoice', 'проверяет выбор');
     refToItem(source, hypothesis.values.strategicChoice, STRATEGY_CARD_ID, 'actions', strategyActionIdx, 'testsChoice', 'проверяет действие');
     refToRootByLabel(source, hypothesis.values.strategicChoice, STRATEGY_ROOT_NODE_ID, strategyRootLabels, 'testsChoice', 'проверяет выбор');
+    refToItem(source, hypothesis.values.mapNode, STRATEGY_MAP_CARD_ID, STRATEGY_MAP_CARD_ID, strategyMapIdx, 'testsChoice', 'проверяет узел карты');
   }
 
   for (const experiment of genericItemsByCard.get(EXPERIMENTS_CARD_ID) ?? []) {
