@@ -1441,3 +1441,55 @@ npm.cmd run test -- src/pages/tasks/logic.test.ts
 - В Яндекс OAuth-приложении должен быть указан redirect URI, совпадающий с `YANDEX_TRACKER_OAUTH_REDIRECT_URI`; для lab это `http://127.0.0.1:8010/api/tracker/oauth/callback`.
 - У OAuth-приложения должны быть права `tracker:read` и `tracker:write`.
 - Для production-переноса нужна миграция БД вместо startup `ALTER TABLE` для `refresh_token_encrypted` и `token_expires_at`.
+## Граф «Стратегический выбор» на экране «Весь проект»
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-23
+- Цель: аккуратно добавить граф экрана «Стратегический выбор» в общий граф «Весь проект», следуя правилам `THEORY_GRAPH.md` без изменения самого файла.
+
+### Что реализовано
+
+- В модель графа добавлен отдельный раздел `strategic-choice`:
+  - section-node «Стратегический выбор»;
+  - корень «Принятый стратегический выбор»;
+  - блоки `capabilities`, `alternatives`, `tradeOffs`, `actions`, `hypotheses`.
+- Сохранён инвариант графа Теории:
+  - каркасные связи рисуются как методологическая структура раздела;
+  - смысловые `ref`-связи строятся только из реальных полей-ссылок.
+- Для стратегии добавлены смысловые связи:
+  - корень стратегии → выбранная альтернатива по `selectedAlternative`;
+  - действие → альтернатива по `supportsChoiceRef` / `supportsChoice`;
+  - гипотеза → альтернатива по `choiceLinkRef` / `choiceLink`.
+- React Flow-рендер расширен на несколько колонок разделов:
+  - Теория проекта осталась в первой колонке;
+  - Стратегический выбор отображается рядом;
+  - раскрытие, закрепление связей, добавление и удаление элементов теперь учитывают `cardId`.
+- В editable-модель сложной карточки добавлено поле `selectedAlternative`, чтобы граф мог читать выбранную альтернативу как часть реальных данных карточки.
+- Добавлены тесты на новый раздел и связи стратегии.
+- Выполнен `npm.cmd run build`, поэтому обновлены hash-файлы в `frontend/dist`.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/projectTheoryGraph.ts` - расширена модель графа «Весь проект» разделом «Стратегический выбор».
+- `frontend/src/components/projects/ProjectDependencyGraph.tsx` - раскладка и действия адаптированы под несколько разделов и `cardId`.
+- `frontend/src/components/projects/projectComplexCards.ts` - добавлено поле `selectedAlternative` в editable-модель стратегического выбора.
+- `frontend/src/components/projects/projectTheoryGraph.test.ts` - добавлены тесты для графа стратегии.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновлены build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run test -- projectTheoryGraph.test.ts` в `frontend` - успешно, 9 тестов пройдены.
+- `npm.cmd exec eslint src/components/projects/projectTheoryGraph.ts src/components/projects/ProjectDependencyGraph.tsx src/components/projects/projectComplexCards.ts src/components/projects/projectTheoryGraph.test.ts` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+- `npm.cmd run lint` в `frontend` - неуспешно из-за существующих ошибок в unrelated-файлах (`Layout.tsx`, `ProjectDiagnosisCanvas.tsx`, `ProjectTheoryCanvas.tsx`, pages и др.); изменённые файлы проверены отдельной командой выше.
+
+### Риски и следующие шаги
+
+- Межраздельные связи с «Диагнозом» пока не выводятся на холст стратегии, потому что экран «Диагноз» находится в параллельной разработке.
+- Для дальнейшего расширения общего графа лучше постепенно выносить общие id/layout-helper’ы из `projectTheoryGraph.ts`, чтобы название файла не путало роль модели.
+
+---

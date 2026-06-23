@@ -1,6 +1,6 @@
-// Модель графа экрана «Весь проект» в режиме Теории проекта.
-// Только project-theory: Миссия-корень + 6 блоков Теории (в порядке экрана) + их элементы + связи.
-// Без бэкбона методологии и чужих кластеров (остальные разделы подключим отдельными экранами).
+// Модель графа экрана «Весь проект» для содержательных разделов.
+// Базовый слой — Теория проекта; рядом подключается Стратегический выбор.
+// Без бэкбона методологии и чужих кластеров.
 // Чистая функция buildTheoryGraph — только данные, без раскладки/UI.
 //
 // Связи двух видов:
@@ -14,6 +14,9 @@ import { buildProjectEditModel, type EditableCard, type EditableItem, type Proje
 export const THEORY_CARD_ID = 'project-theory';
 export const SECTION_NODE_ID = 'section:project-theory';
 export const MISSION_NODE_ID = 'mission';
+export const STRATEGY_CARD_ID = 'strategic-choice';
+export const STRATEGY_SECTION_NODE_ID = 'section:strategic-choice';
+export const STRATEGY_ROOT_NODE_ID = 'root:strategic-choice';
 
 // Блоки Теории строго в порядке экрана (list = ключ списка в модели Теории, nameField — куда писать имя при +).
 export interface TheoryBlockSpec { list: string; title: string; nameField: string; }
@@ -24,6 +27,15 @@ export const THEORY_BLOCKS: TheoryBlockSpec[] = [
   { list: 'constraints', title: 'Ограничения', nameField: 'statement' },
   { list: 'quality', title: 'Качество', nameField: 'requirement' },
   { list: 'preserve', title: 'Что нельзя разрушить', nameField: 'details' },
+];
+
+export interface StrategyBlockSpec { list: string; title: string; nameField: string; }
+export const STRATEGY_BLOCKS: StrategyBlockSpec[] = [
+  { list: 'capabilities', title: 'Capabilities', nameField: 'name' },
+  { list: 'alternatives', title: 'Стратегические альтернативы', nameField: 'name' },
+  { list: 'tradeOffs', title: 'Trade-offs', nameField: 'name' },
+  { list: 'actions', title: 'Coherent actions', nameField: 'name' },
+  { list: 'hypotheses', title: 'Гипотезы выбора', nameField: 'name' },
 ];
 
 // Каждая смысловая связь относится к СЕМЕЙСТВУ (принцип, виден по умолчанию) и имеет точный
@@ -64,6 +76,11 @@ export const ENTITY_COLORS: { list: string; title: string; color: string }[] = [
   { list: 'constraints', title: 'Ограничения', color: '#DC2626' },
   { list: 'quality', title: 'Качество', color: '#CA8A04' },
   { list: 'preserve', title: 'Сохраняемое ядро', color: '#DB2777' },
+  { list: 'capabilities', title: 'Capabilities', color: '#7C3AED' },
+  { list: 'alternatives', title: 'Альтернативы выбора', color: '#0891B2' },
+  { list: 'tradeOffs', title: 'Trade-offs', color: '#DC2626' },
+  { list: 'actions', title: 'Coherent actions', color: '#16A34A' },
+  { list: 'hypotheses', title: 'Гипотезы выбора', color: '#CA8A04' },
 ];
 const ENTITY_COLOR = new Map(ENTITY_COLORS.map(e => [e.list, e.color] as const));
 export const NEUTRAL_COLOR = '#475569';
@@ -85,9 +102,12 @@ const FAMILY_BY_KIND: Record<TheoryEdgeKind, EdgeFamily> = {
 };
 const FAMILY_STYLE = new Map(EDGE_FAMILIES.map(f => [f.family, f] as const));
 
-// Ключ списка-сущности из id узла-цели (block:<list> / item:project-theory:<list>:<id>).
+// Ключ списка-сущности из id узла-цели (block:<list> / block:<card>:<list> / item:<card>:<list>:<id>).
 function listOfNode(nodeId: string): string | undefined {
-  if (nodeId.startsWith('block:')) return nodeId.slice('block:'.length);
+  if (nodeId.startsWith('block:')) {
+    const parts = nodeId.split(':');
+    return parts.length > 2 ? parts[2] : parts[1];
+  }
   if (nodeId.startsWith('item:')) return nodeId.split(':')[2];
   return undefined;
 }
@@ -109,6 +129,8 @@ export const RELATION_FAMILIES: RelationFamily[] = [
   { id: 'forStakeholder', label: 'в интересах', about: 'элемент служит стейкхолдеру', color: '#2563EB' },
   { id: 'needsCapability', label: 'требует способности', about: 'результат опирается на компетенцию', color: '#7C3AED' },
   { id: 'withinLimit', label: 'в рамках ограничения', about: 'связь с ограничением-границей', color: '#DC2626' },
+  { id: 'supportsChoice', label: 'поддерживает выбор', about: 'действие поддерживает выбранную альтернативу', color: '#16A34A' },
+  { id: 'testsChoice', label: 'проверяет выбор', about: 'гипотеза проверяет выбранную альтернативу', color: '#CA8A04' },
 ];
 const FAMILY_LABEL = new Map(RELATION_FAMILIES.map(f => [f.id, f.label] as const));
 const familyLabel = (id: string): string => FAMILY_LABEL.get(id) ?? id;
@@ -117,12 +139,12 @@ const familyLabel = (id: string): string => FAMILY_LABEL.get(id) ?? id;
 // Верхний «слой разделов»: карточка-раздел (ссылка на экран), из которой выходит корень раздела.
 // Пока слой содержит один раздел — «Теория проекта»; позже сюда добавятся остальные экраны.
 export type TheorySectionData = { kind: 'section'; cardId: string; title: string; subtitle: string };
-export type TheoryMissionData = { kind: 'mission'; title: string; statement: string; isEmpty: boolean };
+export type TheoryMissionData = { kind: 'mission'; cardId: string; title: string; statement: string; isEmpty: boolean };
 export type TheoryBlockData = {
-  kind: 'block'; list: string; title: string; index: number;
+  kind: 'block'; cardId: string; list: string; title: string; index: number; nameField: string; expandKey: string;
   itemCount: number; isEmpty: boolean; expanded: boolean; expandable: boolean;
 };
-export type TheoryItemData = { kind: 'item'; list: string; itemId: string; label: string; blockTitle: string };
+export type TheoryItemData = { kind: 'item'; cardId: string; list: string; itemId: string; label: string; blockTitle: string };
 
 export type TheoryNode =
   | { id: string; type: 'sectionNode'; data: TheorySectionData }
@@ -136,14 +158,23 @@ export interface TheoryEdge { id: string; source: string; target: string; kind: 
 export interface TheoryGraph { nodes: TheoryNode[]; edges: TheoryEdge[]; }
 
 // === id-хелперы ===
-const blockNodeId = (list: string) => `block:${list}`;
-const itemNodeId = (list: string, itemId: string) => `item:${THEORY_CARD_ID}:${list}:${itemId}`;
+const blockNodeId = (cardId: string, list: string) => cardId === THEORY_CARD_ID ? `block:${list}` : `block:${cardId}:${list}`;
+const itemNodeId = (cardId: string, list: string, itemId: string) => `item:${cardId}:${list}:${itemId}`;
+const expandKey = (cardId: string, list: string) => cardId === THEORY_CARD_ID ? list : `${cardId}:${list}`;
 const trimmed = (v?: string) => (v ?? '').trim();
-const hasContent = (item: EditableItem) => Object.values(item.values).some(v => trimmed(v));
+const meaningful = (v?: string) => {
+  const s = trimmed(v);
+  return Boolean(s) && !s.toLowerCase().startsWith('сначала заполните');
+};
+const hasContent = (item: EditableItem, ignoredKeys: ReadonlySet<string> = new Set()) =>
+  Object.entries(item.values).some(([k, v]) => !ignoredKeys.has(k) && meaningful(v));
 const tokenize = (v?: string) => trimmed(v).split(/[;,]\s*/).map(t => t.trim().toLowerCase()).filter(Boolean);
 
 function theoryCard(model: ProjectEditModel): EditableCard | undefined {
   return model.editable_cards.find(c => c.card_id === THEORY_CARD_ID);
+}
+function strategyCard(model: ProjectEditModel): EditableCard | undefined {
+  return model.editable_cards.find(c => c.card_id === STRATEGY_CARD_ID);
 }
 function missionStatement(card: EditableCard | undefined): string {
   const fields = card?.fields ?? [];
@@ -153,10 +184,40 @@ function missionStatement(card: EditableCard | undefined): string {
 function missionFilled(card: EditableCard | undefined): boolean {
   return (card?.fields ?? []).some(f => trimmed(f.value));
 }
+function fieldsMap(card: EditableCard | undefined): Map<string, string> {
+  return new Map((card?.fields ?? []).map(f => [f.key, f.value] as const));
+}
+function strategyStatement(card: EditableCard | undefined): string {
+  const fields = fieldsMap(card);
+  return trimmed(fields.get('acceptedChoice'))
+    || trimmed(fields.get('guidingPolicy'))
+    || trimmed(fields.get('strategicQuestion'))
+    || trimmed(fields.get('winningAspiration'))
+    || '';
+}
+function itemByLabel(items: EditableItem[]): Map<string, string> {
+  const idx = new Map<string, string>();
+  for (const it of items) {
+    const lbl = it.label.trim().toLowerCase();
+    if (lbl) idx.set(lbl, String(it.id));
+  }
+  return idx;
+}
+function resolveByRefOrLabel(value: string | undefined, refValue: string | undefined, targetCard: string, targetList: string, targetByLabel: Map<string, string>): string | null {
+  const prefix = `${targetCard}:${targetList}:`;
+  const ref = trimmed(refValue);
+  if (ref.startsWith(prefix)) return ref.slice(prefix.length);
+  for (const token of tokenize(value)) {
+    const id = targetByLabel.get(token);
+    if (id) return id;
+  }
+  return null;
+}
 
 export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string> = new Set(), model?: ProjectEditModel): TheoryGraph {
   const m = model ?? buildProjectEditModel(projectId);
   const card = theoryCard(m);
+  const strategy = strategyCard(m);
 
   const nodes: TheoryNode[] = [];
   const edges: TheoryEdge[] = [];
@@ -171,18 +232,16 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
   // Миссия — корень
   nodes.push({
     id: MISSION_NODE_ID, type: 'missionNode',
-    data: { kind: 'mission', title: 'Миссия проекта', statement: missionStatement(card), isEmpty: !missionFilled(card) },
+    data: { kind: 'mission', cardId: THEORY_CARD_ID, title: 'Миссия проекта', statement: missionStatement(card), isEmpty: !missionFilled(card) },
   });
 
   // Содержательные элементы блоков + индекс лейблов (для резолва связей)
   const itemsByList = new Map<string, EditableItem[]>();
   const labelIndex = new Map<string, Map<string, string>>(); // list → (labelLC → itemId)
   for (const b of THEORY_BLOCKS) {
-    const items = (card?.lists.find(l => l.list === b.list)?.items ?? []).filter(hasContent);
+    const items = (card?.lists.find(l => l.list === b.list)?.items ?? []).filter(it => hasContent(it));
     itemsByList.set(b.list, items);
-    const idx = new Map<string, string>();
-    for (const it of items) { const lbl = it.label.trim().toLowerCase(); if (lbl) idx.set(lbl, String(it.id)); }
-    labelIndex.set(b.list, idx);
+    labelIndex.set(b.list, itemByLabel(items));
   }
 
   // Блоки + элементы раскрытых блоков; запоминаем присутствующие узлы-элементы
@@ -190,18 +249,21 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
   THEORY_BLOCKS.forEach((b, index) => {
     const items = itemsByList.get(b.list) ?? [];
     nodes.push({
-      id: blockNodeId(b.list), type: 'blockNode',
-      data: { kind: 'block', list: b.list, title: b.title, index, itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(b.list), expandable: items.length > 0 },
+      id: blockNodeId(THEORY_CARD_ID, b.list), type: 'blockNode',
+      data: {
+        kind: 'block', cardId: THEORY_CARD_ID, list: b.list, title: b.title, index, nameField: b.nameField, expandKey: expandKey(THEORY_CARD_ID, b.list),
+        itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(b.list), expandable: items.length > 0,
+      },
     });
     // структурное ребро Миссия → блок (всегда видно)
-    edges.push({ id: `origin:${b.list}`, source: MISSION_NODE_ID, target: blockNodeId(b.list), kind: 'origin' });
+    edges.push({ id: `origin:${b.list}`, source: MISSION_NODE_ID, target: blockNodeId(THEORY_CARD_ID, b.list), kind: 'origin' });
 
     if (expanded.has(b.list)) {
       for (const it of items) {
-        const nid = itemNodeId(b.list, String(it.id));
+        const nid = itemNodeId(THEORY_CARD_ID, b.list, String(it.id));
         presentItems.add(nid);
-        nodes.push({ id: nid, type: 'itemNode', data: { kind: 'item', list: b.list, itemId: String(it.id), label: it.label, blockTitle: b.title } });
-        edges.push({ id: `containment:${nid}`, source: blockNodeId(b.list), target: nid, kind: 'containment' });
+        nodes.push({ id: nid, type: 'itemNode', data: { kind: 'item', cardId: THEORY_CARD_ID, list: b.list, itemId: String(it.id), label: it.label, blockTitle: b.title } });
+        edges.push({ id: `containment:${nid}`, source: blockNodeId(THEORY_CARD_ID, b.list), target: nid, kind: 'containment' });
       }
     }
   });
@@ -216,7 +278,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     for (const token of tokenize(missionFields.get(link.field))) {
       const id = idx.get(token);
       if (!id) continue;
-      const target = itemNodeId(link.targetList, id);
+      const target = itemNodeId(THEORY_CARD_ID, link.targetList, id);
       if (!presentItems.has(target)) continue;
       edges.push({ id: `ref:m:${seq++}`, source: MISSION_NODE_ID, target, kind: 'ref', family: familyLabel(link.family), verb: link.verb });
     }
@@ -226,16 +288,92 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     const idx = labelIndex.get(link.targetList);
     if (!idx) continue;
     for (const src of itemsByList.get(link.sourceList) ?? []) {
-      const source = itemNodeId(link.sourceList, String(src.id));
+      const source = itemNodeId(THEORY_CARD_ID, link.sourceList, String(src.id));
       if (!presentItems.has(source)) continue;
       for (const token of tokenize(src.values[link.field])) {
         const id = idx.get(token);
         if (!id) continue;
-        const target = itemNodeId(link.targetList, id);
+        const target = itemNodeId(THEORY_CARD_ID, link.targetList, id);
         if (target === source || !presentItems.has(target)) continue;
         edges.push({ id: `ref:b:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel(link.family), verb: link.verb });
       }
     }
+  }
+
+  // Стратегический выбор: отдельный раздел рядом с Теорией. Каркас строится всегда,
+  // смысловые связи — только из реальных полей связи самого экрана.
+  nodes.push({
+    id: STRATEGY_SECTION_NODE_ID, type: 'sectionNode',
+    data: { kind: 'section', cardId: STRATEGY_CARD_ID, title: 'Стратегический выбор', subtitle: 'Раздел проекта' },
+  });
+  edges.push({ id: 'section:strategy->root', source: STRATEGY_SECTION_NODE_ID, target: STRATEGY_ROOT_NODE_ID, kind: 'section', label: 'выбор' });
+
+  nodes.push({
+    id: STRATEGY_ROOT_NODE_ID, type: 'missionNode',
+    data: { kind: 'mission', cardId: STRATEGY_CARD_ID, title: 'Принятый стратегический выбор', statement: strategyStatement(strategy), isEmpty: !missionFilled(strategy) },
+  });
+
+  const strategyIgnored = new Map<string, ReadonlySet<string>>([
+    ['alternatives', new Set(['status'])],
+  ]);
+  const strategyItemsByList = new Map<string, EditableItem[]>();
+  const strategyLabelIndex = new Map<string, Map<string, string>>();
+  for (const b of STRATEGY_BLOCKS) {
+    const items = (strategy?.lists.find(l => l.list === b.list)?.items ?? []).filter(it => hasContent(it, strategyIgnored.get(b.list)));
+    strategyItemsByList.set(b.list, items);
+    strategyLabelIndex.set(b.list, itemByLabel(items));
+  }
+
+  STRATEGY_BLOCKS.forEach((b, index) => {
+    const key = expandKey(STRATEGY_CARD_ID, b.list);
+    const items = strategyItemsByList.get(b.list) ?? [];
+    nodes.push({
+      id: blockNodeId(STRATEGY_CARD_ID, b.list), type: 'blockNode',
+      data: {
+        kind: 'block', cardId: STRATEGY_CARD_ID, list: b.list, title: b.title, index, nameField: b.nameField, expandKey: key,
+        itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(key), expandable: items.length > 0,
+      },
+    });
+    edges.push({ id: `origin:${STRATEGY_CARD_ID}:${b.list}`, source: STRATEGY_ROOT_NODE_ID, target: blockNodeId(STRATEGY_CARD_ID, b.list), kind: 'origin' });
+
+    if (expanded.has(key)) {
+      for (const it of items) {
+        const nid = itemNodeId(STRATEGY_CARD_ID, b.list, String(it.id));
+        presentItems.add(nid);
+        nodes.push({ id: nid, type: 'itemNode', data: { kind: 'item', cardId: STRATEGY_CARD_ID, list: b.list, itemId: String(it.id), label: it.label, blockTitle: b.title } });
+        edges.push({ id: `containment:${nid}`, source: blockNodeId(STRATEGY_CARD_ID, b.list), target: nid, kind: 'containment' });
+      }
+    }
+  });
+
+  const strategyFields = fieldsMap(strategy);
+  const alternativeIdx = strategyLabelIndex.get('alternatives') ?? new Map();
+  const selectedAlternative = resolveByRefOrLabel(strategyFields.get('selectedAlternative'), undefined, STRATEGY_CARD_ID, 'alternatives', alternativeIdx);
+  if (selectedAlternative) {
+    const target = itemNodeId(STRATEGY_CARD_ID, 'alternatives', selectedAlternative);
+    if (presentItems.has(target)) {
+      edges.push({ id: `ref:s:${seq++}:selected`, source: STRATEGY_ROOT_NODE_ID, target, kind: 'ref', family: familyLabel('defines'), verb: 'выбрана' });
+    }
+  }
+
+  for (const action of strategyItemsByList.get('actions') ?? []) {
+    const source = itemNodeId(STRATEGY_CARD_ID, 'actions', String(action.id));
+    if (!presentItems.has(source)) continue;
+    const targetId = resolveByRefOrLabel(action.values.supportsChoice, action.values.supportsChoiceRef, STRATEGY_CARD_ID, 'alternatives', alternativeIdx);
+    if (!targetId) continue;
+    const target = itemNodeId(STRATEGY_CARD_ID, 'alternatives', targetId);
+    if (!presentItems.has(target)) continue;
+    edges.push({ id: `ref:s:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel('supportsChoice'), verb: 'поддерживает' });
+  }
+
+  for (const hypothesis of strategyItemsByList.get('hypotheses') ?? []) {
+    const source = itemNodeId(STRATEGY_CARD_ID, 'hypotheses', String(hypothesis.id));
+    if (!presentItems.has(source)) continue;
+    const targetId = resolveByRefOrLabel(hypothesis.values.choiceLink, hypothesis.values.choiceLinkRef, STRATEGY_CARD_ID, 'alternatives', alternativeIdx);
+    if (!targetId) continue;
+    const target = itemNodeId(STRATEGY_CARD_ID, 'alternatives', targetId);
+    if (!presentItems.has(target)) continue;
+    edges.push({ id: `ref:s:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel('testsChoice'), verb: 'влияет на' });
   }
 
   return { nodes, edges };

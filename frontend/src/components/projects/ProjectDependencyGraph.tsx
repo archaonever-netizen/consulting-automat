@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  buildTheoryGraph, edgeVisual, SEMANTIC_DASH, MISSION_NODE_ID, THEORY_BLOCKS, THEORY_CARD_ID,
+  buildTheoryGraph, edgeVisual, SEMANTIC_DASH, MISSION_NODE_ID, STRATEGY_CARD_ID, THEORY_CARD_ID,
   type TheoryBlockData, type TheoryEdgeKind, type TheoryItemData, type TheoryMissionData, type TheorySectionData, type TheoryNode,
 } from './projectTheoryGraph';
 import { applyProjectEdit } from './projectEditApplier';
@@ -34,9 +34,15 @@ const TRUNK_X = 60;                          // ствол структурно�
 const CHILD_RAIL_X = BLOCK_X + BLOCK_W + 64; // рейка блок→элементы (между блоком и элементами)
 const ROW_GAP = 30;
 const LANE_X0 = ITEM_X + ITEM_W + 44, LANE_STEP = 30; // «дорожки» смысловых связей справа
+const SECTION_COLUMN_W = 720;
 const ACCENT = '#2563EB', MUTED = '#94a3b8';
 
-const blockName = (list: string) => THEORY_BLOCKS.find(b => b.list === list)?.nameField ?? 'name';
+const SECTION_ORDER = [THEORY_CARD_ID, STRATEGY_CARD_ID];
+const columnOfCard = (cardId?: string) => {
+  const index = SECTION_ORDER.indexOf(cardId ?? THEORY_CARD_ID);
+  return index === -1 ? SECTION_ORDER.length : index;
+};
+const offsetOfCard = (cardId?: string) => columnOfCard(cardId) * SECTION_COLUMN_W;
 
 // — Ортогональный путь со скруглёнными углами —
 const dist = (a: number[], b: number[]) => Math.hypot(b[0] - a[0], b[1] - a[1]);
@@ -90,16 +96,16 @@ const edgeTypes = { tree: TreeEdge, bus: BusEdge };
 
 // ============ Узлы ============
 // Клик по узлу — закрепляет/снимает его связи (pin); двойной клик — открывает Теорию.
-const PIN_TITLE = 'Клик — закрепить связи · двойной клик — открыть Теорию';
+const PIN_TITLE = 'Клик — закрепить связи · двойной клик — открыть раздел';
 type SectionNodeData = TheorySectionData & { onOpen: () => void };
 type MissionNodeData = TheoryMissionData & { onOpen: () => void; onPin: (id: string) => void };
-type BlockNodeData = TheoryBlockData & { onOpen: () => void; onPin: (id: string) => void; onToggle: (list: string) => void; onAdd: (list: string) => void };
+type BlockNodeData = TheoryBlockData & { onOpen: () => void; onPin: (id: string) => void; onToggle: (key: string) => void; onAdd: (cardId: string, list: string, nameField: string) => void };
 type ItemNodeData = TheoryItemData & { onOpen: () => void; onPin: (id: string) => void; onDelete: (d: TheoryItemData) => void };
 
 function SectionNode({ data }: NodeProps) {
   const d = data as unknown as SectionNodeData;
   return (
-    <div className="pg-section" onClick={d.onOpen} role="button" title="Открыть раздел Теории проекта">
+    <div className="pg-section" onClick={d.onOpen} role="button" title="Открыть раздел">
       <Handle type="source" position={Position.Bottom} id="b" />
       <span className="pg-section-kicker">{d.subtitle}</span>
       <b className="pg-section-title">{d.title}</b>
@@ -131,8 +137,8 @@ function BlockNode({ id, data }: NodeProps) {
       <Handle type="source" position={Position.Right} id="r" />
       <div className="pg-block-head"><b>{d.title}</b><span className="pg-chip">{d.itemCount}</span></div>
       <div className="pg-block-foot">
-        <button type="button" className="pg-mini" title="Добавить элемент" onClick={e => { stop(e); d.onAdd(d.list); }} onDoubleClick={stop}>＋</button>
-        {d.expandable && <button type="button" className="pg-expand" onClick={e => { stop(e); d.onToggle(d.list); }} onDoubleClick={stop}>{d.expanded ? '− свернуть' : `раскрыть (${d.itemCount})`}</button>}
+        <button type="button" className="pg-mini" title="Добавить элемент" onClick={e => { stop(e); d.onAdd(d.cardId, d.list, d.nameField); }} onDoubleClick={stop}>＋</button>
+        {d.expandable && <button type="button" className="pg-expand" onClick={e => { stop(e); d.onToggle(d.expandKey); }} onDoubleClick={stop}>{d.expanded ? '− свернуть' : `раскрыть (${d.itemCount})`}</button>}
       </div>
     </div>
   );
@@ -157,33 +163,47 @@ const nodeTypes = { sectionNode: SectionNode, missionNode: MissionNode, blockNod
 
 // ============ Раскладка: вертикальное дерево с динамическими ярусами ============
 function layout(model: TheoryNode[]): Node[] {
-  const itemsByList = new Map<string, Extract<TheoryNode, { type: 'itemNode' }>[]>();
-  const blocks: Extract<TheoryNode, { type: 'blockNode' }>[] = [];
-  let mission: Extract<TheoryNode, { type: 'missionNode' }> | undefined;
-  let section: Extract<TheoryNode, { type: 'sectionNode' }> | undefined;
+  const itemsByBlock = new Map<string, Extract<TheoryNode, { type: 'itemNode' }>[]>();
+  const blocksByCard = new Map<string, Extract<TheoryNode, { type: 'blockNode' }>[]>();
+  const sections = new Map<string, Extract<TheoryNode, { type: 'sectionNode' }>>();
+  const roots = new Map<string, Extract<TheoryNode, { type: 'missionNode' }>>();
   for (const n of model) {
-    if (n.type === 'sectionNode') section = n;
-    else if (n.type === 'missionNode') mission = n;
-    else if (n.type === 'blockNode') blocks.push(n);
-    else { const b = itemsByList.get(n.data.list) ?? []; b.push(n); itemsByList.set(n.data.list, b); }
+    if (n.type === 'sectionNode') sections.set(n.data.cardId, n);
+    else if (n.type === 'missionNode') roots.set(n.data.cardId, n);
+    else if (n.type === 'blockNode') {
+      const b = blocksByCard.get(n.data.cardId) ?? [];
+      b.push(n);
+      blocksByCard.set(n.data.cardId, b);
+    } else {
+      const key = `${n.data.cardId}:${n.data.list}`;
+      const b = itemsByBlock.get(key) ?? [];
+      b.push(n);
+      itemsByBlock.set(key, b);
+    }
   }
 
   const out: Node[] = [];
-  if (section) out.push({ id: section.id, type: 'sectionNode', position: { x: BLOCK_X, y: SECTION_TOP }, data: section.data, zIndex: 4 });
-  if (mission) out.push({ id: mission.id, type: 'missionNode', position: { x: BLOCK_X, y: MISSION_TOP }, data: mission.data, zIndex: 4 });
+  const cardIds = [...new Set([...SECTION_ORDER, ...sections.keys(), ...roots.keys(), ...blocksByCard.keys()])];
+  for (const cardId of cardIds) {
+    const offset = offsetOfCard(cardId);
+    const section = sections.get(cardId);
+    const root = roots.get(cardId);
+    const blocks = (blocksByCard.get(cardId) ?? []).sort((a, b) => a.data.index - b.data.index);
+    if (section) out.push({ id: section.id, type: 'sectionNode', position: { x: BLOCK_X + offset, y: SECTION_TOP }, data: section.data, zIndex: 4 });
+    if (root) out.push({ id: root.id, type: 'missionNode', position: { x: BLOCK_X + offset, y: MISSION_TOP }, data: root.data, zIndex: 4 });
 
-  blocks.sort((a, b) => a.data.index - b.data.index);
-  let y = BLOCKS_TOP;
-  for (const b of blocks) {
-    const items = itemsByList.get(b.data.list) ?? [];
-    const itemsH = items.length ? items.length * ITEM_H + (items.length - 1) * ITEM_GAP : 0;
-    const bandH = Math.max(BLOCK_H, itemsH);
-    const blockY = y + (bandH - BLOCK_H) / 2; // блок по центру своего яруса (симметричный веер к детям)
-    out.push({ id: b.id, type: 'blockNode', position: { x: BLOCK_X, y: blockY }, data: b.data, zIndex: 3 });
-    items.forEach((n, i) => {
-      out.push({ id: n.id, type: 'itemNode', position: { x: ITEM_X, y: y + i * (ITEM_H + ITEM_GAP) }, data: n.data, zIndex: 3 });
-    });
-    y += bandH + ROW_GAP;
+    let y = BLOCKS_TOP;
+    for (const b of blocks) {
+      const items = itemsByBlock.get(`${b.data.cardId}:${b.data.list}`) ?? [];
+      const itemsH = items.length ? items.length * ITEM_H + (items.length - 1) * ITEM_GAP : 0;
+      const bandH = Math.max(BLOCK_H, itemsH);
+      const blockY = y + (bandH - BLOCK_H) / 2; // блок по центру своего яруса (симметричный веер к детям)
+      out.push({ id: b.id, type: 'blockNode', position: { x: BLOCK_X + offset, y: blockY }, data: b.data, zIndex: 3 });
+      items.forEach((n, i) => {
+        out.push({ id: n.id, type: 'itemNode', position: { x: ITEM_X + offset, y: y + i * (ITEM_H + ITEM_GAP) }, data: n.data, zIndex: 3 });
+      });
+      y += bandH + ROW_GAP;
+    }
   }
   return out;
 }
@@ -193,7 +213,7 @@ function handlesFor(kind: TheoryEdgeKind, source: string): [string, string] {
   if (kind === 'section') return ['b', 't'];           // раздел (низ) → Миссия (верх), прямой столбец
   if (kind === 'origin') return ['b', 'l'];           // Миссия (низ) → блок (лево)
   if (kind === 'containment') return ['r', 'l'];       // блок (право) → элемент (лево)
-  return [source === MISSION_NODE_ID ? 'r' : 'rs', 'rt']; // ref: справа источника → справа цели
+  return [source === MISSION_NODE_ID || source.startsWith('root:') ? 'r' : 'rs', 'rt']; // ref: справа источника → справа цели
 }
 
 interface GraphProps { projectId: number; onOpenCard: (cardId: string) => void }
@@ -236,16 +256,16 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     if (res.ok) setEditNonce(n => n + 1);
   }, [projectId]);
 
-  const onAdd = useCallback((list: string) => {
-    applyEdit({ id: 'add', op: 'add_item', card_id: THEORY_CARD_ID, list, human: 'Добавить', values: { [blockName(list)]: 'Новый элемент' } } as Proposal);
-    setExpanded(prev => new Set(prev).add(list));
+  const onAdd = useCallback((cardId: string, list: string, nameField: string) => {
+    applyEdit({ id: 'add', op: 'add_item', card_id: cardId, list, human: 'Добавить', values: { [nameField]: 'Новый элемент' } } as Proposal);
+    setExpanded(prev => new Set(prev).add(cardId === THEORY_CARD_ID ? list : `${cardId}:${list}`));
   }, [applyEdit]);
 
   const onDelete = useCallback((d: TheoryItemData) => {
-    applyEdit({ id: 'del', op: 'delete_item', card_id: THEORY_CARD_ID, list: d.list, item_id: d.itemId, human: 'Удалить' } as Proposal);
+    applyEdit({ id: 'del', op: 'delete_item', card_id: d.cardId, list: d.list, item_id: d.itemId, human: 'Удалить' } as Proposal);
   }, [applyEdit]);
 
-  const openTheory = useCallback(() => onOpenCard(THEORY_CARD_ID), [onOpenCard]);
+  const openCard = useCallback((cardId: string) => onOpenCard(cardId), [onOpenCard]);
 
   // editNonce — намеренная зависимость: после applyProjectEdit меняется localStorage, граф пересобираем.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -255,14 +275,26 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
   useEffect(() => {
     const laid = layout(graph.nodes).map(n => {
       const className = pinned.has(n.id) ? 'is-pinned' : undefined;
-      if (n.type === 'sectionNode') return { ...n, data: { ...n.data, onOpen: openTheory } };
-      if (n.type === 'missionNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin } };
-      if (n.type === 'blockNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin, onToggle: toggle, onAdd } };
-      if (n.type === 'itemNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin, onDelete } };
+      if (n.type === 'sectionNode') {
+        const data = n.data as TheorySectionData;
+        return { ...n, data: { ...data, onOpen: () => openCard(data.cardId) } };
+      }
+      if (n.type === 'missionNode') {
+        const data = n.data as TheoryMissionData;
+        return { ...n, className, data: { ...data, onOpen: () => openCard(data.cardId), onPin } };
+      }
+      if (n.type === 'blockNode') {
+        const data = n.data as TheoryBlockData;
+        return { ...n, className, data: { ...data, onOpen: () => openCard(data.cardId), onPin, onToggle: toggle, onAdd } };
+      }
+      if (n.type === 'itemNode') {
+        const data = n.data as TheoryItemData;
+        return { ...n, className, data: { ...data, onOpen: () => openCard(data.cardId), onPin, onDelete } };
+      }
       return n;
     });
     setNodes(laid);
-  }, [graph, pinned, openTheory, onPin, toggle, onAdd, onDelete, setNodes]);
+  }, [graph, pinned, openCard, onPin, toggle, onAdd, onDelete, setNodes]);
 
   // Рёбра. Видимы ref-связи активных узлов (pin ∪ наведённый) ИЛИ сама связь зафиксирована/наведена.
   // Дорожки (laneX) и высоту подписи (labelT) назначаем ПЛОТНО только среди видимых — чтобы и линии,
@@ -273,15 +305,33 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     const refVisible = (e: typeof graph.edges[number]) =>
       e.kind === 'ref' && (active.has(e.source) || active.has(e.target) || pinnedEdges.has(e.id) || hoveredEdge === e.id);
 
+    const graphNode = new Map(graph.nodes.map(n => [n.id, n] as const));
+    const nodeCard = (id: string) => {
+      const n = graphNode.get(id);
+      return n?.type === 'sectionNode' || n?.type === 'missionNode' || n?.type === 'blockNode' || n?.type === 'itemNode'
+        ? n.data.cardId
+        : THEORY_CARD_ID;
+    };
+    const edgeColumn = (e: typeof graph.edges[number]) => Math.max(columnOfCard(nodeCard(e.source)), columnOfCard(nodeCard(e.target)));
     const visibleRef = graph.edges.filter(refVisible);
-    const n = visibleRef.length;
     const lane = new Map<string, number>();
     const jog = new Map<string, number>();
     const labelT = new Map<string, number>();
     const bySource = new Map<string, string[]>();
-    visibleRef.forEach((e, i) => {
-      lane.set(e.id, LANE_X0 + i * LANE_STEP);
-      labelT.set(e.id, (i + 1) / (n + 1));
+    const visibleByColumn = new Map<number, typeof visibleRef>();
+    visibleRef.forEach(e => {
+      const col = edgeColumn(e);
+      const arr = visibleByColumn.get(col) ?? [];
+      arr.push(e);
+      visibleByColumn.set(col, arr);
+    });
+    for (const [col, refs] of visibleByColumn) {
+      refs.forEach((e, i) => {
+        lane.set(e.id, LANE_X0 + col * SECTION_COLUMN_W + i * LANE_STEP);
+        labelT.set(e.id, (i + 1) / (refs.length + 1));
+      });
+    }
+    visibleRef.forEach(e => {
       const arr = bySource.get(e.source) ?? []; arr.push(e.id); bySource.set(e.source, arr);
     });
     for (const ids of bySource.values()) ids.forEach((id, k) => jog.set(id, (k - (ids.length - 1) / 2) * 9));
@@ -289,7 +339,8 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     const rf: Edge[] = graph.edges.map(e => {
       const isRef = e.kind === 'ref';
       const [sourceHandle, targetHandle] = handlesFor(e.kind, e.source);
-      const rail = e.kind === 'origin' ? TRUNK_X : e.kind === 'section' ? COL_CENTER_X : CHILD_RAIL_X;
+      const offset = edgeColumn(e) * SECTION_COLUMN_W;
+      const rail = e.kind === 'origin' ? TRUNK_X + offset : e.kind === 'section' ? COL_CENTER_X + offset : CHILD_RAIL_X + offset;
       const hot = hoveredEdge === e.id || pinnedEdges.has(e.id);
       const vis = edgeVisual(e.kind, e.target);
       const width = vis.width + (hot ? 1.5 : 0);

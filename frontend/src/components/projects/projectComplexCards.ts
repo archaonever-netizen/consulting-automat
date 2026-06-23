@@ -155,6 +155,7 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
       { key: 'howAdvantage', label: 'Преимущество' },
       { key: 'howSystemChange', label: 'Изменение системы' },
       { key: 'howBetterThanAlternatives', label: 'Лучше альтернатив' },
+      { key: 'selectedAlternative', label: 'Выбранная альтернатива' },
       { key: 'acceptedChoice', label: 'Принятый выбор' },
       { key: 'guidingPolicy', label: 'Guiding policy' },
       { key: 'managementMetrics', label: 'Системы управления: метрики' },

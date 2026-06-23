@@ -1,19 +1,35 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { applyProjectEdit } from './projectEditApplier';
-import { buildTheoryGraph, MISSION_NODE_ID, SECTION_NODE_ID, THEORY_BLOCKS, type TheoryGraph, type TheoryNode } from './projectTheoryGraph';
+import {
+  buildTheoryGraph,
+  MISSION_NODE_ID,
+  SECTION_NODE_ID,
+  STRATEGY_BLOCKS,
+  STRATEGY_CARD_ID,
+  STRATEGY_ROOT_NODE_ID,
+  STRATEGY_SECTION_NODE_ID,
+  THEORY_BLOCKS,
+  THEORY_CARD_ID,
+  type TheoryGraph,
+  type TheoryNode,
+} from './projectTheoryGraph';
 import type { Proposal } from './projectReview';
 
 const PID = 21;
 
 type BlockNode = Extract<TheoryNode, { type: 'blockNode' }>;
 type ItemNode = Extract<TheoryNode, { type: 'itemNode' }>;
-const blockNodes = (g: TheoryGraph) => g.nodes.filter((n): n is BlockNode => n.type === 'blockNode');
-const itemNodes = (g: TheoryGraph) => g.nodes.filter((n): n is ItemNode => n.type === 'itemNode');
+const blockNodes = (g: TheoryGraph, cardId = THEORY_CARD_ID) => g.nodes.filter((n): n is BlockNode => n.type === 'blockNode' && n.data.cardId === cardId);
+const itemNodes = (g: TheoryGraph, cardId = THEORY_CARD_ID) => g.nodes.filter((n): n is ItemNode => n.type === 'itemNode' && n.data.cardId === cardId);
 
 const add = (list: string, values: Record<string, string>) =>
   applyProjectEdit(PID, { id: 'x', op: 'add_item', card_id: 'project-theory', list, human: 'add', values } as Proposal);
 const setMission = (field: string, value: string) =>
   applyProjectEdit(PID, { id: 'm', op: 'update_field', card_id: 'project-theory', field, value, human: 'set' } as Proposal);
+const addStrategy = (list: string, values: Record<string, string>) =>
+  applyProjectEdit(PID, { id: 's', op: 'add_item', card_id: STRATEGY_CARD_ID, list, human: 'add strategy', values } as Proposal);
+const setStrategy = (field: string, value: string) =>
+  applyProjectEdit(PID, { id: 'sf', op: 'update_field', card_id: STRATEGY_CARD_ID, field, value, human: 'set strategy' } as Proposal);
 
 describe('buildTheoryGraph', () => {
   beforeEach(() => window.localStorage.clear());
@@ -35,7 +51,7 @@ describe('buildTheoryGraph', () => {
 
   it('пустой проект: блоки пусты, нет узлов-элементов и смысловых рёбер', () => {
     const g = buildTheoryGraph(PID);
-    expect(blockNodes(g).every(n => n.data.isEmpty && !n.data.expandable)).toBe(true);
+    expect([...blockNodes(g), ...blockNodes(g, STRATEGY_CARD_ID)].every(n => n.data.isEmpty && !n.data.expandable)).toBe(true);
     expect(g.edges.some(e => e.kind === 'ref')).toBe(false);
   });
 
@@ -74,5 +90,36 @@ describe('buildTheoryGraph', () => {
 
     const g = buildTheoryGraph(PID, new Set(['stakeholder']));
     expect(g.edges.some(e => e.kind === 'ref' && e.source === MISSION_NODE_ID && e.target.includes(':stakeholder:'))).toBe(true);
+  });
+
+  it('добавляет отдельный раздел «Стратегический выбор» с корнем и блоками', () => {
+    const g = buildTheoryGraph(PID);
+    expect(g.nodes.find(n => n.id === STRATEGY_SECTION_NODE_ID)?.type).toBe('sectionNode');
+    expect(g.nodes.find(n => n.id === STRATEGY_ROOT_NODE_ID)?.type).toBe('missionNode');
+    expect(g.edges.some(e => e.kind === 'section' && e.source === STRATEGY_SECTION_NODE_ID && e.target === STRATEGY_ROOT_NODE_ID)).toBe(true);
+    expect(blockNodes(g, STRATEGY_CARD_ID)).toHaveLength(STRATEGY_BLOCKS.length);
+    expect(g.edges.filter(e => e.kind === 'origin' && e.source === STRATEGY_ROOT_NODE_ID)).toHaveLength(STRATEGY_BLOCKS.length);
+  });
+
+  it('стратегические ref-связи строятся из реальных полей связи и только при раскрытых блоках', () => {
+    addStrategy('alternatives', { name: 'Фокус на enterprise', status: 'выбрана' });
+    addStrategy('actions', { name: 'Перенастроить продажи', supportsChoiceRef: 'strategic-choice:alternatives:1' });
+
+    const partial = buildTheoryGraph(PID, new Set(['strategic-choice:actions']));
+    expect(partial.edges.some(e => e.kind === 'ref' && e.source.includes(':actions:'))).toBe(false);
+
+    const g = buildTheoryGraph(PID, new Set(['strategic-choice:alternatives', 'strategic-choice:actions']));
+    const edge = g.edges.find(e => e.kind === 'ref' && e.source.includes(':actions:') && e.target.includes(':alternatives:'));
+    expect(edge).toBeDefined();
+    expect(edge?.family).toBe('поддерживает выбор');
+    expect(edge?.verb).toBe('поддерживает');
+  });
+
+  it('корень стратегии связывается с выбранной альтернативой по полю selectedAlternative', () => {
+    addStrategy('alternatives', { name: 'Фокус на enterprise', status: 'выбрана' });
+    setStrategy('selectedAlternative', 'Фокус на enterprise');
+
+    const g = buildTheoryGraph(PID, new Set(['strategic-choice:alternatives']));
+    expect(g.edges.some(e => e.kind === 'ref' && e.source === STRATEGY_ROOT_NODE_ID && e.target.includes(':alternatives:'))).toBe(true);
   });
 });
