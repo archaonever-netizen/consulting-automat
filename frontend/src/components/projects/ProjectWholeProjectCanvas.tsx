@@ -4,7 +4,7 @@ import { readProjectFrameworkSectionSnapshot } from './projectFrameworkSectionSn
 import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { getFallbackProjectTargetStateSnapshot, readProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
 import { getFallbackProjectTheorySnapshot, readProjectTheorySnapshot } from './projectTheorySnapshot';
-import { EDGE_FAMILIES, ENTITY_COLORS, SEMANTIC_DASH, THEORY_REF_LEGEND, entityColor } from './projectTheoryGraph';
+import { EDGE_FAMILIES, ENTITY_COLORS, RELATION_FAMILIES, SEMANTIC_DASH } from './projectTheoryGraph';
 
 // React Flow + dagre — тяжёлые, грузим лениво только на этом экране (отдельный бандл-чанк).
 const ProjectDependencyGraph = lazy(() => import('./ProjectDependencyGraph'));
@@ -21,8 +21,6 @@ function LineSample({ color, dash, width = 2.5 }: { color: string; dash: string;
 // Легенда из визуальной грамматики: РОД линии (пунктир/толщина) + ЦВЕТ (= сущность-цель),
 // затем сами связи (точную семантику несёт подпись). Грамматика — масштабируемая часть.
 function ConnectionsLegend() {
-  const mission = THEORY_REF_LEGEND.filter(e => e.group === 'mission');
-  const block = THEORY_REF_LEGEND.filter(e => e.group === 'block');
   return (
     <section className="pg-legend">
       <div className="pg-legend-group">
@@ -42,23 +40,15 @@ function ConnectionsLegend() {
         ))}
       </div>
       <div className="pg-legend-group">
-        <span className="pg-legend-title">Связи Миссии</span>
-        {mission.map(e => (
-          <span className="pg-legend-item" key={e.label}>
-            <LineSample color={entityColor(e.targetList)} dash={SEMANTIC_DASH} width={2} /><b>{e.label}</b>
-            <span className="pg-legend-meta">{e.from} → {e.to}</span>
+        <span className="pg-legend-title">Принцип связей</span>
+        {RELATION_FAMILIES.map(f => (
+          <span className="pg-legend-item" key={f.id}>
+            <LineSample color={f.color} dash={SEMANTIC_DASH} width={2} /><b>{f.label}</b>
+            <span className="pg-legend-meta">{f.about}</span>
           </span>
         ))}
       </div>
-      <div className="pg-legend-group">
-        <span className="pg-legend-title">Связи между блоками</span>
-        {block.map(e => (
-          <span className="pg-legend-item" key={e.label}>
-            <LineSample color={entityColor(e.targetList)} dash={SEMANTIC_DASH} width={2} /><b>{e.label}</b>
-            <span className="pg-legend-meta">{e.from} → {e.to}</span>
-          </span>
-        ))}
-      </div>
+      <p className="pg-legend-note">Точный глагол связи («контролирует», «обеспечивает»…) — по наведению на саму связь.</p>
     </section>
   );
 }
@@ -122,7 +112,7 @@ export default function ProjectWholeProjectCanvas({ projectId, onSelectCard }: P
         <div>
           <span>Проекты / Весь проект</span>
           <h2>Весь проект</h2>
-          <p>Верхний слой — карточки-разделы (пока «Теория проекта»): из неё выходит Миссия, из Миссии — блоки Теории. Раскрывайте блоки, чтобы видеть элементы. Наведение на узел подсвечивает связи временно, клик — закрепляет (повторный клик/клик по полю — снимает), двойной клик по узлу открывает раздел. Связь тоже можно навести или кликнуть, чтобы зафиксировать. Визуальный язык: цвет линии = сущность-цель, тип линии (сплошная/пунктир/толщина) = род связи, а точную семантику несёт подпись (см. легенду ниже).</p>
+          <p>Верхний слой — карточки-разделы (пока «Теория проекта»): из неё выходит Миссия, из Миссии — блоки Теории. Раскрывайте блоки, чтобы видеть элементы. Наведение на узел подсвечивает связи временно, клик — закрепляет (повторный клик/клик по полю — снимает), двойной клик по узлу открывает раздел. Связь тоже можно навести или кликнуть, чтобы зафиксировать. Визуальный язык: цвет линии = сущность-цель, тип линии = род связи, а подпись по умолчанию показывает семейство связи (принцип) — точный глагол открывается по наведению на связь (см. легенду ниже).</p>
         </div>
         <label className="project-theory-field compact">
           <span>Готовность</span>

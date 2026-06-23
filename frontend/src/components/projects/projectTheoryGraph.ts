@@ -26,28 +26,30 @@ export const THEORY_BLOCKS: TheoryBlockSpec[] = [
   { list: 'preserve', title: 'Что нельзя разрушить', nameField: 'details' },
 ];
 
-// Точные ссылки Миссии: поле миссии → блок-цель. protectRelations указывает и на preserve, и на ограничения.
-interface MissionLink { field: string; targetList: string; label: string; }
+// Каждая смысловая связь относится к СЕМЕЙСТВУ (принцип, виден по умолчанию) и имеет точный
+// глагол `verb` (деталь, показывается по наведению на связь). Так на карте читается принцип,
+// а нюанс — по требованию. Семейства определены ниже (RELATION_FAMILIES).
+interface MissionLink { field: string; targetList: string; family: string; verb: string; }
 const MISSION_LINKS: MissionLink[] = [
-  { field: 'mainBeneficiary', targetList: 'stakeholder', label: 'выгодоприобретатель' },
-  { field: 'relatedResults', targetList: 'results', label: 'результат' },
-  { field: 'relatedCompetencies', targetList: 'competencies', label: 'компетенция' },
-  { field: 'protectRelations', targetList: 'preserve', label: 'нельзя нарушить' },
-  { field: 'protectRelations', targetList: 'constraints', label: 'нельзя нарушить' },
+  { field: 'mainBeneficiary', targetList: 'stakeholder', family: 'defines', verb: 'выгодоприобретатель' },
+  { field: 'relatedResults', targetList: 'results', family: 'defines', verb: 'результат' },
+  { field: 'relatedCompetencies', targetList: 'competencies', family: 'defines', verb: 'компетенция' },
+  { field: 'protectRelations', targetList: 'preserve', family: 'defines', verb: 'нельзя нарушить' },
+  { field: 'protectRelations', targetList: 'constraints', family: 'defines', verb: 'нельзя нарушить' },
 ];
 
 // Меж-блочные смысловые ссылки: элемент-источник.поле → элемент целевого блока.
-interface BlockLink { sourceList: string; field: string; targetList: string; label: string; }
+interface BlockLink { sourceList: string; field: string; targetList: string; family: string; verb: string; }
 const BLOCK_LINKS: BlockLink[] = [
-  { sourceList: 'stakeholder', field: 'resultCriterion', targetList: 'results', label: 'отвечает за' },
-  { sourceList: 'results', field: 'requiredCompetencies', targetList: 'competencies', label: 'требует' },
-  { sourceList: 'competencies', field: 'resultCriterion', targetList: 'results', label: 'обеспечивает' },
-  { sourceList: 'constraints', field: 'resultCriterion', targetList: 'results', label: 'ограничивает' },
-  { sourceList: 'quality', field: 'resultCriterion', targetList: 'results', label: 'контролирует' },
-  { sourceList: 'quality', field: 'beneficiary', targetList: 'stakeholder', label: 'для' },
-  { sourceList: 'preserve', field: 'stakeholder', targetList: 'stakeholder', label: 'защищает' },
-  { sourceList: 'preserve', field: 'resultCriterion', targetList: 'results', label: 'сохраняет' },
-  { sourceList: 'preserve', field: 'constraint', targetList: 'constraints', label: 'связано с' },
+  { sourceList: 'stakeholder', field: 'resultCriterion', targetList: 'results', family: 'toResult', verb: 'отвечает за' },
+  { sourceList: 'results', field: 'requiredCompetencies', targetList: 'competencies', family: 'needsCapability', verb: 'требует' },
+  { sourceList: 'competencies', field: 'resultCriterion', targetList: 'results', family: 'toResult', verb: 'обеспечивает' },
+  { sourceList: 'constraints', field: 'resultCriterion', targetList: 'results', family: 'toResult', verb: 'ограничивает' },
+  { sourceList: 'quality', field: 'resultCriterion', targetList: 'results', family: 'toResult', verb: 'контролирует' },
+  { sourceList: 'quality', field: 'beneficiary', targetList: 'stakeholder', family: 'forStakeholder', verb: 'для' },
+  { sourceList: 'preserve', field: 'stakeholder', targetList: 'stakeholder', family: 'forStakeholder', verb: 'защищает' },
+  { sourceList: 'preserve', field: 'resultCriterion', targetList: 'results', family: 'toResult', verb: 'сохраняет' },
+  { sourceList: 'preserve', field: 'constraint', targetList: 'constraints', family: 'withinLimit', verb: 'связано с' },
 ];
 
 // === Визуальная грамматика связей (масштабируется на все разделы) ===
@@ -97,25 +99,19 @@ export function edgeVisual(kind: TheoryEdgeKind, targetId: string): { color: str
   return { color, dash: fs.dash, width: fs.width };
 }
 
-// Аннотация смысловых связей для легенды (стиль выводится из грамматики по targetList).
-export interface RefLegendEntry { label: string; from: string; to: string; group: 'mission' | 'block'; targetList: string; }
-export const THEORY_REF_LEGEND: RefLegendEntry[] = [
-  // Из Миссии
-  { label: 'выгодоприобретатель', from: 'Миссия', to: 'Клиент', group: 'mission', targetList: 'stakeholder' },
-  { label: 'результат', from: 'Миссия', to: 'Критерии', group: 'mission', targetList: 'results' },
-  { label: 'компетенция', from: 'Миссия', to: 'Компетенции', group: 'mission', targetList: 'competencies' },
-  { label: 'нельзя нарушить', from: 'Миссия', to: 'Сохраняемое / Огр.', group: 'mission', targetList: 'preserve' },
-  // Между блоками
-  { label: 'отвечает за', from: 'Клиент', to: 'Критерии', group: 'block', targetList: 'results' },
-  { label: 'требует', from: 'Критерии', to: 'Компетенции', group: 'block', targetList: 'competencies' },
-  { label: 'обеспечивает', from: 'Компетенции', to: 'Критерии', group: 'block', targetList: 'results' },
-  { label: 'ограничивает', from: 'Ограничения', to: 'Критерии', group: 'block', targetList: 'results' },
-  { label: 'контролирует', from: 'Качество', to: 'Критерии', group: 'block', targetList: 'results' },
-  { label: 'для', from: 'Качество', to: 'Клиент', group: 'block', targetList: 'stakeholder' },
-  { label: 'защищает', from: 'Сохраняемое', to: 'Клиент', group: 'block', targetList: 'stakeholder' },
-  { label: 'сохраняет', from: 'Сохраняемое', to: 'Критерии', group: 'block', targetList: 'results' },
-  { label: 'связано с', from: 'Сохраняемое', to: 'Ограничения', group: 'block', targetList: 'constraints' },
+// Семейства смысловых связей — это и есть «принцип» карты (4–5 вместо 13 глаголов).
+// Точные глаголы остаются на связях (verb) и видны по наведению. about — пояснение для легенды,
+// color — представительный цвет (совпадает с сущностью-целью; у «определяет» цель разная → нейтральный).
+export interface RelationFamily { id: string; label: string; about: string; color: string }
+export const RELATION_FAMILIES: RelationFamily[] = [
+  { id: 'defines', label: 'определяет', about: 'Миссия задаёт грани Теории (цвет — по цели)', color: NEUTRAL_COLOR },
+  { id: 'toResult', label: 'вклад в результат', about: 'элемент влияет на измеримый критерий', color: '#0891B2' },
+  { id: 'forStakeholder', label: 'в интересах', about: 'элемент служит стейкхолдеру', color: '#2563EB' },
+  { id: 'needsCapability', label: 'требует способности', about: 'результат опирается на компетенцию', color: '#7C3AED' },
+  { id: 'withinLimit', label: 'в рамках ограничения', about: 'связь с ограничением-границей', color: '#DC2626' },
 ];
+const FAMILY_LABEL = new Map(RELATION_FAMILIES.map(f => [f.id, f.label] as const));
+const familyLabel = (id: string): string => FAMILY_LABEL.get(id) ?? id;
 
 // === Типы графа (type-алиасы — чтобы data приводились к Record<string, unknown> для React Flow) ===
 // Верхний «слой разделов»: карточка-раздел (ссылка на экран), из которой выходит корень раздела.
@@ -135,7 +131,8 @@ export type TheoryNode =
   | { id: string; type: 'itemNode'; data: TheoryItemData };
 
 export type TheoryEdgeKind = 'section' | 'origin' | 'ref' | 'containment';
-export interface TheoryEdge { id: string; source: string; target: string; kind: TheoryEdgeKind; label?: string; }
+// family — подпись-семейство (по умолчанию на карте), verb — точный глагол (показываем по наведению).
+export interface TheoryEdge { id: string; source: string; target: string; kind: TheoryEdgeKind; label?: string; family?: string; verb?: string; }
 export interface TheoryGraph { nodes: TheoryNode[]; edges: TheoryEdge[]; }
 
 // === id-хелперы ===
@@ -221,7 +218,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
       if (!id) continue;
       const target = itemNodeId(link.targetList, id);
       if (!presentItems.has(target)) continue;
-      edges.push({ id: `ref:m:${seq++}`, source: MISSION_NODE_ID, target, kind: 'ref', label: link.label });
+      edges.push({ id: `ref:m:${seq++}`, source: MISSION_NODE_ID, target, kind: 'ref', family: familyLabel(link.family), verb: link.verb });
     }
   }
 
@@ -236,7 +233,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
         if (!id) continue;
         const target = itemNodeId(link.targetList, id);
         if (target === source || !presentItems.has(target)) continue;
-        edges.push({ id: `ref:b:${seq++}:${source}->${target}`, source, target, kind: 'ref', label: link.label });
+        edges.push({ id: `ref:b:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel(link.family), verb: link.verb });
       }
     }
   }

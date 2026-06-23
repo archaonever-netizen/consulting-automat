@@ -299,7 +299,9 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
         data: isRef
           ? { laneX: lane.get(e.id) ?? LANE_X0, jog: jog.get(e.id) ?? 0, labelT: labelT.get(e.id) ?? 0.5, color: vis.color, dash: vis.dash, width }
           : { rail, color: vis.color, dash: vis.dash, width },
-        label: e.label, hidden: isRef && !lane.has(e.id),
+        // По умолчанию — семейство (принцип); по наведению/фиксации — точный глагол (деталь).
+        label: isRef ? (hot ? (e.verb ?? e.family) : (e.family ?? e.verb)) : e.label,
+        hidden: isRef && !lane.has(e.id),
         className: `pg-edge pg-edge-${e.kind}${hot ? ' is-hot' : ''}`,
         markerEnd: { type: MarkerType.ArrowClosed, color: vis.color, width: 15, height: 15 },
       };

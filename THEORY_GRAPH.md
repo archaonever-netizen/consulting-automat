@@ -100,35 +100,42 @@ ProjectDependencyGraph (React Flow)          ← раскладка + касто
 - **Тип линии (пунктир + толщина) = род связи** (`EDGE_FAMILIES`): каркас (сплошная толстая),
   декомпозиция Миссия→блоки (сплошная), вложенность блок→элементы (сплошная тонкая),
   смысловая `ref` (пунктир).
-- **Точную семантику несёт подпись** на связи («требует», «обеспечивает»…), поэтому отдельный
-  цвет на каждый глагол не нужен — палитра остаётся читаемой при росте числа типов связей.
+- **По умолчанию подпись связи = СЕМЕЙСТВО** (принцип), а точный глагол («контролирует»,
+  «обеспечивает»…) — это `verb`, который показывается **только по наведению/фиксации** связи.
+  Так на карте читается принцип, а нюанс — по требованию. Это убирает «13 глаголов» с дефолтного вида.
 
-Граф берёт визуал из `edgeVisual(kind, targetId)`, легенда на экране — из тех же `EDGE_FAMILIES`
-+ `ENTITY_COLORS` + `THEORY_REF_LEGEND`. **При добавлении раздела новые цвета/типы линий не нужны** —
-только подписи связей (их вид выводится из грамматики).
+Граф берёт визуал из `edgeVisual(kind, targetId)` и подпись `family`/`verb`; легенда на экране —
+из `EDGE_FAMILIES` + `ENTITY_COLORS` + `RELATION_FAMILIES`. **При добавлении раздела новые цвета/типы
+линий не нужны** — только привязать связи к семействам (вид выводится из грамматики).
 
-**`MISSION_LINKS`** — точные ссылки Миссии на элементы (поле Миссии → блок):
+**Семейства связей (`RELATION_FAMILIES`)** — это и есть «принцип» карты:
 
-| Поле Миссии | → блок | подпись |
+| Семейство | Смысл | Куда (цвет) |
 |---|---|---|
-| `mainBeneficiary` | stakeholder | выгодоприобретатель |
-| `relatedResults` | results | результат |
-| `relatedCompetencies` | competencies | компетенция |
-| `protectRelations` | preserve и constraints | нельзя нарушить |
+| **определяет** | Миссия задаёт грани Теории | по цели |
+| **вклад в результат** | элемент влияет на измеримый критерий | results (циан) |
+| **в интересах** | элемент служит стейкхолдеру | stakeholder (синий) |
+| **требует способности** | результат опирается на компетенцию | competencies (фиолет) |
+| **в рамках ограничения** | связь с ограничением-границей | constraints (красный) |
 
-**`BLOCK_LINKS`** — связи элемент → элемент (поле элемента-источника → блок-цель):
+**`MISSION_LINKS`** (поле Миссии → блок): все относятся к семейству **определяет**; точные глаголы
+(`verb`, по наведению): `mainBeneficiary`→stakeholder «выгодоприобретатель», `relatedResults`→results
+«результат», `relatedCompetencies`→competencies «компетенция», `protectRelations`→preserve/constraints
+«нельзя нарушить».
 
-| Источник.поле | → блок | подпись |
-|---|---|---|
-| `stakeholder.resultCriterion` | results | отвечает за |
-| `results.requiredCompetencies` | competencies | требует |
-| `competencies.resultCriterion` | results | обеспечивает |
-| `constraints.resultCriterion` | results | ограничивает |
-| `quality.resultCriterion` | results | контролирует |
-| `quality.beneficiary` | stakeholder | для |
-| `preserve.stakeholder` | stakeholder | защищает |
-| `preserve.resultCriterion` | results | сохраняет |
-| `preserve.constraint` | constraints | связано с |
+**`BLOCK_LINKS`** (поле элемента-источника → блок-цель), семейство → точный глагол:
+
+| Источник.поле | → блок | семейство | глагол (по наведению) |
+|---|---|---|---|
+| `stakeholder.resultCriterion` | results | вклад в результат | отвечает за |
+| `results.requiredCompetencies` | competencies | требует способности | требует |
+| `competencies.resultCriterion` | results | вклад в результат | обеспечивает |
+| `constraints.resultCriterion` | results | вклад в результат | ограничивает |
+| `quality.resultCriterion` | results | вклад в результат | контролирует |
+| `quality.beneficiary` | stakeholder | в интересах | для |
+| `preserve.stakeholder` | stakeholder | в интересах | защищает |
+| `preserve.resultCriterion` | results | вклад в результат | сохраняет |
+| `preserve.constraint` | constraints | в рамках ограничения | связано с |
 
 ### 4.3. Как резолвится `ref`
 

@@ -61,7 +61,11 @@ describe('buildTheoryGraph', () => {
     expect(partial.edges.some(e => e.kind === 'ref')).toBe(false);
 
     const g = buildTheoryGraph(PID, new Set(['stakeholder', 'results']));
-    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes(':stakeholder:') && e.target.includes(':results:'))).toBe(true);
+    const edge = g.edges.find(e => e.kind === 'ref' && e.source.includes(':stakeholder:') && e.target.includes(':results:'));
+    expect(edge).toBeDefined();
+    // по умолчанию — семейство (принцип), точный глагол — деталь
+    expect(edge?.family).toBe('вклад в результат');
+    expect(edge?.verb).toBe('отвечает за');
   });
 
   it('связь Миссии с выбранным выгодоприобретателем', () => {

@@ -2023,6 +2023,7 @@ a:hover { color: var(--accent-hover); }
 .pg-legend-item b { font-weight: 800; color: var(--text-primary); }
 .pg-legend-meta { font-size: 11px; color: var(--text-secondary); }
 .pg-legend-line { flex: 0 0 auto; overflow: visible; }
+.pg-legend-note { margin: 2px 0 0; font-size: 11px; color: var(--text-secondary); }
 
 /* === Граф зависимостей проекта («Весь проект») === */
 .project-graph {
