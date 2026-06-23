@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  buildTheoryGraph, MISSION_NODE_ID, THEORY_BLOCKS, THEORY_CARD_ID,
+  buildTheoryGraph, edgeVisual, SEMANTIC_DASH, MISSION_NODE_ID, THEORY_BLOCKS, THEORY_CARD_ID,
   type TheoryBlockData, type TheoryEdgeKind, type TheoryItemData, type TheoryMissionData, type TheorySectionData, type TheoryNode,
 } from './projectTheoryGraph';
 import { applyProjectEdit } from './projectEditApplier';
@@ -63,23 +63,24 @@ function orthoPath(raw: number[][], r = 9): string {
 // ============ Кастомные рёбра ============
 // Дерево: структурные (Миссия→блок, ствол слева) и containment (блок→элемент, рейка справа от блока).
 function TreeEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, markerEnd, data }: EdgeProps) {
-  const rail = (data as { rail: number }).rail;
+  const { rail, color = ACCENT, dash = '', width = 2.5 } = data as { rail: number; color?: string; dash?: string; width?: number };
   const pts = sourcePosition === Position.Bottom
     ? [[sourceX, sourceY], [sourceX, sourceY + 16], [rail, sourceY + 16], [rail, targetY], [targetX, targetY]]
     : [[sourceX, sourceY], [rail, sourceY], [rail, targetY], [targetX, targetY]];
-  return <BaseEdge path={orthoPath(pts)} markerEnd={markerEnd} />;
+  return <BaseEdge path={orthoPath(pts)} markerEnd={markerEnd} style={{ stroke: color, strokeDasharray: dash || undefined, strokeWidth: width }} />;
 }
 
 // Смысловые ref-связи: вертикальный участок выносится на отдельную «дорожку» laneX справа;
 // jog — вертикальный разнос у общего источника; labelT — позиция подписи вдоль дорожки (доля 0..1),
 // чтобы подписи разных связей не накладывались (у каждой свой laneX и своя высота).
 function BusEdge({ sourceX, sourceY, targetX, targetY, markerEnd, label, data }: EdgeProps) {
-  const { laneX, jog = 0, labelT = 0.5 } = data as { laneX: number; jog?: number; labelT?: number };
+  const { laneX, jog = 0, labelT = 0.5, color = MUTED, dash = SEMANTIC_DASH, width = 2 } = data as { laneX: number; jog?: number; labelT?: number; color?: string; dash?: string; width?: number };
   const sy = sourceY + jog;
   const pts = [[sourceX, sourceY], [sourceX, sy], [laneX, sy], [laneX, targetY], [targetX, targetY]];
   return (
     <BaseEdge
-      path={orthoPath(pts)} markerEnd={markerEnd} label={label} labelX={laneX} labelY={sy + labelT * (targetY - sy)}
+      path={orthoPath(pts)} markerEnd={markerEnd} style={{ stroke: color, strokeDasharray: dash || undefined, strokeWidth: width }}
+      label={label} labelX={laneX} labelY={sy + labelT * (targetY - sy)} labelStyle={{ fill: color, fontWeight: 800 }}
       labelShowBg labelBgPadding={[6, 3]} labelBgBorderRadius={5}
     />
   );
@@ -289,15 +290,18 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
       const isRef = e.kind === 'ref';
       const [sourceHandle, targetHandle] = handlesFor(e.kind, e.source);
       const rail = e.kind === 'origin' ? TRUNK_X : e.kind === 'section' ? COL_CENTER_X : CHILD_RAIL_X;
-      const structural = e.kind === 'origin' || e.kind === 'section';
       const hot = hoveredEdge === e.id || pinnedEdges.has(e.id);
+      const vis = edgeVisual(e.kind, e.target);
+      const width = vis.width + (hot ? 1.5 : 0);
       return {
         id: e.id, source: e.source, target: e.target, sourceHandle, targetHandle,
         type: isRef ? 'bus' : 'tree',
-        data: isRef ? { laneX: lane.get(e.id) ?? LANE_X0, jog: jog.get(e.id) ?? 0, labelT: labelT.get(e.id) ?? 0.5 } : { rail },
+        data: isRef
+          ? { laneX: lane.get(e.id) ?? LANE_X0, jog: jog.get(e.id) ?? 0, labelT: labelT.get(e.id) ?? 0.5, color: vis.color, dash: vis.dash, width }
+          : { rail, color: vis.color, dash: vis.dash, width },
         label: e.label, hidden: isRef && !lane.has(e.id),
         className: `pg-edge pg-edge-${e.kind}${hot ? ' is-hot' : ''}`,
-        markerEnd: { type: MarkerType.ArrowClosed, color: hot ? ACCENT : structural ? ACCENT : MUTED, width: 15, height: 15 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: vis.color, width: 15, height: 15 },
       };
     });
     setEdges(rf);

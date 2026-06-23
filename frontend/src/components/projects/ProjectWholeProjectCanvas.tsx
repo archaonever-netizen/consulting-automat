@@ -4,9 +4,64 @@ import { readProjectFrameworkSectionSnapshot } from './projectFrameworkSectionSn
 import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { getFallbackProjectTargetStateSnapshot, readProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
 import { getFallbackProjectTheorySnapshot, readProjectTheorySnapshot } from './projectTheorySnapshot';
+import { EDGE_FAMILIES, ENTITY_COLORS, SEMANTIC_DASH, THEORY_REF_LEGEND, entityColor } from './projectTheoryGraph';
 
 // React Flow + dagre — тяжёлые, грузим лениво только на этом экране (отдельный бандл-чанк).
 const ProjectDependencyGraph = lazy(() => import('./ProjectDependencyGraph'));
+
+// Образец линии связи для легенды (цвет + пунктир + толщина как на графе).
+function LineSample({ color, dash, width = 2.5 }: { color: string; dash: string; width?: number }) {
+  return (
+    <svg className="pg-legend-line" width="34" height="10" aria-hidden="true">
+      <line x1="1" y1="5" x2="33" y2="5" stroke={color} strokeWidth={width} strokeLinecap="round" strokeDasharray={dash || undefined} />
+    </svg>
+  );
+}
+
+// Легенда из визуальной грамматики: РОД линии (пунктир/толщина) + ЦВЕТ (= сущность-цель),
+// затем сами связи (точную семантику несёт подпись). Грамматика — масштабируемая часть.
+function ConnectionsLegend() {
+  const mission = THEORY_REF_LEGEND.filter(e => e.group === 'mission');
+  const block = THEORY_REF_LEGEND.filter(e => e.group === 'block');
+  return (
+    <section className="pg-legend">
+      <div className="pg-legend-group">
+        <span className="pg-legend-title">Род линии</span>
+        {EDGE_FAMILIES.map(f => (
+          <span className="pg-legend-item" key={f.family}>
+            <LineSample color="#64748b" dash={f.dash} width={f.width} /><b>{f.title}</b>
+          </span>
+        ))}
+      </div>
+      <div className="pg-legend-group">
+        <span className="pg-legend-title">Цвет = сущность</span>
+        {ENTITY_COLORS.map(e => (
+          <span className="pg-legend-item" key={e.list}>
+            <LineSample color={e.color} dash="" width={3} /><b>{e.title}</b>
+          </span>
+        ))}
+      </div>
+      <div className="pg-legend-group">
+        <span className="pg-legend-title">Связи Миссии</span>
+        {mission.map(e => (
+          <span className="pg-legend-item" key={e.label}>
+            <LineSample color={entityColor(e.targetList)} dash={SEMANTIC_DASH} width={2} /><b>{e.label}</b>
+            <span className="pg-legend-meta">{e.from} → {e.to}</span>
+          </span>
+        ))}
+      </div>
+      <div className="pg-legend-group">
+        <span className="pg-legend-title">Связи между блоками</span>
+        {block.map(e => (
+          <span className="pg-legend-item" key={e.label}>
+            <LineSample color={entityColor(e.targetList)} dash={SEMANTIC_DASH} width={2} /><b>{e.label}</b>
+            <span className="pg-legend-meta">{e.from} → {e.to}</span>
+          </span>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 const sectionIds = [
   ['strategy-map', 'Стратегическая карта'],
@@ -67,13 +122,15 @@ export default function ProjectWholeProjectCanvas({ projectId, onSelectCard }: P
         <div>
           <span>Проекты / Весь проект</span>
           <h2>Весь проект</h2>
-          <p>Верхний слой — карточки-разделы проекта; пока это «Теория проекта», из неё выходит Миссия (позже сюда добавятся остальные экраны). Из Миссии вытекают блоки Теории — клиент, критерии результата, компетенции, ограничения, качество и сохраняемое ядро. Раскройте блок, чтобы увидеть элементы. Наведите на узел — связи подсветятся временно; кликните — закрепятся (повторный клик снимает, клик по пустому полю — снимает все). Саму связь можно навести (выделится) или кликнуть по ней, чтобы зафиксировать. Двойной клик по узлу открывает раздел.</p>
+          <p>Верхний слой — карточки-разделы (пока «Теория проекта»): из неё выходит Миссия, из Миссии — блоки Теории. Раскрывайте блоки, чтобы видеть элементы. Наведение на узел подсвечивает связи временно, клик — закрепляет (повторный клик/клик по полю — снимает), двойной клик по узлу открывает раздел. Связь тоже можно навести или кликнуть, чтобы зафиксировать. Визуальный язык: цвет линии = сущность-цель, тип линии (сплошная/пунктир/толщина) = род связи, а точную семантику несёт подпись (см. легенду ниже).</p>
         </div>
         <label className="project-theory-field compact">
           <span>Готовность</span>
           <input className="form-input" value={`${completed} из ${checks.length}: ${readiness}`} readOnly />
         </label>
       </section>
+
+      <ConnectionsLegend />
 
       <Suspense fallback={<div className="project-graph project-graph-loading"><span className="spinner" /><span>Загрузка графа…</span></div>}>
         <ProjectDependencyGraph projectId={projectId} onOpenCard={onSelectCard ?? (() => {})} />

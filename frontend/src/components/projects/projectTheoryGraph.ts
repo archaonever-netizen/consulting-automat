@@ -50,6 +50,73 @@ const BLOCK_LINKS: BlockLink[] = [
   { sourceList: 'preserve', field: 'constraint', targetList: 'constraints', label: 'связано с' },
 ];
 
+// === Визуальная грамматика связей (масштабируется на все разделы) ===
+// ЦВЕТ линии = семейство сущности-цели (единый язык во всех разделах).
+// ТИП линии (пунктир/толщина) = РОД связи. Точную семантику несёт подпись на связи.
+// Так палитра остаётся читаемой даже когда типов связей станет много.
+
+export const ENTITY_COLORS: { list: string; title: string; color: string }[] = [
+  { list: 'stakeholder', title: 'Клиент / выгодоприобретатель', color: '#2563EB' },
+  { list: 'results', title: 'Критерии результата', color: '#0891B2' },
+  { list: 'competencies', title: 'Компетенции', color: '#7C3AED' },
+  { list: 'constraints', title: 'Ограничения', color: '#DC2626' },
+  { list: 'quality', title: 'Качество', color: '#CA8A04' },
+  { list: 'preserve', title: 'Сохраняемое ядро', color: '#DB2777' },
+];
+const ENTITY_COLOR = new Map(ENTITY_COLORS.map(e => [e.list, e.color] as const));
+export const NEUTRAL_COLOR = '#475569';
+/** Цвет по семейству сущности (по ключу списка-блока). Фолбэк — нейтральный. */
+export function entityColor(list?: string): string {
+  return (list && ENTITY_COLOR.get(list)) || NEUTRAL_COLOR;
+}
+
+export type EdgeFamily = 'structural' | 'decomposition' | 'containment' | 'semantic';
+export const SEMANTIC_DASH = '6 4';
+export const EDGE_FAMILIES: { family: EdgeFamily; title: string; dash: string; width: number }[] = [
+  { family: 'structural', title: 'Каркас (раздел → Миссия)', dash: '', width: 3 },
+  { family: 'decomposition', title: 'Из Миссии в блоки', dash: '', width: 2.5 },
+  { family: 'containment', title: 'Блок → элементы', dash: '', width: 1.5 },
+  { family: 'semantic', title: 'Смысловая связь', dash: SEMANTIC_DASH, width: 2 },
+];
+const FAMILY_BY_KIND: Record<TheoryEdgeKind, EdgeFamily> = {
+  section: 'structural', origin: 'decomposition', containment: 'containment', ref: 'semantic',
+};
+const FAMILY_STYLE = new Map(EDGE_FAMILIES.map(f => [f.family, f] as const));
+
+// Ключ списка-сущности из id узла-цели (block:<list> / item:project-theory:<list>:<id>).
+function listOfNode(nodeId: string): string | undefined {
+  if (nodeId.startsWith('block:')) return nodeId.slice('block:'.length);
+  if (nodeId.startsWith('item:')) return nodeId.split(':')[2];
+  return undefined;
+}
+
+/** Визуал ребра по грамматике: цвет (= сущность-цель), пунктир и толщина (= род связи). */
+export function edgeVisual(kind: TheoryEdgeKind, targetId: string): { color: string; dash: string; width: number } {
+  const fs = FAMILY_STYLE.get(FAMILY_BY_KIND[kind])!;
+  const color = kind === 'section' ? NEUTRAL_COLOR : entityColor(listOfNode(targetId));
+  return { color, dash: fs.dash, width: fs.width };
+}
+
+// Аннотация смысловых связей для легенды (стиль выводится из грамматики по targetList).
+export interface RefLegendEntry { label: string; from: string; to: string; group: 'mission' | 'block'; targetList: string; }
+export const THEORY_REF_LEGEND: RefLegendEntry[] = [
+  // Из Миссии
+  { label: 'выгодоприобретатель', from: 'Миссия', to: 'Клиент', group: 'mission', targetList: 'stakeholder' },
+  { label: 'результат', from: 'Миссия', to: 'Критерии', group: 'mission', targetList: 'results' },
+  { label: 'компетенция', from: 'Миссия', to: 'Компетенции', group: 'mission', targetList: 'competencies' },
+  { label: 'нельзя нарушить', from: 'Миссия', to: 'Сохраняемое / Огр.', group: 'mission', targetList: 'preserve' },
+  // Между блоками
+  { label: 'отвечает за', from: 'Клиент', to: 'Критерии', group: 'block', targetList: 'results' },
+  { label: 'требует', from: 'Критерии', to: 'Компетенции', group: 'block', targetList: 'competencies' },
+  { label: 'обеспечивает', from: 'Компетенции', to: 'Критерии', group: 'block', targetList: 'results' },
+  { label: 'ограничивает', from: 'Ограничения', to: 'Критерии', group: 'block', targetList: 'results' },
+  { label: 'контролирует', from: 'Качество', to: 'Критерии', group: 'block', targetList: 'results' },
+  { label: 'для', from: 'Качество', to: 'Клиент', group: 'block', targetList: 'stakeholder' },
+  { label: 'защищает', from: 'Сохраняемое', to: 'Клиент', group: 'block', targetList: 'stakeholder' },
+  { label: 'сохраняет', from: 'Сохраняемое', to: 'Критерии', group: 'block', targetList: 'results' },
+  { label: 'связано с', from: 'Сохраняемое', to: 'Ограничения', group: 'block', targetList: 'constraints' },
+];
+
 // === Типы графа (type-алиасы — чтобы data приводились к Record<string, unknown> для React Flow) ===
 // Верхний «слой разделов»: карточка-раздел (ссылка на экран), из которой выходит корень раздела.
 // Пока слой содержит один раздел — «Теория проекта»; позже сюда добавятся остальные экраны.

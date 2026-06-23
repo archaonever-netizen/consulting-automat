@@ -2008,6 +2008,22 @@ a:hover { color: var(--accent-hover); }
   .project-theory-subhead { align-items: flex-start; flex-direction: column; }
 }
 
+/* Легенда связей графа «Весь проект» */
+.pg-legend {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 12px 14px; margin-bottom: 12px;
+  border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface-2);
+}
+.pg-legend-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; }
+.pg-legend-title {
+  font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--text-secondary); flex: 0 0 auto; min-width: 150px;
+}
+.pg-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; }
+.pg-legend-item b { font-weight: 800; color: var(--text-primary); }
+.pg-legend-meta { font-size: 11px; color: var(--text-secondary); }
+.pg-legend-line { flex: 0 0 auto; overflow: visible; }
+
 /* === Граф зависимостей проекта («Весь проект») === */
 .project-graph {
   width: 100%; height: min(72vh, 720px); min-height: 460px;

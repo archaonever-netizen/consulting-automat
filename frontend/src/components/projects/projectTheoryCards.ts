@@ -369,36 +369,68 @@ function evalOptions(provider: OptionProvider, form: TheoryForm, item: Record<st
   return typeof provider === 'function' ? provider(form, item) : provider;
 }
 
-/** Резолвит присланное моделью значение ссылочного поля (лейбл/часть лейбла/уже-id) → id карточки. */
-function resolveRefValues(options: RefOption[], raw: unknown, multi: boolean): string[] {
+// Человекочитаемые названия блоков по виду ссылки — для просьбы «сначала добавьте элемент».
+const REF_BLOCK_TITLE: Record<RefKind, string> = {
+  stakeholders: 'Клиент / выгодоприобретатель',
+  criteria: 'Критерии результата',
+  competencies: 'Ключевые компетенции',
+  preserve: 'Что нельзя разрушить',
+  constraints: 'Ограничения',
+  protections: 'Сохраняемое ядро / Ограничения',
+};
+
+export interface MissingRef { ref: RefKind; text: string; }
+
+/** Просьба дозаполнить недостающие элементы (ответ Методолога вместо записи сырого текста). */
+function missingMessage(missing: MissingRef[]): string {
+  const uniq = Array.from(new Set(missing.map(m => `«${m.text}» (${REF_BLOCK_TITLE[m.ref]})`)));
+  return `Сначала добавьте ${uniq.length > 1 ? 'элементы' : 'элемент'}: ${uniq.join(', ')} — затем повторите привязку.`;
+}
+
+/** Резолвит значение ссылочного поля → id СУЩЕСТВУЮЩЕГО элемента.
+ *  Совпадение: уже-id → точный лейбл → ЕДИНСТВЕННОЕ частичное вхождение.
+ *  Что не нашлось — отдаём в missing (сырой текст НЕ возвращаем). */
+function resolveRefValues(options: RefOption[], raw: unknown, multi: boolean): { ids: string[]; missing: string[] } {
   const tokens = multi ? splitMulti(raw) : [String(raw ?? '').trim()];
-  const out: string[] = [];
+  const ids: string[] = [];
+  const missing: string[] = [];
   for (const token of tokens) {
     const t = token.trim();
     if (!t) continue;
-    let opt = options.find(o => o.value === t);
-    if (!opt) opt = options.find(o => o.label.trim().toLowerCase() === t.toLowerCase());
-    if (!opt && t.length >= 3) opt = options.find(o => o.label.toLowerCase().includes(t.toLowerCase()));
-    out.push(opt ? opt.value : t);
+    let opt = options.find(o => o.value === t)
+      ?? options.find(o => o.label.trim().toLowerCase() === t.toLowerCase());
+    if (!opt && t.length >= 3) {
+      const hits = options.filter(o => o.label.toLowerCase().includes(t.toLowerCase()));
+      if (hits.length === 1) opt = hits[0]; // частичное — только если однозначно
+    }
+    if (opt) ids.push(opt.value); else missing.push(t);
   }
-  return out;
+  return { ids, missing };
 }
 
-/** Записать значение в поле объекта (миссия или элемент списка): ссылки → id, массивы → split. */
-function applyFieldValue(target: Record<string, unknown>, field: TheoryFieldSpec, raw: unknown, refs: Refs) {
+/** Записать значение поля. Ссылки пишем ТОЛЬКО при найденном id существующего элемента;
+ *  ненайденные складываем в missing и поле НЕ трогаем. Возвращает true, если поле реально записано. */
+function applyFieldValue(target: Record<string, unknown>, field: TheoryFieldSpec, raw: unknown, refs: Refs, missing: MissingRef[]): boolean {
   const isArr = Array.isArray(target[field.key]);
   if (field.ref) {
-    const ids = resolveRefValues(refs[field.ref], raw, isArr);
-    target[field.key] = isArr ? ids : (ids[0] ?? '');
-  } else if (isArr) {
-    target[field.key] = splitMulti(raw);
-  } else {
-    target[field.key] = raw == null ? '' : String(raw);
+    const { ids, missing: miss } = resolveRefValues(refs[field.ref], raw, isArr);
+    for (const t of miss) missing.push({ ref: field.ref, text: t });
+    if (isArr) {
+      if (!ids.length && miss.length) return false; // нечего вносить — только недостающие
+      target[field.key] = ids;                       // пишем лишь найденные id
+      return true;
+    }
+    if (!ids.length) return false;                   // элемент не найден — старую связь не затираем
+    target[field.key] = ids[0];
+    return true;
   }
+  if (isArr) { target[field.key] = splitMulti(raw); return true; }
+  target[field.key] = raw == null ? '' : String(raw);
+  return true;
 }
 
-/** Свести присланные значения в объект по схеме полей. Возвращает число применённых полей. */
-function applyValues(target: Record<string, unknown>, fields: TheoryFieldSpec[], values: Record<string, unknown> | undefined, refs: Refs): number {
+/** Свести присланные значения в объект по схеме полей. Считает записанные поля и копит недостающие ссылки. */
+function applyValues(target: Record<string, unknown>, fields: TheoryFieldSpec[], values: Record<string, unknown> | undefined, refs: Refs, missing: MissingRef[]): number {
   if (!values) return 0;
   const byKey = new Map(fields.map(f => [f.key, f]));
   const byLabel = new Map(fields.map(f => [f.label.trim().toLowerCase(), f]));
@@ -407,8 +439,7 @@ function applyValues(target: Record<string, unknown>, fields: TheoryFieldSpec[],
     if (k === 'id') continue;
     const field = byKey.get(k) ?? byLabel.get(k.trim().toLowerCase());
     if (field) {
-      applyFieldValue(target, field, v, refs);
-      touched += 1;
+      if (applyFieldValue(target, field, v, refs, missing)) touched += 1;
     } else if (k in target) {
       // ключ есть в элементе, но не в схеме — применяем как обычное значение через общий хелпер
       mergeItemValues(target as FormItem, { [k]: v });
@@ -525,17 +556,19 @@ function applyMission(projectId: number, form: TheoryForm, refs: Refs, proposal:
     ? (proposal.field ? { [proposal.field]: proposal.value } : undefined)
     : proposal.values;
   if (proposal.op === 'update_field' && !proposal.field) return fail('Не указано поле миссии.');
-  const touched = applyValues(mission, MISSION_FIELDS, values, refs);
-  if (!touched) return fail('Не распознаны поля миссии для изменения.');
+  const missing: MissingRef[] = [];
+  const touched = applyValues(mission, MISSION_FIELDS, values, refs, missing);
+  if (!touched) return fail(missing.length ? missingMessage(missing) : 'Не распознаны поля миссии для изменения.');
   form.mission = mission as unknown as MissionCard;
   writeForm(projectId, form);
-  return succeed('Формулировка миссии обновлена.');
+  return succeed(missing.length ? `Миссия обновлена. ${missingMessage(missing)}` : 'Формулировка миссии обновлена.');
 }
 
 /** Применить одно подтверждённое предложение к «Теории проекта». */
 export function applyTheoryEdit(projectId: number, proposal: Proposal): ApplyResult {
   const form = normalizeForm(JSON.parse(JSON.stringify(readTheoryForm(projectId))) as Partial<TheoryForm>);
   const refs = buildRefs(form);
+  const missing: MissingRef[] = [];
 
   const listName = (proposal.list ?? '').trim().toLowerCase();
   if (proposal.op === 'update_field' || MISSION_LIST_ALIASES.has(listName)) {
@@ -559,7 +592,7 @@ export function applyTheoryEdit(projectId: number, proposal: Proposal): ApplyRes
   if (proposal.op === 'add_item') {
     const id = Number(formRecord[block.nextIdKey]) || nextItemId(arr);
     const item = block.createItem(id);
-    applyValues(item as unknown as Record<string, unknown>, block.fields, proposal.values, refs);
+    applyValues(item as unknown as Record<string, unknown>, block.fields, proposal.values, refs, missing);
     arr.push(item);
     formRecord[block.nextIdKey] = id + 1;
   } else if (proposal.op === 'update_item') {
@@ -567,8 +600,8 @@ export function applyTheoryEdit(projectId: number, proposal: Proposal): ApplyRes
     if (idx === -1) return fail('Не найден элемент Теории для изменения.');
     const item = { ...arr[idx] };
     const values = proposal.values ?? (proposal.field ? { [proposal.field]: proposal.value } : undefined);
-    if (!applyValues(item as unknown as Record<string, unknown>, block.fields, values, refs)) {
-      return fail('Нечего изменять: не распознаны поля.');
+    if (!applyValues(item as unknown as Record<string, unknown>, block.fields, values, refs, missing)) {
+      return fail(missing.length ? missingMessage(missing) : 'Нечего изменять: не распознаны поля.');
     }
     arr[idx] = item;
   } else if (proposal.op === 'delete_item') {
@@ -581,5 +614,6 @@ export function applyTheoryEdit(projectId: number, proposal: Proposal): ApplyRes
 
   formRecord[block.formKey] = arr;
   writeForm(projectId, form);
-  return succeed(proposal.op === 'add_item' ? 'Добавлено новое окно.' : proposal.op === 'delete_item' ? 'Окно удалено.' : 'Формулировка обновлена.');
+  const base = proposal.op === 'add_item' ? 'Добавлено новое окно.' : proposal.op === 'delete_item' ? 'Окно удалено.' : 'Формулировка обновлена.';
+  return succeed(missing.length ? `${base} ${missingMessage(missing)}` : base);
 }
