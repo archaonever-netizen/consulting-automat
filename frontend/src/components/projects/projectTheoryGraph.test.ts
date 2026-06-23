@@ -116,6 +116,23 @@ describe('buildTheoryGraph', () => {
     expect(edge?.verb).toBe('поддерживает');
   });
 
+  it('связывает capability стратегического выбора с компетенцией Теории проекта', () => {
+    add('competencies', { name: 'Опыт создания подразделений' });
+    addStrategy('capabilities', {
+      name: 'Интеграция данных без слома IT ГО',
+      competency: 'Опыт создания подразделений',
+    });
+
+    const partial = buildTheoryGraph(PID, new Set(['strategic-choice:capabilities']));
+    expect(partial.edges.some(e => e.kind === 'ref' && e.source.includes(':capabilities:') && e.target.includes(':competencies:'))).toBe(false);
+
+    const g = buildTheoryGraph(PID, new Set(['competencies', 'strategic-choice:capabilities']));
+    const edge = g.edges.find(e => e.kind === 'ref' && e.source.includes(':capabilities:') && e.target.includes(':competencies:'));
+    expect(edge).toBeDefined();
+    expect(edge?.family).toBe('требует способности');
+    expect(edge?.verb).toBe('требует');
+  });
+
   it('корень стратегии связывается с выбранной альтернативой по полю selectedAlternative', () => {
     addStrategy('alternatives', { name: 'Фокус на enterprise', status: 'выбрана' });
     setStrategy('selectedAlternative', 'Фокус на enterprise');

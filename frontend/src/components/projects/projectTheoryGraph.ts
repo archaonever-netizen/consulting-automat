@@ -375,6 +375,19 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     edges.push({ id: `ref:s:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel('supportsChoice'), verb: 'поддерживает' });
   }
 
+  const competencyIdx = labelIndex.get('competencies') ?? new Map();
+  for (const capability of strategyItemsByList.get('capabilities') ?? []) {
+    const source = itemNodeId(STRATEGY_CARD_ID, 'capabilities', String(capability.id));
+    if (!presentItems.has(source)) continue;
+    for (const token of tokenize(capability.values.competency)) {
+      const targetId = competencyIdx.get(token);
+      if (!targetId) continue;
+      const target = itemNodeId(THEORY_CARD_ID, 'competencies', targetId);
+      if (!presentItems.has(target)) continue;
+      edges.push({ id: `ref:s:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel('needsCapability'), verb: 'требует' });
+    }
+  }
+
   for (const hypothesis of strategyItemsByList.get('hypotheses') ?? []) {
     const source = itemNodeId(STRATEGY_CARD_ID, 'hypotheses', String(hypothesis.id));
     if (!presentItems.has(source)) continue;

@@ -2,6 +2,48 @@
 
 Этот файл нужен, чтобы любые изменения из lab-веток можно было понятно перенести в основной репозиторий. Формат рассчитан и на человека, и на ИИ: заголовки стабильные, факты отделены от заметок, команды тестов указаны явно.
 
+## Связь capabilities стратегии с компетенциями Теории
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-23
+- Цель: исправить отсутствие смысловой связи при выборе поля `Необходимая компетенция` в capability экрана «Стратегический выбор».
+
+### Что реализовано
+
+- Добавлена смысловая `ref`-связь:
+  - `strategic-choice.capabilities.competency` → `project-theory.competencies`.
+- Связь строится по реальному полю карточки `competency`, которое пользователь выбирает в «Стратегическом выборе».
+- Связь появляется только по правилам `THEORY_GRAPH.md`:
+  - capability имеет название;
+  - выбранная компетенция совпадает с элементом блока «Ключевые компетенции» в Теории;
+  - раскрыты оба блока: `Ключевые компетенции` и `Capabilities`;
+  - для отображения `ref` нужно навести/закрепить узел или связь.
+- `THEORY_GRAPH.md` не изменялся.
+- Выполнен `npm.cmd run build`, поэтому обновлены hash-файлы в `frontend/dist`.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/projectTheoryGraph.ts` - добавлен резолв `capabilities.competency` в узел компетенции Теории.
+- `frontend/src/components/projects/projectTheoryGraph.test.ts` - добавлен тест на связь capability → competency.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновлены build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run test -- projectTheoryGraph.test.ts` в `frontend` - успешно, 10 тестов.
+- `npm.cmd exec eslint src/components/projects/projectTheoryGraph.ts src/components/projects/projectTheoryGraph.test.ts` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- Поле `competency` пока хранит метку, а не составной `*Ref` id; при дублях названий компетенций возможна неоднозначность, как описано в `THEORY_GRAPH.md`.
+- Более надёжный следующий шаг - добавить `competencyRef` в форму capability и писать туда `project-theory:competencies:<id>`.
+
+---
+
 ## Визуальная связь карточек разделов в графе «Весь проект»
 
 ### Контекст
