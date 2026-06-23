@@ -77,14 +77,16 @@ function BusEdge({ sourceX, sourceY, targetX, targetY, markerEnd, label, data }:
 const edgeTypes = { tree: TreeEdge, bus: BusEdge };
 
 // ============ Узлы ============
-type MissionNodeData = TheoryMissionData & { onOpen: () => void };
-type BlockNodeData = TheoryBlockData & { onOpen: () => void; onToggle: (list: string) => void; onAdd: (list: string) => void };
-type ItemNodeData = TheoryItemData & { onOpen: () => void; onDelete: (d: TheoryItemData) => void };
+// Клик по узлу — закрепляет/снимает его связи (pin); двойной клик — открывает Теорию.
+const PIN_TITLE = 'Клик — закрепить связи · двойной клик — открыть Теорию';
+type MissionNodeData = TheoryMissionData & { onOpen: () => void; onPin: (id: string) => void };
+type BlockNodeData = TheoryBlockData & { onOpen: () => void; onPin: (id: string) => void; onToggle: (list: string) => void; onAdd: (list: string) => void };
+type ItemNodeData = TheoryItemData & { onOpen: () => void; onPin: (id: string) => void; onDelete: (d: TheoryItemData) => void };
 
-function MissionNode({ data }: NodeProps) {
+function MissionNode({ id, data }: NodeProps) {
   const d = data as unknown as MissionNodeData;
   return (
-    <div className={`pg-mission${d.isEmpty ? ' is-empty' : ''}`} onClick={d.onOpen} role="button" title="Открыть Теорию проекта">
+    <div className={`pg-mission${d.isEmpty ? ' is-empty' : ''}`} onClick={() => d.onPin(id)} onDoubleClick={d.onOpen} role="button" title={PIN_TITLE}>
       <Handle type="source" position={Position.Bottom} id="b" style={{ left: 26 }} />
       <Handle type="source" position={Position.Right} id="r" />
       <span className="pg-mission-kicker">Теория проекта</span>
@@ -94,31 +96,31 @@ function MissionNode({ data }: NodeProps) {
   );
 }
 
-function BlockNode({ data }: NodeProps) {
+function BlockNode({ id, data }: NodeProps) {
   const d = data as unknown as BlockNodeData;
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
-    <div className={`pg-block${d.isEmpty ? ' is-empty' : ''}`} title="Блок Теории">
+    <div className={`pg-block${d.isEmpty ? ' is-empty' : ''}`} onClick={() => d.onPin(id)} onDoubleClick={d.onOpen} title={PIN_TITLE}>
       <Handle type="target" position={Position.Left} id="l" />
       <Handle type="source" position={Position.Right} id="r" />
-      <div className="pg-block-head"><b onClick={d.onOpen}>{d.title}</b><span className="pg-chip">{d.itemCount}</span></div>
+      <div className="pg-block-head"><b>{d.title}</b><span className="pg-chip">{d.itemCount}</span></div>
       <div className="pg-block-foot">
-        <button type="button" className="pg-mini" title="Добавить элемент" onClick={e => { stop(e); d.onAdd(d.list); }}>＋</button>
-        {d.expandable && <button type="button" className="pg-expand" onClick={e => { stop(e); d.onToggle(d.list); }}>{d.expanded ? '− свернуть' : `раскрыть (${d.itemCount})`}</button>}
+        <button type="button" className="pg-mini" title="Добавить элемент" onClick={e => { stop(e); d.onAdd(d.list); }} onDoubleClick={stop}>＋</button>
+        {d.expandable && <button type="button" className="pg-expand" onClick={e => { stop(e); d.onToggle(d.list); }} onDoubleClick={stop}>{d.expanded ? '− свернуть' : `раскрыть (${d.itemCount})`}</button>}
       </div>
     </div>
   );
 }
 
-function ItemNode({ data }: NodeProps) {
+function ItemNode({ id, data }: NodeProps) {
   const d = data as unknown as ItemNodeData;
   const stop = (e: React.MouseEvent) => e.stopPropagation();
   return (
-    <div className="pg-item" onClick={d.onOpen} title={`${d.blockTitle} — клик: открыть Теорию`}>
+    <div className="pg-item" onClick={() => d.onPin(id)} onDoubleClick={d.onOpen} title={`${d.blockTitle} · ${PIN_TITLE}`}>
       <Handle type="target" position={Position.Left} id="l" />
       <Handle type="source" position={Position.Right} id="rs" />
       <Handle type="target" position={Position.Right} id="rt" style={{ top: '70%' }} />
-      <button type="button" className="pg-item-del" title="Удалить" onClick={e => { stop(e); d.onDelete(d); }}>×</button>
+      <button type="button" className="pg-item-del" title="Удалить" onClick={e => { stop(e); d.onDelete(d); }} onDoubleClick={stop}>×</button>
       <span className="pg-item-sub">{d.blockTitle}</span>
       <span className="pg-item-label">{d.label}</span>
     </div>
@@ -168,6 +170,7 @@ interface GraphProps { projectId: number; onOpenCard: (cardId: string) => void }
 
 function GraphInner({ projectId, onOpenCard }: GraphProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set());
   const [editNonce, setEditNonce] = useState(0);
   const [hovered, setHovered] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
@@ -175,6 +178,13 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
   const { fitView } = useReactFlow();
 
   const toggle = useCallback((id: string) => setExpanded(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  }), []);
+
+  // Клик по узлу — закрепить/снять его связи.
+  const onPin = useCallback((id: string) => setPinned(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
@@ -200,48 +210,48 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const graph = useMemo(() => buildTheoryGraph(projectId, expanded), [projectId, expanded, editNonce]);
 
-  // Узлы (стабильны при наведении — иначе сбрасывается измерение)
+  // Узлы (включая признак закрепления is-pinned)
   useEffect(() => {
     const laid = layout(graph.nodes).map(n => {
-      if (n.type === 'missionNode') return { ...n, data: { ...n.data, onOpen: openTheory } };
-      if (n.type === 'blockNode') return { ...n, data: { ...n.data, onOpen: openTheory, onToggle: toggle, onAdd } };
-      if (n.type === 'itemNode') return { ...n, data: { ...n.data, onOpen: openTheory, onDelete } };
+      const className = pinned.has(n.id) ? 'is-pinned' : undefined;
+      if (n.type === 'missionNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin } };
+      if (n.type === 'blockNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin, onToggle: toggle, onAdd } };
+      if (n.type === 'itemNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin, onDelete } };
       return n;
     });
     setNodes(laid);
-  }, [graph, openTheory, toggle, onAdd, onDelete, setNodes]);
+  }, [graph, pinned, openTheory, onPin, toggle, onAdd, onDelete, setNodes]);
 
-  // Рёбра: дорожки и разнос для ref считаем стабильно (не зависят от наведения)
-  const laneX = useMemo(() => {
+  // Рёбра. Активные узлы = закреплённые (pin) ∪ наведённый. Видимы только ref-связи активных узлов;
+  // дорожки (laneX) назначаем ПЛОТНО только среди видимых — чтобы одиночная связь шла рядом, а не уезжала.
+  useEffect(() => {
+    const active = new Set<string>(pinned);
+    if (hovered) active.add(hovered);
+
+    const visibleRef = graph.edges.filter(e => e.kind === 'ref' && (active.has(e.source) || active.has(e.target)));
     const lane = new Map<string, number>();
     const jog = new Map<string, number>();
     const bySource = new Map<string, string[]>();
-    let i = 0;
-    for (const e of graph.edges) {
-      if (e.kind !== 'ref') continue;
-      lane.set(e.id, LANE_X0 + i * LANE_STEP); i += 1;
+    visibleRef.forEach((e, i) => {
+      lane.set(e.id, LANE_X0 + i * LANE_STEP);
       const arr = bySource.get(e.source) ?? []; arr.push(e.id); bySource.set(e.source, arr);
-    }
+    });
     for (const ids of bySource.values()) ids.forEach((id, k) => jog.set(id, (k - (ids.length - 1) / 2) * 9));
-    return { lane, jog };
-  }, [graph]);
 
-  useEffect(() => {
     const rf: Edge[] = graph.edges.map(e => {
       const isRef = e.kind === 'ref';
       const [sourceHandle, targetHandle] = handlesFor(e.kind, e.source);
-      const hiddenRef = isRef && !(hovered === e.source || hovered === e.target);
       return {
         id: e.id, source: e.source, target: e.target, sourceHandle, targetHandle,
         type: isRef ? 'bus' : 'tree',
-        data: isRef ? { laneX: laneX.lane.get(e.id), jog: laneX.jog.get(e.id) } : { rail: e.kind === 'origin' ? TRUNK_X : CHILD_RAIL_X },
-        label: e.label, hidden: hiddenRef,
+        data: isRef ? { laneX: lane.get(e.id) ?? LANE_X0, jog: jog.get(e.id) ?? 0 } : { rail: e.kind === 'origin' ? TRUNK_X : CHILD_RAIL_X },
+        label: e.label, hidden: isRef && !lane.has(e.id),
         className: `pg-edge pg-edge-${e.kind}`,
         markerEnd: { type: MarkerType.ArrowClosed, color: e.kind === 'origin' ? ACCENT : MUTED, width: 15, height: 15 },
       };
     });
     setEdges(rf);
-  }, [graph, hovered, laneX, setEdges]);
+  }, [graph, hovered, pinned, setEdges]);
 
   useEffect(() => {
     const t = window.setTimeout(() => fitView({ duration: 300, padding: 0.14 }), 60);
@@ -252,8 +262,9 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     <ReactFlow
       nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
       nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.14 }} minZoom={0.15}
-      proOptions={{ hideAttribution: true }} nodesConnectable={false} edgesFocusable={false}
+      proOptions={{ hideAttribution: true }} nodesConnectable={false} edgesFocusable={false} elementsSelectable={false}
       onNodeMouseEnter={(_, n) => setHovered(n.id)} onNodeMouseLeave={() => setHovered(null)}
+      onPaneClick={() => setPinned(new Set())}
     >
       <Background gap={22} />
       <MiniMap pannable zoomable />
