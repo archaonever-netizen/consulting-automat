@@ -12,6 +12,10 @@ import {
   STRATEGY_CARD_ID,
   STRATEGY_ROOT_NODE_ID,
   STRATEGY_SECTION_NODE_ID,
+  TARGET_BLOCKS,
+  TARGET_CARD_ID,
+  TARGET_ROOT_NODE_ID,
+  TARGET_SECTION_NODE_ID,
   THEORY_BLOCKS,
   THEORY_CARD_ID,
   type TheoryGraph,
@@ -35,6 +39,8 @@ const addStrategy = (list: string, values: Record<string, string>) =>
   applyProjectEdit(PID, { id: 's', op: 'add_item', card_id: STRATEGY_CARD_ID, list, human: 'add strategy', values } as Proposal);
 const setStrategy = (field: string, value: string) =>
   applyProjectEdit(PID, { id: 'sf', op: 'update_field', card_id: STRATEGY_CARD_ID, field, value, human: 'set strategy' } as Proposal);
+const addTarget = (list: string, values: Record<string, string>) =>
+  applyProjectEdit(PID, { id: 't', op: 'add_item', card_id: TARGET_CARD_ID, list, human: 'add target', values } as Proposal);
 // Диагноз — сложная карточка с засеянными «разрывами» (createItem: null), поэтому
 // для тестов пишем форму снапшота напрямую (как это делает редактор при первом открытии).
 const seedDiagnosis = (form: Record<string, unknown>) =>
@@ -207,5 +213,49 @@ describe('buildTheoryGraph', () => {
     const gapToFact = g.edges.find(e => e.kind === 'ref' && e.source.includes('item:diagnosis:gaps:') && e.target.includes('item:diagnosis:facts:'));
     expect(gapToFact).toBeDefined();
     expect(gapToFact?.family).toBe('подтверждение фактом');
+  });
+
+  it('добавляет отдельный раздел «Целевое состояние» с корнем, блоками и цепочкой после Стратегического выбора', () => {
+    const g = buildTheoryGraph(PID);
+    expect(g.nodes.find(n => n.id === TARGET_SECTION_NODE_ID)?.type).toBe('sectionNode');
+    expect(g.nodes.find(n => n.id === TARGET_ROOT_NODE_ID)?.type).toBe('missionNode');
+    expect(g.edges.some(e => e.kind === 'section' && e.source === TARGET_SECTION_NODE_ID && e.target === TARGET_ROOT_NODE_ID)).toBe(true);
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === STRATEGY_SECTION_NODE_ID && e.target === TARGET_SECTION_NODE_ID)).toBe(true);
+    expect(blockNodes(g, TARGET_CARD_ID)).toHaveLength(TARGET_BLOCKS.length);
+    expect(g.edges.filter(e => e.kind === 'origin' && e.source === TARGET_ROOT_NODE_ID)).toHaveLength(TARGET_BLOCKS.length);
+  });
+
+  it('целевое состояние строит ref-связи из структурных полей к Теории и Стратегическому выбору', () => {
+    add('results', { statement: 'Рост выручки' });
+    add('stakeholder', { details: 'Генеральный директор' });
+    add('quality', { requirement: 'Скорость ответа' });
+    add('preserve', { details: 'Доверие команды' });
+    add('constraints', { statement: 'Без остановки продаж' });
+    addStrategy('capabilities', { name: 'Интеграция данных' });
+    addTarget('results', { name: 'Выручка 150%', criterion: 'Рост выручки' });
+    addTarget('stakeholderValues', { name: 'Ценность для ГД', stakeholder: 'Генеральный директор', measurement: 'Рост выручки' });
+    addTarget('capabilities', { name: 'Целевая интеграция', competency: 'Интеграция данных' });
+    addTarget('managementSystems', { name: 'Совет по данным', supportsChoice: 'Интеграция данных' });
+    addTarget('qualityTargets', { name: 'SLA', qualityIndicator: 'Скорость ответа' });
+    addTarget('preserveTargets', { name: 'Сохранить доверие', preserveElement: 'Доверие команды' });
+    addTarget('constraints', { name: 'Продажи работают', constraint: 'Без остановки продаж' });
+    addTarget('keyResults', { name: 'KR выручка', metric: 'Рост выручки' });
+
+    const g = buildTheoryGraph(PID, new Set([
+      'results', 'stakeholder', 'quality', 'preserve', 'constraints',
+      'strategic-choice:capabilities',
+      'target-state:results', 'target-state:stakeholderValues', 'target-state:capabilities',
+      'target-state:managementSystems', 'target-state:qualityTargets', 'target-state:preserveTargets',
+      'target-state:constraints', 'target-state:keyResults',
+    ]));
+
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:results:') && e.target.includes('item:project-theory:results:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:stakeholderValues:') && e.target.includes('item:project-theory:stakeholder:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:capabilities:') && e.target.includes('item:strategic-choice:capabilities:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:managementSystems:') && e.target.includes('item:strategic-choice:capabilities:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:qualityTargets:') && e.target.includes('item:project-theory:quality:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:preserveTargets:') && e.target.includes('item:project-theory:preserve:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:constraints:') && e.target.includes('item:project-theory:constraints:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:keyResults:') && e.target.includes('item:project-theory:results:'))).toBe(true);
   });
 });

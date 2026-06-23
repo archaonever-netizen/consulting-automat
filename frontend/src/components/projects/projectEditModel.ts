@@ -102,12 +102,16 @@ function buildComplexEditable(projectId: number, cardId: string): EditableCard {
     ? form[spec.scalarContainer]
     : base) as Record<string, unknown>;
 
-  const fields: EditableScalarField[] = spec.scalarFields.map(f => ({
-    key: f.key,
-    label: f.label,
-    value: typeof container[f.key] === 'string' ? (container[f.key] as string) : '',
-    ...(f.options ? { options: f.options } : {}),
-  }));
+  const fields: EditableScalarField[] = spec.scalarFields.map(f => {
+    // Скаляр-ссылка отдаёт динамические опции (существующие цели), как refFields списков.
+    const options = f.refOptions ? f.refOptions(form, projectId) : f.options;
+    return {
+      key: f.key,
+      label: f.label,
+      value: typeof container[f.key] === 'string' ? (container[f.key] as string) : '',
+      ...(options && options.length ? { options } : {}),
+    };
+  });
 
   const lists: EditableList[] = spec.lists.map(listSpec => {
     const arr = (Array.isArray(form[listSpec.formKey]) ? form[listSpec.formKey] : []) as FormItem[];
@@ -119,7 +123,7 @@ function buildComplexEditable(projectId: number, cardId: string): EditableCard {
     // item_fields — полная схема полей элемента (даже пустых), чтобы модель заполняла окно
     // целиком и добавляла недостающие, а не правила только видимые непустые поля.
     // form передаём для динамических опций полей-ссылок (варианты = существующие элементы).
-    return { list: listSpec.projKey, title: listSpec.title, item_fields: listItemFields(listSpec, arr, form), items };
+    return { list: listSpec.projKey, title: listSpec.title, item_fields: listItemFields(listSpec, arr, form, projectId), items };
   });
 
   return { card_id: cardId, title: spec.title, fields, lists };

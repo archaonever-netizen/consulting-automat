@@ -3,7 +3,7 @@ import { applyProjectEdit } from './projectEditApplier';
 import { buildProjectEditModel, isEditableCard } from './projectEditModel';
 import { readProjectFrameworkSectionSnapshot, type ProjectFrameworkSectionSnapshotItem } from './projectFrameworkSectionSnapshot';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot, writeProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
-import { readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
+import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot, writeProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { getFallbackProjectTargetStateSnapshot, readProjectTargetStateSnapshot, writeProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
 import { readProjectTheorySnapshot } from './projectTheorySnapshot';
 import type { RecordState } from './ProjectFrameworkSectionCanvas';
@@ -328,6 +328,71 @@ describe('applyProjectEdit (complex cards)', () => {
     expect((snap.form as { choice: { howApproach: string } }).choice.howApproach).toBe('через автоматизацию');
   });
 
+  // Засеять Стратвыбор формой напрямую (нужны существующие альтернативы как цели связей).
+  const seedStrategy = (form: Record<string, unknown>) =>
+    writeProjectStrategicChoiceSnapshot(PROJECT_ID, {
+      ...getFallbackProjectStrategicChoiceSnapshot(PROJECT_ID),
+      form: { choice: {}, capabilities: [], alternatives: [], tradeOffs: [], actions: [], hypotheses: [], ...form },
+    } as never);
+
+  it('strategic-choice: модель видит опции связи действия/гипотезы и скаляра «выбранная альтернатива»', () => {
+    seedStrategy({ alternatives: [{ id: 1, name: 'Фокус на enterprise' }] });
+    const model = buildProjectEditModel(PROJECT_ID);
+    const sc = model.editable_cards.find(c => c.card_id === 'strategic-choice')!;
+    expect(sc.lists.find(l => l.list === 'actions')!.item_fields!.find(f => f.key === 'supportsChoice')!.options).toContain('Фокус на enterprise');
+    expect(sc.lists.find(l => l.list === 'hypotheses')!.item_fields!.find(f => f.key === 'choiceLink')!.options).toContain('Фокус на enterprise');
+    expect(sc.fields!.find(f => f.key === 'selectedAlternative')!.options).toContain('Фокус на enterprise');
+  });
+
+  it('strategic-choice: нормализует неточную связь действия к существующей альтернативе', () => {
+    seedStrategy({ alternatives: [{ id: 1, name: 'Фокус на enterprise' }] });
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'add_item', card_id: 'strategic-choice', list: 'actions', human: 'add',
+      values: { name: 'Перенастроить продажи', supportsChoice: 'enterprise' },
+    });
+    expect(res.ok).toBe(true);
+    const form = readProjectStrategicChoiceSnapshot(PROJECT_ID)!.form as { actions: Array<{ supportsChoice: string }> };
+    expect(form.actions[0].supportsChoice).toBe('Фокус на enterprise');
+  });
+
+  it('strategic-choice: невалидную связь действия не пишет, а просит добавить альтернативу', () => {
+    seedStrategy({ alternatives: [{ id: 1, name: 'Фокус на enterprise' }] });
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'add_item', card_id: 'strategic-choice', list: 'actions', human: 'add',
+      values: { name: 'Действие', supportsChoice: 'Несуществующая альтернатива' },
+    });
+    expect(res.ok).toBe(true); // действие добавлено…
+    const form = readProjectStrategicChoiceSnapshot(PROJECT_ID)!.form as { actions: Array<{ supportsChoice: string }> };
+    expect(form.actions[0].supportsChoice).toBe(''); // …но битая связь не записана
+    expect(res.message).toContain('Не нашёл цель для связи');
+  });
+
+  it('strategic-choice: скаляр «выбранная альтернатива» нормализуется к существующей', () => {
+    seedStrategy({ alternatives: [{ id: 1, name: 'Фокус на enterprise' }] });
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_field', card_id: 'strategic-choice', field: 'selectedAlternative', value: 'enterprise', human: 'fix',
+    });
+    expect(res.ok).toBe(true);
+    expect((readProjectStrategicChoiceSnapshot(PROJECT_ID)!.form as { choice: { selectedAlternative: string } }).choice.selectedAlternative).toBe('Фокус на enterprise');
+  });
+
+  it('strategic-choice: невалидную «выбранную альтернативу» не пишет, а просит добавить', () => {
+    seedStrategy({ alternatives: [{ id: 1, name: 'Фокус на enterprise' }] });
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'update_field', card_id: 'strategic-choice', field: 'selectedAlternative', value: 'Чего-то нет', human: 'fix',
+    });
+    expect(res.ok).toBe(true);
+    expect(res.message).toContain('Не нашёл цель для связи');
+    expect((readProjectStrategicChoiceSnapshot(PROJECT_ID)!.form as { choice: { selectedAlternative?: string } }).choice.selectedAlternative ?? '').toBe('');
+  });
+
+  it('strategic-choice: capability видит компетенции Теории как опции связи', () => {
+    applyProjectEdit(PROJECT_ID, { id: 'a', op: 'add_item', card_id: 'project-theory', list: 'competencies', human: 'add', values: { name: 'Опыт создания подразделений' } });
+    const model = buildProjectEditModel(PROJECT_ID);
+    const sc = model.editable_cards.find(c => c.card_id === 'strategic-choice')!;
+    expect(sc.lists.find(l => l.list === 'capabilities')!.item_fields!.find(f => f.key === 'competency')!.options).toContain('Опыт создания подразделений');
+  });
+
   it('target-state: add a key result (form key differs from projection key)', () => {
     const res = applyProjectEdit(PROJECT_ID, {
       id: 'p', op: 'add_item', card_id: 'target-state', list: 'results', human: 'add',
@@ -338,6 +403,25 @@ describe('applyProjectEdit (complex cards)', () => {
     expect(snap.results.some(r => r.label === 'Рост выручки')).toBe(true);
     // form хранит под ключом targetResults.
     expect((snap.form as { targetResults: unknown[] }).targetResults).toHaveLength(1);
+  });
+
+  it('target-state: модель видит поля-ссылки и нормализует их к существующим элементам', () => {
+    applyProjectEdit(PROJECT_ID, { id: 'r', op: 'add_item', card_id: 'project-theory', list: 'results', human: 'add', values: { statement: 'Рост выручки' } });
+    applyProjectEdit(PROJECT_ID, { id: 's', op: 'add_item', card_id: 'project-theory', list: 'stakeholder', human: 'add', values: { details: 'Генеральный директор' } });
+
+    const model = buildProjectEditModel(PROJECT_ID);
+    const target = model.editable_cards.find(c => c.card_id === 'target-state')!;
+    expect(target.fields!.find(f => f.key === 'whereClient')!.options).toContain('Генеральный директор');
+    expect(target.lists.find(l => l.list === 'results')!.item_fields!.find(f => f.key === 'criterion')!.options).toContain('Рост выручки');
+    expect(target.lists.find(l => l.list === 'stakeholderValues')!.item_fields!.find(f => f.key === 'stakeholder')!.options).toContain('Генеральный директор');
+
+    const res = applyProjectEdit(PROJECT_ID, {
+      id: 'p', op: 'add_item', card_id: 'target-state', list: 'results', human: 'add',
+      values: { name: 'Целевой рост', criterion: 'выручки' },
+    });
+    expect(res.ok).toBe(true);
+    const form = readProjectTargetStateSnapshot(PROJECT_ID)!.form as { targetResults: Array<{ criterion: string }> };
+    expect(form.targetResults[0].criterion).toBe('Рост выручки');
   });
 
   it('target-state: methodologist sees and fills the comparison table (change/preserve)', () => {

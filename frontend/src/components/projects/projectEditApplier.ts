@@ -24,6 +24,7 @@ import {
   itemLabel,
   normalizeRefFields,
   refMissingMessage,
+  resolveRefOption,
   type ComplexCardSpec,
   type ComplexListSpec,
   type FormItem,
@@ -161,7 +162,14 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
     const fieldSpec = spec.scalarFields.find(f => f.key === field || f.label.toLowerCase() === field.toLowerCase());
     const key = fieldSpec?.key ?? field;
     const container = { ...spec.createScalar(), ...((form[spec.scalarContainer] as Record<string, unknown>) || {}) };
-    container[key] = proposal.value == null ? '' : String(proposal.value);
+    let value = proposal.value == null ? '' : String(proposal.value);
+    // Скаляр-ссылка: нормализуем к существующей цели; ненайденную не пишем, просим дозаполнить.
+    if (fieldSpec?.refOptions && value.trim()) {
+      const canon = resolveRefOption(fieldSpec.refOptions(form, projectId), value);
+      if (!canon) return ok(refMissingMessage([{ field: key, targetTitle: fieldSpec.refTargetTitle ?? 'элемент', text: value.trim() }]));
+      value = canon;
+    }
+    container[key] = value;
     form[spec.scalarContainer] = container;
     base.form = form;
     const projKey = fieldSpec?.projKey ?? key;
@@ -186,7 +194,7 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
   if (proposal.op === 'add_item') {
     if (!listSpec.createItem) return fail(`В список «${listSpec.title}» нельзя добавлять элементы автоматически.`);
     const item = listSpec.createItem(nextItemId(arr));
-    const norm = normalizeRefFields(listSpec, form, proposal.values);
+    const norm = normalizeRefFields(listSpec, form, proposal.values, projectId);
     refMiss.push(...norm.missing);
     mergeItemValues(item, norm.values);
     arr.push(item);
@@ -194,7 +202,7 @@ function applyComplexEdit(projectId: number, spec: ComplexCardSpec, proposal: Pr
     const idx = pickIndex(arr, proposal.item_id, i => String(i.id), it => labelOf(it));
     if (idx === -1) return fail('Не найден элемент для изменения.');
     const item = { ...arr[idx] };
-    const norm = normalizeRefFields(listSpec, form, proposal.values ?? (proposal.field ? { [proposal.field]: proposal.value } : undefined));
+    const norm = normalizeRefFields(listSpec, form, proposal.values ?? (proposal.field ? { [proposal.field]: proposal.value } : undefined), projectId);
     refMiss.push(...norm.missing);
     mergeItemValues(item, norm.values);
     arr[idx] = item;

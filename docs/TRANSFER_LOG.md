@@ -44,6 +44,54 @@
 
 ---
 
+## Граф «Целевое состояние» на экране «Весь проект»
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-23
+- Цель: добавить граф раздела «Целевое состояние» в общий граф «Весь проект» по правилам `THEORY_GRAPH.md`.
+
+### Что реализовано
+
+- В общий граф добавлен раздел `target-state`: section-node, корень «Итоговое целевое состояние» и 10 блоков экрана.
+- Методологическая цепочка расширена до `Теория проекта → Диагноз → Стратегический выбор → Целевое состояние`.
+- Смысловые `ref`-связи строятся только из реальных полей-ссылок «Целевого состояния»:
+  - целевой результат / key result → критерий результата Теории;
+  - клиентская ценность → стейкхолдер Теории, измерение → результат/качество;
+  - target capability → capability Стратегического выбора или компетенция Теории;
+  - management system → поддерживаемая capability/выбор Стратегии;
+  - quality / preserve / constraint targets → соответствующие блоки Теории.
+- Поля-ссылки «Целевого состояния» подключены к общему механизму `refFields`/`refOptions`, чтобы ИИ-Методолог видел допустимые цели и не записывал произвольный текст в зависимости.
+- Раскладка React Flow расширена четвертой колонкой для `target-state`.
+- Добавлены тесты на каркас раздела, смысловые связи и нормализацию ref-полей.
+- Выполнен `npm.cmd run build`, поэтому обновлены hash-файлы в `frontend/dist`.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/projectTheoryGraph.ts` - добавлена модель графа «Целевого состояния» и связи с Теорией/Стратегическим выбором.
+- `frontend/src/components/projects/ProjectDependencyGraph.tsx` - добавлена колонка `target-state`.
+- `frontend/src/components/projects/projectComplexCards.ts` - зарегистрированы ref-поля «Целевого состояния» для Методолога.
+- `frontend/src/components/projects/projectTheoryGraph.test.ts` - добавлены тесты графа «Целевого состояния».
+- `frontend/src/components/projects/projectEditApplier.test.ts` - добавлен тест видимости/нормализации ref-полей «Целевого состояния».
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновлены build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run test -- projectTheoryGraph.test.ts` в `frontend` - успешно, 17 тестов пройдены.
+- `npm.cmd run test -- projectEditApplier.test.ts` в `frontend` - успешно, 38 тестов пройдены.
+- `npm.cmd exec eslint src/components/projects/projectTheoryGraph.ts src/components/projects/ProjectDependencyGraph.tsx src/components/projects/projectComplexCards.ts src/components/projects/projectTheoryGraph.test.ts src/components/projects/projectEditApplier.ts src/components/projects/projectEditModel.ts src/components/projects/projectEditApplier.test.ts` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- Связи появляются по общему правилу графа: оба связанных блока должны быть раскрыты, а в полях должны быть выбраны существующие элементы.
+- Для `managementSystems.supportsChoice` граф сейчас визуально связывает реальные item-цели strategy capabilities; scalar-формулировки стратегии могут вести только к корню стратегии.
+
+---
+
 ## Визуальная связь карточек разделов в графе «Весь проект»
 
 ### Контекст

@@ -66,7 +66,7 @@ import {
   readProjectTargetStateSnapshot,
   writeProjectTargetStateSnapshot,
 } from './projectTargetStateSnapshot';
-import { PROJECT_THEORY_BLOCKS } from './projectTheorySnapshot';
+import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot } from './projectTheorySnapshot';
 
 export type Snapshot = Record<string, unknown>;
 export type FormItem = { id: number; [key: string]: unknown };
@@ -76,15 +76,20 @@ export interface ComplexScalarField {
   label: string;      // подпись для пользователя/модели
   projKey?: string;   // ключ в проекции, если отличается от key
   options?: string[]; // опции выпадающего списка — чтобы модель выбирала валидное значение
+  // Скаляр-ссылка: динамические опции (как у refFields списков) — чтобы Методолог выбирал
+  // существующий элемент, а на применении значение нормализовалось/отвергалось.
+  refOptions?: (form: Record<string, unknown>, projectId: number) => string[];
+  refTargetTitle?: string; // что выбираем (для просьбы «сначала добавьте …»)
 }
 
 // Поле-ссылка на элемент другого списка (выпадашка-связь). Его допустимые значения зависят от
-// текущих данных проекта, поэтому считаются динамически из form. Нужно, чтобы Методолог выбирал
-// СУЩЕСТВУЮЩИЙ элемент (как опции редактора), а на применении значение нормализовалось/отвергалось.
+// текущих данных проекта, поэтому считаются динамически из form (и при необходимости — из других
+// карточек проекта по projectId). Нужно, чтобы Методолог выбирал СУЩЕСТВУЮЩИЙ элемент (как опции
+// редактора), а на применении значение нормализовалось/отвергалось.
 export interface ComplexRefField {
-  field: string;                                          // ключ поля-ссылки в элементе
-  targetTitle: string;                                    // что выбираем (для просьбы «сначала добавьте …»)
-  options: (form: Record<string, unknown>) => string[];  // допустимые значения из текущих данных
+  field: string;                                                       // ключ поля-ссылки в элементе
+  targetTitle: string;                                                 // что выбираем (для просьбы «сначала добавьте …»)
+  options: (form: Record<string, unknown>, projectId: number) => string[]; // допустимые значения из текущих данных
 }
 
 export interface ComplexListSpec {
@@ -127,6 +132,43 @@ const diagSymptomNames = (form: Record<string, unknown>): string[] =>
   formList(form, 'symptoms').map(s => trimStr(s.description)).filter(Boolean);
 const diagFactConfirmsOptions = (form: Record<string, unknown>): string[] =>
   [...diagSymptomNames(form), ...diagGapNames(form), 'Диагностическое суждение'];
+
+// === Динамические варианты для полей-ссылок Стратегического выбора ===
+// Альтернативы — цель связей «действие/гипотеза/выбор → альтернатива» (в пределах самой карточки).
+// Имя совпадает с меткой элемента (labelKeys ['name','diagnosisFit']) — так граф резолвит связь по лейблу.
+const choiceAlternativeNames = (form: Record<string, unknown>): string[] =>
+  formList(form, 'alternatives').map(a => trimStr(a.name) || trimStr(a.diagnosisFit)).filter(Boolean);
+// Компетенции Теории проекта — кросс-карточная цель связи capability → компетенция.
+// Источник — производная выжимка снапшота Теории (blocks), которую читают нижележащие экраны.
+const theoryCompetencyNames = (_form: Record<string, unknown>, projectId: number): string[] => {
+  const block = readProjectTheorySnapshot(projectId)?.blocks?.find(b => b.id === 'competencies');
+  return (block?.items ?? []).map(i => i.label.trim()).filter(Boolean);
+};
+
+// === Динамические варианты для полей-ссылок Целевого состояния ===
+const theoryBlockItemNames = (projectId: number, blockId: string): string[] => {
+  const block = readProjectTheorySnapshot(projectId)?.blocks?.find(b => b.id === blockId);
+  return (block?.items ?? []).map(i => i.label.trim()).filter(Boolean);
+};
+const theoryStakeholderNames = (_form: Record<string, unknown>, projectId: number): string[] => theoryBlockItemNames(projectId, 'stakeholder');
+const theoryResultNames = (_form: Record<string, unknown>, projectId: number): string[] => theoryBlockItemNames(projectId, 'results');
+const theoryConstraintNames = (_form: Record<string, unknown>, projectId: number): string[] => theoryBlockItemNames(projectId, 'constraints');
+const theoryQualityNames = (_form: Record<string, unknown>, projectId: number): string[] => theoryBlockItemNames(projectId, 'quality');
+const theoryPreserveNames = (_form: Record<string, unknown>, projectId: number): string[] => theoryBlockItemNames(projectId, 'preserve');
+const theoryResultOrQualityNames = (form: Record<string, unknown>, projectId: number): string[] =>
+  [...theoryResultNames(form, projectId), ...theoryQualityNames(form, projectId)];
+const strategyCapabilityNames = (_form: Record<string, unknown>, projectId: number): string[] =>
+  (readProjectStrategicChoiceSnapshot(projectId)?.capabilities ?? []).map(i => i.label.trim()).filter(Boolean);
+const targetCapabilityNames = (form: Record<string, unknown>, projectId: number): string[] =>
+  [...theoryCompetencyNames(form, projectId), ...strategyCapabilityNames(form, projectId)];
+const targetStrategyChoiceNames = (_form: Record<string, unknown>, projectId: number): string[] => {
+  const strategy = readProjectStrategicChoiceSnapshot(projectId);
+  return [
+    strategy?.whereToPlay,
+    strategy?.howToWin,
+    ...(strategy?.capabilities ?? []).map(i => i.label),
+  ].map(v => v?.trim()).filter(Boolean) as string[];
+};
 
 export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
   diagnosis: {
@@ -183,7 +225,7 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
       { key: 'howAdvantage', label: 'Преимущество' },
       { key: 'howSystemChange', label: 'Изменение системы' },
       { key: 'howBetterThanAlternatives', label: 'Лучше альтернатив' },
-      { key: 'selectedAlternative', label: 'Выбранная альтернатива' },
+      { key: 'selectedAlternative', label: 'Выбранная альтернатива', refOptions: choiceAlternativeNames, refTargetTitle: 'стратегическая альтернатива' },
       { key: 'acceptedChoice', label: 'Принятый выбор' },
       { key: 'guidingPolicy', label: 'Guiding policy' },
       { key: 'managementMetrics', label: 'Системы управления: метрики' },
@@ -200,11 +242,11 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
       { key: 'noActionVerdict', label: 'Если ничего не делать: вывод' },
     ],
     lists: [
-      { projKey: 'capabilities', formKey: 'capabilities', title: 'Способность', labelKeys: ['name', 'competency'], createItem: cast<FormItem>(createCapability) },
+      { projKey: 'capabilities', formKey: 'capabilities', title: 'Способность', labelKeys: ['name', 'competency'], createItem: cast<FormItem>(createCapability), refFields: [{ field: 'competency', targetTitle: 'ключевая компетенция (Теория проекта)', options: theoryCompetencyNames }] },
       { projKey: 'alternatives', formKey: 'alternatives', title: 'Стратегическая альтернатива', labelKeys: ['name', 'diagnosisFit'], createItem: cast<FormItem>(createChoiceAlternative), fieldOptions: { status: choiceAlternativeStatusOptions } },
       { projKey: 'tradeOffs', formKey: 'tradeOffs', title: 'Trade-off', labelKeys: ['name', 'refusal'], createItem: cast<FormItem>(createTradeOff) },
-      { projKey: 'actions', formKey: 'actions', title: 'Действие', labelKeys: ['name', 'action'], createItem: cast<FormItem>(createAction) },
-      { projKey: 'hypotheses', formKey: 'hypotheses', title: 'Гипотеза', labelKeys: ['name', 'assumption'], createItem: cast<FormItem>(createHypothesis) },
+      { projKey: 'actions', formKey: 'actions', title: 'Действие', labelKeys: ['name', 'action'], createItem: cast<FormItem>(createAction), refFields: [{ field: 'supportsChoice', targetTitle: 'стратегическая альтернатива', options: choiceAlternativeNames }] },
+      { projKey: 'hypotheses', formKey: 'hypotheses', title: 'Гипотеза', labelKeys: ['name', 'assumption'], createItem: cast<FormItem>(createHypothesis), refFields: [{ field: 'choiceLink', targetTitle: 'стратегическая альтернатива', options: choiceAlternativeNames }] },
     ],
   },
 
@@ -219,7 +261,7 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
     scalarFields: [
       { key: 'statement', label: 'Формулировка целевого состояния' },
       { key: 'type', label: 'Тип', options: targetTypeOptions },
-      { key: 'whereClient', label: 'Where to play: клиент / сегмент' },
+      { key: 'whereClient', label: 'Where to play: клиент / сегмент', refOptions: theoryStakeholderNames, refTargetTitle: 'клиент / выгодоприобретатель (Теория проекта)' },
       { key: 'whereGeography', label: 'Where to play: география' },
       { key: 'whereProduct', label: 'Where to play: продукт / услуга / функция' },
       { key: 'whereProcess', label: 'Where to play: процесс' },
@@ -233,18 +275,18 @@ export const COMPLEX_CARDS: Record<string, ComplexCardSpec> = {
       { key: 'finalStatement', label: 'Итоговая формулировка' },
     ],
     lists: [
-      { projKey: 'results', formKey: 'targetResults', title: 'Результат', labelKeys: ['name', 'criterion', 'metric'], createItem: cast<FormItem>(createTargetResult), fieldOptions: { perspective: perspectiveOptions, unit: targetUnitOptions, controlSource: targetDataSourceOptions } },
-      { projKey: 'stakeholderValues', formKey: 'stakeholderValues', title: 'Ценность для стейкхолдера', labelKeys: ['name', 'stakeholder'], createItem: cast<FormItem>(createStakeholderValue), fieldOptions: { valueType: valueTypeOptions } },
+      { projKey: 'results', formKey: 'targetResults', title: 'Результат', labelKeys: ['name', 'criterion', 'metric'], createItem: cast<FormItem>(createTargetResult), fieldOptions: { perspective: perspectiveOptions, unit: targetUnitOptions, controlSource: targetDataSourceOptions }, refFields: [{ field: 'criterion', targetTitle: 'критерий результата (Теория проекта)', options: theoryResultNames }] },
+      { projKey: 'stakeholderValues', formKey: 'stakeholderValues', title: 'Ценность для стейкхолдера', labelKeys: ['name', 'stakeholder'], createItem: cast<FormItem>(createStakeholderValue), fieldOptions: { valueType: valueTypeOptions }, refFields: [{ field: 'stakeholder', targetTitle: 'клиент / выгодоприобретатель (Теория проекта)', options: theoryStakeholderNames }, { field: 'measurement', targetTitle: 'критерий результата или показатель качества', options: theoryResultOrQualityNames }] },
       { projKey: 'operatingModels', formKey: 'operatingModels', title: 'Операционная модель', labelKeys: ['name', 'process'], createItem: cast<FormItem>(createOperatingModel), fieldOptions: { metric: processMetricOptions, controlSource: targetDataSourceOptions } },
-      { projKey: 'capabilities', formKey: 'capabilityTargets', title: 'Способность', labelKeys: ['name', 'competency'], createItem: cast<FormItem>(createCapabilityTarget) },
-      { projKey: 'managementSystems', formKey: 'managementTargets', title: 'Система управления', labelKeys: ['name', 'systemType'], createItem: cast<FormItem>(createManagementSystemTarget), fieldOptions: { systemType: managementSystemOptions, dataSource: targetDataSourceOptions } },
-      { projKey: 'qualityTargets', formKey: 'qualityTargets', title: 'Цель по качеству', labelKeys: ['name', 'qualityIndicator'], createItem: cast<FormItem>(createQualityTarget), fieldOptions: { controlSource: targetDataSourceOptions } },
-      { projKey: 'preserveTargets', formKey: 'preserveTargets', title: 'Что сохраняем', labelKeys: ['name', 'preserveElement'], createItem: cast<FormItem>(createPreserveTarget) },
+      { projKey: 'capabilities', formKey: 'capabilityTargets', title: 'Способность', labelKeys: ['name', 'competency'], createItem: cast<FormItem>(createCapabilityTarget), refFields: [{ field: 'competency', targetTitle: 'компетенция Теории или capability Стратегического выбора', options: targetCapabilityNames }] },
+      { projKey: 'managementSystems', formKey: 'managementTargets', title: 'Система управления', labelKeys: ['name', 'systemType'], createItem: cast<FormItem>(createManagementSystemTarget), fieldOptions: { systemType: managementSystemOptions, dataSource: targetDataSourceOptions }, refFields: [{ field: 'supportsChoice', targetTitle: 'элемент Стратегического выбора', options: targetStrategyChoiceNames }] },
+      { projKey: 'qualityTargets', formKey: 'qualityTargets', title: 'Цель по качеству', labelKeys: ['name', 'qualityIndicator'], createItem: cast<FormItem>(createQualityTarget), fieldOptions: { controlSource: targetDataSourceOptions }, refFields: [{ field: 'qualityIndicator', targetTitle: 'показатель качества (Теория проекта)', options: theoryQualityNames }] },
+      { projKey: 'preserveTargets', formKey: 'preserveTargets', title: 'Что сохраняем', labelKeys: ['name', 'preserveElement'], createItem: cast<FormItem>(createPreserveTarget), refFields: [{ field: 'preserveElement', targetTitle: 'сохраняемое ядро (Теория проекта)', options: theoryPreserveNames }] },
       // Таблица «Что изменится / что сохранится» — 8 фиксированных областей (createItem: null,
       // как у diagnosis.gaps): методолог заполняет change/preserve у существующих строк, новых не плодит.
       { projKey: 'comparisonRows', formKey: 'comparisonRows', title: 'Что изменится / что сохранится', labelKeys: ['area'], createItem: null },
-      { projKey: 'constraints', formKey: 'constraintTargets', title: 'Ограничение', labelKeys: ['name', 'constraint'], createItem: cast<FormItem>(createConstraintTarget), fieldOptions: { controlSource: targetDataSourceOptions } },
-      { projKey: 'keyResults', formKey: 'keyResults', title: 'Key result', labelKeys: ['name', 'statement'], createItem: cast<FormItem>(createKeyResult), fieldOptions: { controlSource: targetDataSourceOptions, indisputable: yesNoOptions } },
+      { projKey: 'constraints', formKey: 'constraintTargets', title: 'Ограничение', labelKeys: ['name', 'constraint'], createItem: cast<FormItem>(createConstraintTarget), fieldOptions: { controlSource: targetDataSourceOptions }, refFields: [{ field: 'constraint', targetTitle: 'ограничение (Теория проекта)', options: theoryConstraintNames }] },
+      { projKey: 'keyResults', formKey: 'keyResults', title: 'Key result', labelKeys: ['name', 'statement'], createItem: cast<FormItem>(createKeyResult), fieldOptions: { controlSource: targetDataSourceOptions, indisputable: yesNoOptions }, refFields: [{ field: 'metric', targetTitle: 'критерий результата (Теория проекта)', options: theoryResultNames }] },
     ],
   },
 };
@@ -362,7 +404,7 @@ export interface ComplexFieldSchema { key: string; label: string; options?: stri
  * ключей существующих элементов, если фабрики нет), метки — из COMPLEX_FIELD_LABELS,
  * опции выпадающих списков — из listSpec.fieldOptions (чтобы модель выбирала валидное значение).
  * Нужна модели Методолога, чтобы заполнять элемент ЦЕЛИКОМ, а не только видимые поля. */
-export function listItemFields(listSpec: ComplexListSpec, items: FormItem[], form?: Record<string, unknown>): ComplexFieldSchema[] {
+export function listItemFields(listSpec: ComplexListSpec, items: FormItem[], form?: Record<string, unknown>, projectId = 0): ComplexFieldSchema[] {
   let keys: string[];
   if (listSpec.createItem) {
     keys = Object.keys(listSpec.createItem(0)).filter(k => k !== 'id');
@@ -371,11 +413,11 @@ export function listItemFields(listSpec: ComplexListSpec, items: FormItem[], for
     for (const it of items) for (const k of Object.keys(it)) if (k !== 'id') set.add(k);
     keys = [...set];
   }
-  // Динамические опции полей-ссылок (варианты зависят от текущих данных проекта).
+  // Динамические опции полей-ссылок (варианты зависят от текущих данных проекта; иногда — из других карточек по projectId).
   const refOpts = new Map<string, string[]>();
   if (form && listSpec.refFields) {
     for (const rf of listSpec.refFields) {
-      refOpts.set(rf.field, rf.options(form));
+      refOpts.set(rf.field, rf.options(form, projectId));
       if (!keys.includes(rf.field)) keys.push(rf.field);
     }
   }
@@ -408,6 +450,7 @@ export function normalizeRefFields(
   listSpec: ComplexListSpec,
   form: Record<string, unknown>,
   values: Record<string, unknown> | undefined,
+  projectId = 0,
 ): { values: Record<string, unknown> | undefined; missing: RefMiss[] } {
   if (!values || !listSpec.refFields?.length) return { values, missing: [] };
   const out = { ...values };
@@ -416,7 +459,7 @@ export function normalizeRefFields(
     if (!(rf.field in out)) continue;
     const raw = out[rf.field];
     if (raw == null || String(raw).trim() === '') continue;
-    const canon = resolveRefOption(rf.options(form), raw);
+    const canon = resolveRefOption(rf.options(form, projectId), raw);
     if (canon) out[rf.field] = canon;
     else { delete out[rf.field]; missing.push({ field: rf.field, targetTitle: rf.targetTitle, text: String(raw).trim() }); }
   }

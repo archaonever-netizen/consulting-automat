@@ -16,6 +16,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import {
   buildTheoryGraph, edgeVisual, SEMANTIC_DASH, MISSION_NODE_ID, DIAGNOSIS_CARD_ID, STRATEGY_CARD_ID, THEORY_CARD_ID,
+  TARGET_CARD_ID,
   type TheoryBlockData, type TheoryEdgeKind, type TheoryItemData, type TheoryMissionData, type TheorySectionData, type TheoryNode,
 } from './projectTheoryGraph';
 import { applyProjectEdit } from './projectEditApplier';
@@ -37,7 +38,7 @@ const LANE_X0 = ITEM_X + ITEM_W + 44, LANE_STEP = 30; // «дорожки» см
 const SECTION_COLUMN_W = 720;
 const ACCENT = '#2563EB', MUTED = '#94a3b8';
 
-const SECTION_ORDER = [THEORY_CARD_ID, DIAGNOSIS_CARD_ID, STRATEGY_CARD_ID];
+const SECTION_ORDER = [THEORY_CARD_ID, DIAGNOSIS_CARD_ID, STRATEGY_CARD_ID, TARGET_CARD_ID];
 const columnOfCard = (cardId?: string) => {
   const index = SECTION_ORDER.indexOf(cardId ?? THEORY_CARD_ID);
   return index === -1 ? SECTION_ORDER.length : index;
