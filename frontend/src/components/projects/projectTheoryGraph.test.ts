@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { applyProjectEdit } from './projectEditApplier';
-import { buildTheoryGraph, MISSION_NODE_ID, THEORY_BLOCKS, type TheoryGraph, type TheoryNode } from './projectTheoryGraph';
+import { buildTheoryGraph, MISSION_NODE_ID, SECTION_NODE_ID, THEORY_BLOCKS, type TheoryGraph, type TheoryNode } from './projectTheoryGraph';
 import type { Proposal } from './projectReview';
 
 const PID = 21;
@@ -17,6 +17,13 @@ const setMission = (field: string, value: string) =>
 
 describe('buildTheoryGraph', () => {
   beforeEach(() => window.localStorage.clear());
+
+  it('верхний слой: карточка-раздел «Теория проекта», из неё выходит Миссия', () => {
+    const g = buildTheoryGraph(PID);
+    const section = g.nodes.find(n => n.id === SECTION_NODE_ID);
+    expect(section?.type).toBe('sectionNode');
+    expect(g.edges.some(e => e.kind === 'section' && e.source === SECTION_NODE_ID && e.target === MISSION_NODE_ID)).toBe(true);
+  });
 
   it('рисует Миссию-корень и 6 блоков Теории со структурными рёбрами Миссия→блок', () => {
     const g = buildTheoryGraph(PID);

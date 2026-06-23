@@ -12,6 +12,7 @@
 import { buildProjectEditModel, type EditableCard, type EditableItem, type ProjectEditModel } from './projectEditModel';
 
 export const THEORY_CARD_ID = 'project-theory';
+export const SECTION_NODE_ID = 'section:project-theory';
 export const MISSION_NODE_ID = 'mission';
 
 // Блоки Теории строго в порядке экрана (list = ключ списка в модели Теории, nameField — куда писать имя при +).
@@ -50,6 +51,9 @@ const BLOCK_LINKS: BlockLink[] = [
 ];
 
 // === Типы графа (type-алиасы — чтобы data приводились к Record<string, unknown> для React Flow) ===
+// Верхний «слой разделов»: карточка-раздел (ссылка на экран), из которой выходит корень раздела.
+// Пока слой содержит один раздел — «Теория проекта»; позже сюда добавятся остальные экраны.
+export type TheorySectionData = { kind: 'section'; cardId: string; title: string; subtitle: string };
 export type TheoryMissionData = { kind: 'mission'; title: string; statement: string; isEmpty: boolean };
 export type TheoryBlockData = {
   kind: 'block'; list: string; title: string; index: number;
@@ -58,11 +62,12 @@ export type TheoryBlockData = {
 export type TheoryItemData = { kind: 'item'; list: string; itemId: string; label: string; blockTitle: string };
 
 export type TheoryNode =
+  | { id: string; type: 'sectionNode'; data: TheorySectionData }
   | { id: string; type: 'missionNode'; data: TheoryMissionData }
   | { id: string; type: 'blockNode'; data: TheoryBlockData }
   | { id: string; type: 'itemNode'; data: TheoryItemData };
 
-export type TheoryEdgeKind = 'origin' | 'ref' | 'containment';
+export type TheoryEdgeKind = 'section' | 'origin' | 'ref' | 'containment';
 export interface TheoryEdge { id: string; source: string; target: string; kind: TheoryEdgeKind; label?: string; }
 export interface TheoryGraph { nodes: TheoryNode[]; edges: TheoryEdge[]; }
 
@@ -91,6 +96,13 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
 
   const nodes: TheoryNode[] = [];
   const edges: TheoryEdge[] = [];
+
+  // Верхний слой: карточка-раздел «Теория проекта» (ссылка на экран); из неё выходит Миссия.
+  nodes.push({
+    id: SECTION_NODE_ID, type: 'sectionNode',
+    data: { kind: 'section', cardId: THEORY_CARD_ID, title: 'Теория проекта', subtitle: 'Раздел проекта' },
+  });
+  edges.push({ id: 'section:theory->mission', source: SECTION_NODE_ID, target: MISSION_NODE_ID, kind: 'section', label: 'миссия' });
 
   // Миссия — корень
   nodes.push({

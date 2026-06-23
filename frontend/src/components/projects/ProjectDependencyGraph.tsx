@@ -16,14 +16,18 @@ import {
 import '@xyflow/react/dist/style.css';
 import {
   buildTheoryGraph, MISSION_NODE_ID, THEORY_BLOCKS, THEORY_CARD_ID,
-  type TheoryBlockData, type TheoryEdgeKind, type TheoryItemData, type TheoryMissionData, type TheoryNode,
+  type TheoryBlockData, type TheoryEdgeKind, type TheoryItemData, type TheoryMissionData, type TheorySectionData, type TheoryNode,
 } from './projectTheoryGraph';
 import { applyProjectEdit } from './projectEditApplier';
 import type { Proposal } from './projectReview';
 
 // — Геометрия (ширины узлов совпадают с CSS: mission 300 / block 200 / item 168) —
 const BLOCK_X = 96, BLOCK_W = 200, BLOCK_H = 74;
-const MISSION_H = 124, BLOCKS_TOP = MISSION_H + 72;
+const MISSION_W = 300, MISSION_H = 124;
+const SECTION_TOP = 0, SECTION_H = 60;               // верхний слой: карточка-раздел
+const MISSION_TOP = SECTION_TOP + SECTION_H + 56;    // Миссия — под карточкой-разделом
+const BLOCKS_TOP = MISSION_TOP + MISSION_H + 64;
+const COL_CENTER_X = BLOCK_X + MISSION_W / 2;        // ось столбца раздел↔миссия (для прямой связи)
 const ITEM_W = 168, ITEM_H = 62, ITEM_GAP = 14;
 const ITEM_X = BLOCK_X + BLOCK_W + 150;      // столбец элементов справа от блоков
 const TRUNK_X = 60;                          // ствол структурного дерева (слева)
@@ -79,17 +83,31 @@ const edgeTypes = { tree: TreeEdge, bus: BusEdge };
 // ============ Узлы ============
 // Клик по узлу — закрепляет/снимает его связи (pin); двойной клик — открывает Теорию.
 const PIN_TITLE = 'Клик — закрепить связи · двойной клик — открыть Теорию';
+type SectionNodeData = TheorySectionData & { onOpen: () => void };
 type MissionNodeData = TheoryMissionData & { onOpen: () => void; onPin: (id: string) => void };
 type BlockNodeData = TheoryBlockData & { onOpen: () => void; onPin: (id: string) => void; onToggle: (list: string) => void; onAdd: (list: string) => void };
 type ItemNodeData = TheoryItemData & { onOpen: () => void; onPin: (id: string) => void; onDelete: (d: TheoryItemData) => void };
+
+function SectionNode({ data }: NodeProps) {
+  const d = data as unknown as SectionNodeData;
+  return (
+    <div className="pg-section" onClick={d.onOpen} role="button" title="Открыть раздел Теории проекта">
+      <Handle type="source" position={Position.Bottom} id="b" />
+      <span className="pg-section-kicker">{d.subtitle}</span>
+      <b className="pg-section-title">{d.title}</b>
+      <span className="pg-section-open">открыть раздел →</span>
+    </div>
+  );
+}
 
 function MissionNode({ id, data }: NodeProps) {
   const d = data as unknown as MissionNodeData;
   return (
     <div className={`pg-mission${d.isEmpty ? ' is-empty' : ''}`} onClick={() => d.onPin(id)} onDoubleClick={d.onOpen} role="button" title={PIN_TITLE}>
+      <Handle type="target" position={Position.Top} id="t" />
       <Handle type="source" position={Position.Bottom} id="b" style={{ left: 26 }} />
       <Handle type="source" position={Position.Right} id="r" />
-      <span className="pg-mission-kicker">Теория проекта</span>
+      <span className="pg-mission-kicker">Корень раздела</span>
       <b className="pg-mission-title">{d.title}</b>
       <span className="pg-mission-statement">{d.statement || 'Миссия ещё не сформулирована'}</span>
     </div>
@@ -127,21 +145,24 @@ function ItemNode({ id, data }: NodeProps) {
   );
 }
 
-const nodeTypes = { missionNode: MissionNode, blockNode: BlockNode, itemNode: ItemNode };
+const nodeTypes = { sectionNode: SectionNode, missionNode: MissionNode, blockNode: BlockNode, itemNode: ItemNode };
 
 // ============ Раскладка: вертикальное дерево с динамическими ярусами ============
 function layout(model: TheoryNode[]): Node[] {
   const itemsByList = new Map<string, Extract<TheoryNode, { type: 'itemNode' }>[]>();
   const blocks: Extract<TheoryNode, { type: 'blockNode' }>[] = [];
   let mission: Extract<TheoryNode, { type: 'missionNode' }> | undefined;
+  let section: Extract<TheoryNode, { type: 'sectionNode' }> | undefined;
   for (const n of model) {
-    if (n.type === 'missionNode') mission = n;
+    if (n.type === 'sectionNode') section = n;
+    else if (n.type === 'missionNode') mission = n;
     else if (n.type === 'blockNode') blocks.push(n);
     else { const b = itemsByList.get(n.data.list) ?? []; b.push(n); itemsByList.set(n.data.list, b); }
   }
 
   const out: Node[] = [];
-  if (mission) out.push({ id: mission.id, type: 'missionNode', position: { x: BLOCK_X, y: 0 }, data: mission.data, zIndex: 4 });
+  if (section) out.push({ id: section.id, type: 'sectionNode', position: { x: BLOCK_X, y: SECTION_TOP }, data: section.data, zIndex: 4 });
+  if (mission) out.push({ id: mission.id, type: 'missionNode', position: { x: BLOCK_X, y: MISSION_TOP }, data: mission.data, zIndex: 4 });
 
   blocks.sort((a, b) => a.data.index - b.data.index);
   let y = BLOCKS_TOP;
@@ -161,6 +182,7 @@ function layout(model: TheoryNode[]): Node[] {
 
 // handles по типу ребра
 function handlesFor(kind: TheoryEdgeKind, source: string): [string, string] {
+  if (kind === 'section') return ['b', 't'];           // раздел (низ) → Миссия (верх), прямой столбец
   if (kind === 'origin') return ['b', 'l'];           // Миссия (низ) → блок (лево)
   if (kind === 'containment') return ['r', 'l'];       // блок (право) → элемент (лево)
   return [source === MISSION_NODE_ID ? 'r' : 'rs', 'rt']; // ref: справа источника → справа цели
@@ -214,6 +236,7 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
   useEffect(() => {
     const laid = layout(graph.nodes).map(n => {
       const className = pinned.has(n.id) ? 'is-pinned' : undefined;
+      if (n.type === 'sectionNode') return { ...n, data: { ...n.data, onOpen: openTheory } };
       if (n.type === 'missionNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin } };
       if (n.type === 'blockNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin, onToggle: toggle, onAdd } };
       if (n.type === 'itemNode') return { ...n, className, data: { ...n.data, onOpen: openTheory, onPin, onDelete } };
@@ -241,13 +264,15 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     const rf: Edge[] = graph.edges.map(e => {
       const isRef = e.kind === 'ref';
       const [sourceHandle, targetHandle] = handlesFor(e.kind, e.source);
+      const rail = e.kind === 'origin' ? TRUNK_X : e.kind === 'section' ? COL_CENTER_X : CHILD_RAIL_X;
+      const structural = e.kind === 'origin' || e.kind === 'section';
       return {
         id: e.id, source: e.source, target: e.target, sourceHandle, targetHandle,
         type: isRef ? 'bus' : 'tree',
-        data: isRef ? { laneX: lane.get(e.id) ?? LANE_X0, jog: jog.get(e.id) ?? 0 } : { rail: e.kind === 'origin' ? TRUNK_X : CHILD_RAIL_X },
+        data: isRef ? { laneX: lane.get(e.id) ?? LANE_X0, jog: jog.get(e.id) ?? 0 } : { rail },
         label: e.label, hidden: isRef && !lane.has(e.id),
         className: `pg-edge pg-edge-${e.kind}`,
-        markerEnd: { type: MarkerType.ArrowClosed, color: e.kind === 'origin' ? ACCENT : MUTED, width: 15, height: 15 },
+        markerEnd: { type: MarkerType.ArrowClosed, color: structural ? ACCENT : MUTED, width: 15, height: 15 },
       };
     });
     setEdges(rf);

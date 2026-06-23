@@ -2080,6 +2080,18 @@ a:hover { color: var(--accent-hover); }
 }
 .pg-mini:hover { filter: brightness(.96); }
 
+/* Узел-раздел (верхний слой: ссылка на экран) */
+.pg-section {
+  width: 300px; box-sizing: border-box; display: flex; flex-direction: column; gap: 3px;
+  padding: 10px 16px; border: 1px solid var(--line); border-bottom: 3px solid var(--accent);
+  border-radius: var(--radius-lg); background: var(--card-bg); box-shadow: var(--sh-sm);
+  cursor: pointer; transition: var(--transition);
+}
+.pg-section:hover { box-shadow: 0 6px 18px rgba(20,30,50,.12); transform: translateY(-1px); }
+.pg-section-kicker { font-size: 10px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; color: var(--text-secondary); }
+.pg-section-title { font-size: 15px; font-weight: 800; letter-spacing: -.01em; color: var(--text-primary); line-height: 1.2; }
+.pg-section-open { font-size: 10.5px; font-weight: 800; color: var(--accent); }
+
 /* Узел-Миссия (корень Теории) */
 .pg-mission {
   width: 300px; box-sizing: border-box; display: flex; flex-direction: column; gap: 5px;
@@ -2146,6 +2158,9 @@ a:hover { color: var(--accent-hover); }
 .project-graph .react-flow__edge-path { vector-effect: non-scaling-stroke; stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-linejoin: round; stroke-linecap: round; }
 /* Структурные рёбра Миссия→блок — широкий сплошной «ствол» дерева */
 .project-graph .react-flow__edge.pg-edge-origin .react-flow__edge-path { stroke: var(--accent); stroke-width: 3.5; }
+/* Раздел→Миссия — сплошной акцент */
+.project-graph .react-flow__edge.pg-edge-section .react-flow__edge-path { stroke: var(--accent); stroke-width: 3; }
+.project-graph .react-flow__edge.pg-edge-section .react-flow__edge-text { fill: var(--text-secondary); }
 /* Containment блок→элемент — спокойная серая ветка */
 .project-graph .react-flow__edge.pg-edge-containment .react-flow__edge-path { stroke: #94a3b8; stroke-width: 2; }
 .project-graph .react-flow__edge.pg-edge-feedback .react-flow__edge-path { stroke: var(--ink-3, #9aa3b2); stroke-width: 2.5; stroke-dasharray: 6 4; }
