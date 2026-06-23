@@ -15,7 +15,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
-  buildTheoryGraph, edgeVisual, SEMANTIC_DASH, MISSION_NODE_ID, STRATEGY_CARD_ID, THEORY_CARD_ID,
+  buildTheoryGraph, edgeVisual, SEMANTIC_DASH, MISSION_NODE_ID, DIAGNOSIS_CARD_ID, STRATEGY_CARD_ID, THEORY_CARD_ID,
   type TheoryBlockData, type TheoryEdgeKind, type TheoryItemData, type TheoryMissionData, type TheorySectionData, type TheoryNode,
 } from './projectTheoryGraph';
 import { applyProjectEdit } from './projectEditApplier';
@@ -37,7 +37,7 @@ const LANE_X0 = ITEM_X + ITEM_W + 44, LANE_STEP = 30; // «дорожки» см
 const SECTION_COLUMN_W = 720;
 const ACCENT = '#2563EB', MUTED = '#94a3b8';
 
-const SECTION_ORDER = [THEORY_CARD_ID, STRATEGY_CARD_ID];
+const SECTION_ORDER = [THEORY_CARD_ID, DIAGNOSIS_CARD_ID, STRATEGY_CARD_ID];
 const columnOfCard = (cardId?: string) => {
   const index = SECTION_ORDER.indexOf(cardId ?? THEORY_CARD_ID);
   return index === -1 ? SECTION_ORDER.length : index;
@@ -123,6 +123,7 @@ function MissionNode({ id, data }: NodeProps) {
       <Handle type="target" position={Position.Top} id="t" />
       <Handle type="source" position={Position.Bottom} id="b" style={{ left: 26 }} />
       <Handle type="source" position={Position.Right} id="r" />
+      <Handle type="target" position={Position.Right} id="rt" style={{ top: '70%' }} />
       <span className="pg-mission-kicker">Корень раздела</span>
       <b className="pg-mission-title">{d.title}</b>
       <span className="pg-mission-statement">{d.statement || 'Миссия ещё не сформулирована'}</span>
@@ -137,9 +138,10 @@ function BlockNode({ id, data }: NodeProps) {
     <div className={`pg-block${d.isEmpty ? ' is-empty' : ''}`} onClick={() => d.onPin(id)} onDoubleClick={d.onOpen} title={PIN_TITLE}>
       <Handle type="target" position={Position.Left} id="l" />
       <Handle type="source" position={Position.Right} id="r" />
+      <Handle type="target" position={Position.Right} id="rt" style={{ top: '70%' }} />
       <div className="pg-block-head"><b>{d.title}</b><span className="pg-chip">{d.itemCount}</span></div>
       <div className="pg-block-foot">
-        <button type="button" className="pg-mini" title="Добавить элемент" onClick={e => { stop(e); d.onAdd(d.cardId, d.list, d.nameField); }} onDoubleClick={stop}>＋</button>
+        {d.addable && <button type="button" className="pg-mini" title="Добавить элемент" onClick={e => { stop(e); d.onAdd(d.cardId, d.list, d.nameField); }} onDoubleClick={stop}>＋</button>}
         {d.expandable && <button type="button" className="pg-expand" onClick={e => { stop(e); d.onToggle(d.expandKey); }} onDoubleClick={stop}>{d.expanded ? '− свернуть' : `раскрыть (${d.itemCount})`}</button>}
       </div>
     </div>

@@ -2,6 +2,10 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { applyProjectEdit } from './projectEditApplier';
 import {
   buildTheoryGraph,
+  DIAGNOSIS_BLOCKS,
+  DIAGNOSIS_CARD_ID,
+  DIAGNOSIS_ROOT_NODE_ID,
+  DIAGNOSIS_SECTION_NODE_ID,
   MISSION_NODE_ID,
   SECTION_NODE_ID,
   STRATEGY_BLOCKS,
@@ -13,6 +17,7 @@ import {
   type TheoryGraph,
   type TheoryNode,
 } from './projectTheoryGraph';
+import { getFallbackProjectDiagnosisSnapshot, writeProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import type { Proposal } from './projectReview';
 
 const PID = 21;
@@ -30,6 +35,13 @@ const addStrategy = (list: string, values: Record<string, string>) =>
   applyProjectEdit(PID, { id: 's', op: 'add_item', card_id: STRATEGY_CARD_ID, list, human: 'add strategy', values } as Proposal);
 const setStrategy = (field: string, value: string) =>
   applyProjectEdit(PID, { id: 'sf', op: 'update_field', card_id: STRATEGY_CARD_ID, field, value, human: 'set strategy' } as Proposal);
+// Диагноз — сложная карточка с засеянными «разрывами» (createItem: null), поэтому
+// для тестов пишем форму снапшота напрямую (как это делает редактор при первом открытии).
+const seedDiagnosis = (form: Record<string, unknown>) =>
+  writeProjectDiagnosisSnapshot(PID, {
+    ...getFallbackProjectDiagnosisSnapshot(PID),
+    form: { diagnosis: {}, gaps: [], symptoms: [], facts: [], alternatives: [], verifications: [], consequences: [], ...form },
+  });
 
 describe('buildTheoryGraph', () => {
   beforeEach(() => window.localStorage.clear());
@@ -97,7 +109,8 @@ describe('buildTheoryGraph', () => {
     expect(g.nodes.find(n => n.id === STRATEGY_SECTION_NODE_ID)?.type).toBe('sectionNode');
     expect(g.nodes.find(n => n.id === STRATEGY_ROOT_NODE_ID)?.type).toBe('missionNode');
     expect(g.edges.some(e => e.kind === 'section' && e.source === STRATEGY_SECTION_NODE_ID && e.target === STRATEGY_ROOT_NODE_ID)).toBe(true);
-    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === SECTION_NODE_ID && e.target === STRATEGY_SECTION_NODE_ID)).toBe(true);
+    // Стратегический выбор стоит в цепочке после Диагноза: Теория → Диагноз → Стратегический выбор.
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === DIAGNOSIS_SECTION_NODE_ID && e.target === STRATEGY_SECTION_NODE_ID)).toBe(true);
     expect(blockNodes(g, STRATEGY_CARD_ID)).toHaveLength(STRATEGY_BLOCKS.length);
     expect(g.edges.filter(e => e.kind === 'origin' && e.source === STRATEGY_ROOT_NODE_ID)).toHaveLength(STRATEGY_BLOCKS.length);
   });
@@ -139,5 +152,60 @@ describe('buildTheoryGraph', () => {
 
     const g = buildTheoryGraph(PID, new Set(['strategic-choice:alternatives']));
     expect(g.edges.some(e => e.kind === 'ref' && e.source === STRATEGY_ROOT_NODE_ID && e.target.includes(':alternatives:'))).toBe(true);
+  });
+
+  it('добавляет отдельный раздел «Диагноз» с корнем, блоками и цепочкой Теория→Диагноз', () => {
+    const g = buildTheoryGraph(PID);
+    expect(g.nodes.find(n => n.id === DIAGNOSIS_SECTION_NODE_ID)?.type).toBe('sectionNode');
+    expect(g.nodes.find(n => n.id === DIAGNOSIS_ROOT_NODE_ID)?.type).toBe('missionNode');
+    expect(g.edges.some(e => e.kind === 'section' && e.source === DIAGNOSIS_SECTION_NODE_ID && e.target === DIAGNOSIS_ROOT_NODE_ID)).toBe(true);
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === SECTION_NODE_ID && e.target === DIAGNOSIS_SECTION_NODE_ID)).toBe(true);
+    expect(blockNodes(g, DIAGNOSIS_CARD_ID)).toHaveLength(DIAGNOSIS_BLOCKS.length);
+    expect(g.edges.filter(e => e.kind === 'origin' && e.source === DIAGNOSIS_ROOT_NODE_ID)).toHaveLength(DIAGNOSIS_BLOCKS.length);
+  });
+
+  it('у блока «Разрывы» нельзя добавлять элементы (addable=false), у остальных блоков Диагноза — можно', () => {
+    const g = buildTheoryGraph(PID);
+    const blocks = blockNodes(g, DIAGNOSIS_CARD_ID);
+    expect(blocks.find(n => n.data.list === 'gaps')?.data.addable).toBe(false);
+    expect(blocks.filter(n => n.data.list !== 'gaps').every(n => n.data.addable)).toBe(true);
+  });
+
+  it('пустой Диагноз: разрывы засеяны экраном, но в графе блоки пусты без смысловых рёбер', () => {
+    const g = buildTheoryGraph(PID);
+    expect(blockNodes(g, DIAGNOSIS_CARD_ID).every(n => n.data.isEmpty && !n.data.expandable)).toBe(true);
+    expect(itemNodes(g, DIAGNOSIS_CARD_ID)).toHaveLength(0);
+  });
+
+  it('связь симптом→разрыв (relatedGap) и кросс-связь разрыв→блок Теории (theoryBlock)', () => {
+    seedDiagnosis({
+      gaps: [{ id: 1, theoryBlock: 'results', expectedState: 'Результат измерим', observedReality: 'Срыв сроков', gap: 'Ожидалось X, фактически Y', confirmingFact: '', status: 'Требует проверки' }],
+      symptoms: [{ id: 1, description: 'Жалобы на сроки', location: '', affected: '', frequency: '', relatedGap: '1. Критерии результата', dataSource: '' }],
+    });
+
+    const collapsed = buildTheoryGraph(PID, new Set(['diagnosis:symptoms'])); // разрывы свёрнуты — связи симптом→разрыв нет
+    expect(collapsed.edges.some(e => e.kind === 'ref' && e.source.includes('item:diagnosis:symptoms:') && e.target.includes('item:diagnosis:gaps:'))).toBe(false);
+
+    const g = buildTheoryGraph(PID, new Set(['diagnosis:gaps', 'diagnosis:symptoms']));
+    const symptomToGap = g.edges.find(e => e.kind === 'ref' && e.source.includes('item:diagnosis:symptoms:') && e.target.includes('item:diagnosis:gaps:'));
+    expect(symptomToGap).toBeDefined();
+    expect(symptomToGap?.family).toBe('проявление разрыва');
+
+    const gapToTheory = g.edges.find(e => e.kind === 'ref' && e.source.includes('item:diagnosis:gaps:') && e.target === 'block:results');
+    expect(gapToTheory).toBeDefined();
+    expect(gapToTheory?.family).toBe('проверка Теории');
+    expect(gapToTheory?.verb).toBe('проверяет блок Теории');
+  });
+
+  it('связь разрыв→факт (confirmingFact) по имени факта', () => {
+    seedDiagnosis({
+      gaps: [{ id: 1, theoryBlock: 'results', expectedState: 'X', observedReality: 'Y', gap: 'Разрыв', confirmingFact: 'Падение конверсии', status: 'Требует проверки' }],
+      facts: [{ id: 1, indicator: 'Падение конверсии', value: '-30%', period: 'Q2', dataSource: 'CRM', reliability: 'высокая', confirms: '' }],
+    });
+
+    const g = buildTheoryGraph(PID, new Set(['diagnosis:gaps', 'diagnosis:facts']));
+    const gapToFact = g.edges.find(e => e.kind === 'ref' && e.source.includes('item:diagnosis:gaps:') && e.target.includes('item:diagnosis:facts:'));
+    expect(gapToFact).toBeDefined();
+    expect(gapToFact?.family).toBe('подтверждение фактом');
   });
 });

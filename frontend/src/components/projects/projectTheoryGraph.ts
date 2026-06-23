@@ -10,6 +10,7 @@
 //       — меж-блочные ссылки элементов (resultCriterion/requiredCompetencies/beneficiary/…).
 // Резолв ref — по совпадению лейбла (значения ссылочных полей в модели уже отображаются как лейблы).
 import { buildProjectEditModel, type EditableCard, type EditableItem, type ProjectEditModel } from './projectEditModel';
+import { PROJECT_THEORY_BLOCKS } from './projectTheorySnapshot';
 
 export const THEORY_CARD_ID = 'project-theory';
 export const SECTION_NODE_ID = 'section:project-theory';
@@ -17,10 +18,15 @@ export const MISSION_NODE_ID = 'mission';
 export const STRATEGY_CARD_ID = 'strategic-choice';
 export const STRATEGY_SECTION_NODE_ID = 'section:strategic-choice';
 export const STRATEGY_ROOT_NODE_ID = 'root:strategic-choice';
+export const DIAGNOSIS_CARD_ID = 'diagnosis';
+export const DIAGNOSIS_SECTION_NODE_ID = 'section:diagnosis';
+export const DIAGNOSIS_ROOT_NODE_ID = 'root:diagnosis';
 
 interface SectionLink { source: string; target: string; label: string }
+// Методологическая цепочка разделов в верхнем слое: Теория → Диагноз → Стратегический выбор.
 const SECTION_LINKS: SectionLink[] = [
-  { source: SECTION_NODE_ID, target: STRATEGY_SECTION_NODE_ID, label: 'задаёт контекст' },
+  { source: SECTION_NODE_ID, target: DIAGNOSIS_SECTION_NODE_ID, label: 'проверяется диагнозом' },
+  { source: DIAGNOSIS_SECTION_NODE_ID, target: STRATEGY_SECTION_NODE_ID, label: 'обосновывает выбор' },
 ];
 
 // Блоки Теории строго в порядке экрана (list = ключ списка в модели Теории, nameField — куда писать имя при +).
@@ -41,6 +47,18 @@ export const STRATEGY_BLOCKS: StrategyBlockSpec[] = [
   { list: 'tradeOffs', title: 'Trade-offs', nameField: 'name' },
   { list: 'actions', title: 'Coherent actions', nameField: 'name' },
   { list: 'hypotheses', title: 'Гипотезы выбора', nameField: 'name' },
+];
+
+// Блоки Диагноза строго в порядке экрана. addable=false для «Разрывов» — они засеяны из блоков
+// Теории (createItem: null в projectComplexCards), новые строки методолог не плодит.
+export interface DiagnosisBlockSpec { list: string; title: string; nameField: string; addable: boolean; }
+export const DIAGNOSIS_BLOCKS: DiagnosisBlockSpec[] = [
+  { list: 'gaps', title: 'Разрывы теории и реальности', nameField: 'gap', addable: false },
+  { list: 'symptoms', title: 'Симптомы', nameField: 'description', addable: true },
+  { list: 'facts', title: 'Факты', nameField: 'indicator', addable: true },
+  { list: 'alternatives', title: 'Альтернативные объяснения', nameField: 'reason', addable: true },
+  { list: 'verifications', title: 'Проверки диагноза', nameField: 'subject', addable: true },
+  { list: 'consequences', title: 'Последствия без изменений', nameField: 'deterioration', addable: true },
 ];
 
 // Каждая смысловая связь относится к СЕМЕЙСТВУ (принцип, виден по умолчанию) и имеет точный
@@ -86,6 +104,10 @@ export const ENTITY_COLORS: { list: string; title: string; color: string }[] = [
   { list: 'tradeOffs', title: 'Trade-offs', color: '#DC2626' },
   { list: 'actions', title: 'Coherent actions', color: '#16A34A' },
   { list: 'hypotheses', title: 'Гипотезы выбора', color: '#CA8A04' },
+  // Диагноз — цвет назначаем только сущностям-целям связей (разрыв/факт/симптом).
+  { list: 'gaps', title: 'Разрывы (Диагноз)', color: '#B45309' },
+  { list: 'facts', title: 'Факты (Диагноз)', color: '#0D9488' },
+  { list: 'symptoms', title: 'Симптомы (Диагноз)', color: '#C026D3' },
 ];
 const ENTITY_COLOR = new Map(ENTITY_COLORS.map(e => [e.list, e.color] as const));
 export const NEUTRAL_COLOR = '#475569';
@@ -136,6 +158,10 @@ export const RELATION_FAMILIES: RelationFamily[] = [
   { id: 'withinLimit', label: 'в рамках ограничения', about: 'связь с ограничением-границей', color: '#DC2626' },
   { id: 'supportsChoice', label: 'поддерживает выбор', about: 'действие поддерживает выбранную альтернативу', color: '#16A34A' },
   { id: 'testsChoice', label: 'проверяет выбор', about: 'гипотеза проверяет выбранную альтернативу', color: '#CA8A04' },
+  { id: 'symptomGap', label: 'проявление разрыва', about: 'симптом — проявление разрыва Теории и реальности', color: '#B45309' },
+  { id: 'evidence', label: 'подтверждение фактом', about: 'факт подтверждает разрыв, симптом или суждение', color: '#0D9488' },
+  { id: 'refute', label: 'опровержение', about: 'факт опровергает альтернативное объяснение', color: '#E11D48' },
+  { id: 'checksTheory', label: 'проверка Теории', about: 'разрыв Диагноза проверяет блок Теории проекта', color: NEUTRAL_COLOR },
 ];
 const FAMILY_LABEL = new Map(RELATION_FAMILIES.map(f => [f.id, f.label] as const));
 const familyLabel = (id: string): string => FAMILY_LABEL.get(id) ?? id;
@@ -147,7 +173,7 @@ export type TheorySectionData = { kind: 'section'; cardId: string; title: string
 export type TheoryMissionData = { kind: 'mission'; cardId: string; title: string; statement: string; isEmpty: boolean };
 export type TheoryBlockData = {
   kind: 'block'; cardId: string; list: string; title: string; index: number; nameField: string; expandKey: string;
-  itemCount: number; isEmpty: boolean; expanded: boolean; expandable: boolean;
+  itemCount: number; isEmpty: boolean; expanded: boolean; expandable: boolean; addable: boolean;
 };
 export type TheoryItemData = { kind: 'item'; cardId: string; list: string; itemId: string; label: string; blockTitle: string };
 
@@ -199,6 +225,24 @@ function strategyStatement(card: EditableCard | undefined): string {
     || trimmed(fields.get('strategicQuestion'))
     || trimmed(fields.get('winningAspiration'))
     || '';
+}
+// Корень Диагноза — итоговое диагностическое суждение (как Миссия для Теории).
+function diagnosisStatement(card: EditableCard | undefined): string {
+  const fields = fieldsMap(card);
+  return trimmed(fields.get('finalStatement')) || trimmed(fields.get('keyChallenge')) || '';
+}
+// Имя-опция разрыва в редакторе Диагноза: «N. <блок Теории>» (так хранятся ссылки relatedGap/confirms).
+const THEORY_BLOCK_TITLE = new Map<string, string>(PROJECT_THEORY_BLOCKS.map(b => [b.id, b.title]));
+function gapName(index: number, theoryBlock?: string): string {
+  const title = THEORY_BLOCK_TITLE.get(trimmed(theoryBlock)) || PROJECT_THEORY_BLOCKS[0].title;
+  return `${index + 1}. ${title}`;
+}
+// Узел Теории, который проверяет разрыв (gap.theoryBlock): корень-Миссия или один из 6 блоков.
+function theoryNodeForBlock(theoryBlock?: string): string | null {
+  const id = trimmed(theoryBlock);
+  if (!id) return null;
+  if (id === 'mission') return MISSION_NODE_ID;
+  return THEORY_BLOCKS.some(b => b.list === id) ? blockNodeId(THEORY_CARD_ID, id) : null;
 }
 function itemByLabel(items: EditableItem[]): Map<string, string> {
   const idx = new Map<string, string>();
@@ -257,7 +301,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
       id: blockNodeId(THEORY_CARD_ID, b.list), type: 'blockNode',
       data: {
         kind: 'block', cardId: THEORY_CARD_ID, list: b.list, title: b.title, index, nameField: b.nameField, expandKey: expandKey(THEORY_CARD_ID, b.list),
-        itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(b.list), expandable: items.length > 0,
+        itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(b.list), expandable: items.length > 0, addable: true,
       },
     });
     // структурное ребро Миссия → блок (всегда видно)
@@ -305,6 +349,141 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     }
   }
 
+  // === Диагноз: проверяет блоки Теории через разрывы, симптомы и факты ===
+  // Каркас (раздел → Диагностическое суждение → 6 блоков) строится всегда; смысловые связи —
+  // из реальных полей-ссылок редактора Диагноза (relatedGap/confirmingFact/confirms/refutes),
+  // плюс кросс-связь «разрыв → блок Теории» из поля gap.theoryBlock.
+  const diagnosis = m.editable_cards.find(c => c.card_id === DIAGNOSIS_CARD_ID);
+  nodes.push({
+    id: DIAGNOSIS_SECTION_NODE_ID, type: 'sectionNode',
+    data: { kind: 'section', cardId: DIAGNOSIS_CARD_ID, title: 'Диагноз', subtitle: 'Раздел проекта' },
+  });
+  edges.push({ id: 'section:diagnosis->root', source: DIAGNOSIS_SECTION_NODE_ID, target: DIAGNOSIS_ROOT_NODE_ID, kind: 'section', label: 'диагноз' });
+  nodes.push({
+    id: DIAGNOSIS_ROOT_NODE_ID, type: 'missionNode',
+    data: { kind: 'mission', cardId: DIAGNOSIS_CARD_ID, title: 'Диагностическое суждение', statement: diagnosisStatement(diagnosis), isEmpty: !missionFilled(diagnosis) },
+  });
+
+  // Авто-засеянные поля не считаем «контентом» (иначе пустые засеянные разрывы засоряют граф).
+  const diagnosisIgnored = new Map<string, ReadonlySet<string>>([
+    ['gaps', new Set(['theoryBlock', 'expectedState', 'status'])],
+    ['alternatives', new Set(['status'])],
+  ]);
+  const diagItemsByList = new Map<string, EditableItem[]>();
+  const diagLabelIndex = new Map<string, Map<string, string>>(); // symptoms/facts — по их собственным лейблам
+  for (const b of DIAGNOSIS_BLOCKS) {
+    const items = (diagnosis?.lists.find(l => l.list === b.list)?.items ?? []).filter(it => hasContent(it, diagnosisIgnored.get(b.list)));
+    diagItemsByList.set(b.list, items);
+    diagLabelIndex.set(b.list, itemByLabel(items));
+  }
+
+  // Разрывы резолвятся по «имени-опции» редактора `${i+1}. <блок>` (нумерация — по позиции в полном
+  // списке gaps, как в редакторе); в индекс кладём только присутствующие (раскрытые/непустые) разрывы.
+  const allGaps = diagnosis?.lists.find(l => l.list === 'gaps')?.items ?? [];
+  const presentGapIds = new Set((diagItemsByList.get('gaps') ?? []).map(it => String(it.id)));
+  const gapByName = new Map<string, string>();
+  allGaps.forEach((g, i) => {
+    const id = String(g.id);
+    if (presentGapIds.has(id)) gapByName.set(gapName(i, g.values.theoryBlock).toLowerCase(), id);
+  });
+
+  DIAGNOSIS_BLOCKS.forEach((b, index) => {
+    const key = expandKey(DIAGNOSIS_CARD_ID, b.list);
+    const items = diagItemsByList.get(b.list) ?? [];
+    nodes.push({
+      id: blockNodeId(DIAGNOSIS_CARD_ID, b.list), type: 'blockNode',
+      data: {
+        kind: 'block', cardId: DIAGNOSIS_CARD_ID, list: b.list, title: b.title, index, nameField: b.nameField, expandKey: key, addable: b.addable,
+        itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(key), expandable: items.length > 0,
+      },
+    });
+    edges.push({ id: `origin:${DIAGNOSIS_CARD_ID}:${b.list}`, source: DIAGNOSIS_ROOT_NODE_ID, target: blockNodeId(DIAGNOSIS_CARD_ID, b.list), kind: 'origin' });
+
+    if (expanded.has(key)) {
+      for (const it of items) {
+        const nid = itemNodeId(DIAGNOSIS_CARD_ID, b.list, String(it.id));
+        presentItems.add(nid);
+        nodes.push({ id: nid, type: 'itemNode', data: { kind: 'item', cardId: DIAGNOSIS_CARD_ID, list: b.list, itemId: String(it.id), label: it.label, blockTitle: b.title } });
+        edges.push({ id: `containment:${nid}`, source: blockNodeId(DIAGNOSIS_CARD_ID, b.list), target: nid, kind: 'containment' });
+      }
+    }
+  });
+
+  const diagFactIdx = diagLabelIndex.get('facts') ?? new Map();
+  const diagSymptomIdx = diagLabelIndex.get('symptoms') ?? new Map();
+  const diagRef = (source: string, target: string, family: string, verb: string) =>
+    edges.push({ id: `ref:d:${seq++}:${source}->${target}`, source, target, kind: 'ref', family: familyLabel(family), verb });
+
+  // симптом → разрыв (relatedGap)
+  for (const s of diagItemsByList.get('symptoms') ?? []) {
+    const source = itemNodeId(DIAGNOSIS_CARD_ID, 'symptoms', String(s.id));
+    if (!presentItems.has(source)) continue;
+    for (const token of tokenize(s.values.relatedGap)) {
+      const id = gapByName.get(token);
+      if (!id) continue;
+      const target = itemNodeId(DIAGNOSIS_CARD_ID, 'gaps', id);
+      if (presentItems.has(target)) diagRef(source, target, 'symptomGap', 'проявляется в разрыве');
+    }
+  }
+
+  // разрыв → факт (confirmingFact)
+  for (const g of diagItemsByList.get('gaps') ?? []) {
+    const source = itemNodeId(DIAGNOSIS_CARD_ID, 'gaps', String(g.id));
+    if (!presentItems.has(source)) continue;
+    for (const token of tokenize(g.values.confirmingFact)) {
+      const id = diagFactIdx.get(token);
+      if (!id) continue;
+      const target = itemNodeId(DIAGNOSIS_CARD_ID, 'facts', id);
+      if (presentItems.has(target)) diagRef(source, target, 'evidence', 'подтверждается фактом');
+    }
+  }
+
+  // факт → симптом / разрыв / диагностическое суждение (confirms)
+  for (const f of diagItemsByList.get('facts') ?? []) {
+    const source = itemNodeId(DIAGNOSIS_CARD_ID, 'facts', String(f.id));
+    if (!presentItems.has(source)) continue;
+    for (const token of tokenize(f.values.confirms)) {
+      if (token === 'диагностическое суждение') { diagRef(source, DIAGNOSIS_ROOT_NODE_ID, 'evidence', 'подтверждает суждение'); continue; }
+      const sid = diagSymptomIdx.get(token);
+      if (sid) {
+        const target = itemNodeId(DIAGNOSIS_CARD_ID, 'symptoms', sid);
+        if (presentItems.has(target)) diagRef(source, target, 'evidence', 'подтверждает симптом');
+        continue;
+      }
+      const gid = gapByName.get(token);
+      if (gid) {
+        const target = itemNodeId(DIAGNOSIS_CARD_ID, 'gaps', gid);
+        if (presentItems.has(target)) diagRef(source, target, 'evidence', 'подтверждает разрыв');
+      }
+    }
+  }
+
+  // альтернативное объяснение → факт (confirms / refutes)
+  for (const a of diagItemsByList.get('alternatives') ?? []) {
+    const source = itemNodeId(DIAGNOSIS_CARD_ID, 'alternatives', String(a.id));
+    if (!presentItems.has(source)) continue;
+    for (const token of tokenize(a.values.confirms)) {
+      const id = diagFactIdx.get(token);
+      if (!id) continue;
+      const target = itemNodeId(DIAGNOSIS_CARD_ID, 'facts', id);
+      if (presentItems.has(target)) diagRef(source, target, 'evidence', 'подтверждается');
+    }
+    for (const token of tokenize(a.values.refutes)) {
+      const id = diagFactIdx.get(token);
+      if (!id) continue;
+      const target = itemNodeId(DIAGNOSIS_CARD_ID, 'facts', id);
+      if (presentItems.has(target)) diagRef(source, target, 'refute', 'опровергается');
+    }
+  }
+
+  // кросс-связь: разрыв → блок Теории, который он проверяет (gap.theoryBlock)
+  for (const g of diagItemsByList.get('gaps') ?? []) {
+    const source = itemNodeId(DIAGNOSIS_CARD_ID, 'gaps', String(g.id));
+    if (!presentItems.has(source)) continue;
+    const theoryNode = theoryNodeForBlock(g.values.theoryBlock);
+    if (theoryNode) diagRef(source, theoryNode, 'checksTheory', 'проверяет блок Теории');
+  }
+
   // Стратегический выбор: отдельный раздел рядом с Теорией. Каркас строится всегда,
   // смысловые связи — только из реальных полей связи самого экрана.
   nodes.push({
@@ -340,7 +519,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
       id: blockNodeId(STRATEGY_CARD_ID, b.list), type: 'blockNode',
       data: {
         kind: 'block', cardId: STRATEGY_CARD_ID, list: b.list, title: b.title, index, nameField: b.nameField, expandKey: key,
-        itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(key), expandable: items.length > 0,
+        itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(key), expandable: items.length > 0, addable: true,
       },
     });
     edges.push({ id: `origin:${STRATEGY_CARD_ID}:${b.list}`, source: STRATEGY_ROOT_NODE_ID, target: blockNodeId(STRATEGY_CARD_ID, b.list), kind: 'origin' });
