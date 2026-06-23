@@ -2172,6 +2172,11 @@ a:hover { color: var(--accent-hover); }
 /* ref-связи (внутри Теории) — по наведению, акцентный пунктир */
 .project-graph .react-flow__edge.pg-edge-ref .react-flow__edge-path { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 5 3; }
 .project-graph .react-flow__edge.pg-edge-ref .react-flow__edge-text { fill: var(--accent); }
+/* Курсор и подсветка связи под наведением/зафиксированной */
+.project-graph .react-flow__edge.pg-edge { cursor: pointer; }
+.project-graph .react-flow__edge.pg-edge.is-hot .react-flow__edge-path { stroke: var(--accent); stroke-width: 4; stroke-dasharray: none; }
+.project-graph .react-flow__edge.pg-edge.is-hot .react-flow__edge-text { font-weight: 900; fill: var(--accent); }
+.project-graph .react-flow__edge.pg-edge.is-hot .react-flow__edge-textbg { fill: var(--accent-weak); }
 /* Подписи связей */
 .project-graph .react-flow__edge-text { font-size: 10.5px; font-weight: 800; fill: var(--accent); }
 .project-graph .react-flow__edge.pg-edge-feedback .react-flow__edge-text { fill: var(--text-secondary); }

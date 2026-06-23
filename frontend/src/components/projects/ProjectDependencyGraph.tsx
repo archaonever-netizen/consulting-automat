@@ -71,11 +71,18 @@ function TreeEdge({ sourceX, sourceY, targetX, targetY, sourcePosition, markerEn
 }
 
 // Смысловые ref-связи: вертикальный участок выносится на отдельную «дорожку» laneX справа;
-// jog — небольшой вертикальный разнос у общего источника, чтобы стартовые отрезки не сливались.
+// jog — вертикальный разнос у общего источника; labelT — позиция подписи вдоль дорожки (доля 0..1),
+// чтобы подписи разных связей не накладывались (у каждой свой laneX и своя высота).
 function BusEdge({ sourceX, sourceY, targetX, targetY, markerEnd, label, data }: EdgeProps) {
-  const { laneX, jog = 0 } = data as { laneX: number; jog?: number };
-  const pts = [[sourceX, sourceY], [sourceX, sourceY + jog], [laneX, sourceY + jog], [laneX, targetY], [targetX, targetY]];
-  return <BaseEdge path={orthoPath(pts)} markerEnd={markerEnd} label={label} labelX={laneX} labelY={(sourceY + jog + targetY) / 2} />;
+  const { laneX, jog = 0, labelT = 0.5 } = data as { laneX: number; jog?: number; labelT?: number };
+  const sy = sourceY + jog;
+  const pts = [[sourceX, sourceY], [sourceX, sy], [laneX, sy], [laneX, targetY], [targetX, targetY]];
+  return (
+    <BaseEdge
+      path={orthoPath(pts)} markerEnd={markerEnd} label={label} labelX={laneX} labelY={sy + labelT * (targetY - sy)}
+      labelShowBg labelBgPadding={[6, 3]} labelBgBorderRadius={5}
+    />
+  );
 }
 
 const edgeTypes = { tree: TreeEdge, bus: BusEdge };
@@ -193,8 +200,10 @@ interface GraphProps { projectId: number; onOpenCard: (cardId: string) => void }
 function GraphInner({ projectId, onOpenCard }: GraphProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set());
+  const [pinnedEdges, setPinnedEdges] = useState<ReadonlySet<string>>(new Set());
   const [editNonce, setEditNonce] = useState(0);
   const [hovered, setHovered] = useState<string | null>(null);
+  const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const { fitView } = useReactFlow();
@@ -211,6 +220,15 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   }), []);
+
+  // Клик по связи — зафиксировать/снять её (видна и подсвечена даже без активного узла).
+  const onEdgePin = useCallback((id: string) => setPinnedEdges(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  }), []);
+
+  const clearPins = useCallback(() => { setPinned(new Set()); setPinnedEdges(new Set()); setHoveredEdge(null); }, []);
 
   const applyEdit = useCallback((proposal: Proposal) => {
     const res = applyProjectEdit(projectId, proposal);
@@ -245,18 +263,24 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     setNodes(laid);
   }, [graph, pinned, openTheory, onPin, toggle, onAdd, onDelete, setNodes]);
 
-  // Рёбра. Активные узлы = закреплённые (pin) ∪ наведённый. Видимы только ref-связи активных узлов;
-  // дорожки (laneX) назначаем ПЛОТНО только среди видимых — чтобы одиночная связь шла рядом, а не уезжала.
+  // Рёбра. Видимы ref-связи активных узлов (pin ∪ наведённый) ИЛИ сама связь зафиксирована/наведена.
+  // Дорожки (laneX) и высоту подписи (labelT) назначаем ПЛОТНО только среди видимых — чтобы и линии,
+  // и подписи разных связей были разнесены и не накладывались.
   useEffect(() => {
     const active = new Set<string>(pinned);
     if (hovered) active.add(hovered);
+    const refVisible = (e: typeof graph.edges[number]) =>
+      e.kind === 'ref' && (active.has(e.source) || active.has(e.target) || pinnedEdges.has(e.id) || hoveredEdge === e.id);
 
-    const visibleRef = graph.edges.filter(e => e.kind === 'ref' && (active.has(e.source) || active.has(e.target)));
+    const visibleRef = graph.edges.filter(refVisible);
+    const n = visibleRef.length;
     const lane = new Map<string, number>();
     const jog = new Map<string, number>();
+    const labelT = new Map<string, number>();
     const bySource = new Map<string, string[]>();
     visibleRef.forEach((e, i) => {
       lane.set(e.id, LANE_X0 + i * LANE_STEP);
+      labelT.set(e.id, (i + 1) / (n + 1));
       const arr = bySource.get(e.source) ?? []; arr.push(e.id); bySource.set(e.source, arr);
     });
     for (const ids of bySource.values()) ids.forEach((id, k) => jog.set(id, (k - (ids.length - 1) / 2) * 9));
@@ -266,17 +290,18 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
       const [sourceHandle, targetHandle] = handlesFor(e.kind, e.source);
       const rail = e.kind === 'origin' ? TRUNK_X : e.kind === 'section' ? COL_CENTER_X : CHILD_RAIL_X;
       const structural = e.kind === 'origin' || e.kind === 'section';
+      const hot = hoveredEdge === e.id || pinnedEdges.has(e.id);
       return {
         id: e.id, source: e.source, target: e.target, sourceHandle, targetHandle,
         type: isRef ? 'bus' : 'tree',
-        data: isRef ? { laneX: lane.get(e.id) ?? LANE_X0, jog: jog.get(e.id) ?? 0 } : { rail },
+        data: isRef ? { laneX: lane.get(e.id) ?? LANE_X0, jog: jog.get(e.id) ?? 0, labelT: labelT.get(e.id) ?? 0.5 } : { rail },
         label: e.label, hidden: isRef && !lane.has(e.id),
-        className: `pg-edge pg-edge-${e.kind}`,
-        markerEnd: { type: MarkerType.ArrowClosed, color: structural ? ACCENT : MUTED, width: 15, height: 15 },
+        className: `pg-edge pg-edge-${e.kind}${hot ? ' is-hot' : ''}`,
+        markerEnd: { type: MarkerType.ArrowClosed, color: hot ? ACCENT : structural ? ACCENT : MUTED, width: 15, height: 15 },
       };
     });
     setEdges(rf);
-  }, [graph, hovered, pinned, setEdges]);
+  }, [graph, hovered, pinned, hoveredEdge, pinnedEdges, setEdges]);
 
   useEffect(() => {
     const t = window.setTimeout(() => fitView({ duration: 300, padding: 0.14 }), 60);
@@ -289,7 +314,9 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
       nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.14 }} minZoom={0.15}
       proOptions={{ hideAttribution: true }} nodesConnectable={false} edgesFocusable={false} elementsSelectable={false}
       onNodeMouseEnter={(_, n) => setHovered(n.id)} onNodeMouseLeave={() => setHovered(null)}
-      onPaneClick={() => setPinned(new Set())}
+      onEdgeMouseEnter={(_, e) => setHoveredEdge(e.id)} onEdgeMouseLeave={() => setHoveredEdge(null)}
+      onEdgeClick={(_, e) => onEdgePin(e.id)}
+      onPaneClick={clearPins}
     >
       <Background gap={22} />
       <MiniMap pannable zoomable />
