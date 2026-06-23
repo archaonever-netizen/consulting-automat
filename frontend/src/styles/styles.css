@@ -2136,9 +2136,11 @@ a:hover { color: var(--accent-hover); }
 .project-graph .react-flow__edges,
 .project-graph .react-flow__edges svg { width: 100%; height: 100%; overflow: visible; }
 /* Рёбра (non-scaling-stroke — линии не истончаются при отдалении) */
-.project-graph .react-flow__edge-path { vector-effect: non-scaling-stroke; stroke: var(--accent); stroke-width: 2.5; }
-/* Структурные рёбра Миссия→блок — сплошной акцент */
-.project-graph .react-flow__edge.pg-edge-origin .react-flow__edge-path { stroke: var(--accent); stroke-width: 2.5; }
+.project-graph .react-flow__edge-path { vector-effect: non-scaling-stroke; stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-linejoin: round; stroke-linecap: round; }
+/* Структурные рёбра Миссия→блок — широкий сплошной «ствол» дерева */
+.project-graph .react-flow__edge.pg-edge-origin .react-flow__edge-path { stroke: var(--accent); stroke-width: 3.5; }
+/* Containment блок→элемент — спокойная серая ветка */
+.project-graph .react-flow__edge.pg-edge-containment .react-flow__edge-path { stroke: #94a3b8; stroke-width: 2; }
 .project-graph .react-flow__edge.pg-edge-feedback .react-flow__edge-path { stroke: var(--ink-3, #9aa3b2); stroke-width: 2.5; stroke-dasharray: 6 4; }
 .project-graph .react-flow__edge.pg-edge-containment .react-flow__edge-path,
 .project-graph .react-flow__edge.pg-edge-hierarchy .react-flow__edge-path { stroke: #64748b; stroke-width: 2.5; }
