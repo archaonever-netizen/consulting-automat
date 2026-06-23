@@ -44,6 +44,66 @@
 
 ---
 
+## Графы «Гипотезы», «Проверки», «Решения» на экране «Весь проект»
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-23
+- Цель: по тому же принципу, что для Теории/Диагноза/Стратегического выбора/Целевого состояния, добавить графы разделов «Гипотезы», «Проверки», «Решения».
+
+### Что реализовано
+
+- В общий граф добавлены разделы `hypotheses`, `experiments`, `decisions`:
+  - section-node каждого раздела;
+  - корень раздела;
+  - один блок повторяемых карточек;
+  - элементы при раскрытии блока.
+- Методологическая цепочка расширена:
+  - `Целевое состояние → Гипотезы → Проверки → Решения`.
+- Смысловые `ref`-связи строятся только из реальных полей-ссылок generic-разделов:
+  - `hypotheses.strategicChoice` → элементы/корень Стратегического выбора;
+  - `experiments.hypothesis` → гипотезы;
+  - `experiments.metric` → критерии результата / key results / качество;
+  - `experiments.constraints` → ограничения;
+  - `decisions.checkResult` → проверки;
+  - `decisions.relatedHypothesis` → гипотезы;
+  - `decisions.relatedCriterion` → критерии результата / key results;
+  - `decisions.constraints` → ограничения;
+  - `decisions.preserve` → сохраняемое ядро.
+- Для generic-секций добавлены `refOptions`/`refTargetTitle`: ИИ-Методолог теперь видит реальные варианты ссылок и применитель нормализует значения, а не записывает произвольный текст в поля зависимостей.
+- React Flow-раскладка расширена колонками `hypotheses`, `experiments`, `decisions`.
+- Добавлены тесты на каркас новых разделов, смысловые связи и нормализацию generic ref-полей.
+- Выполнен `npm.cmd run build`, обновлены hash-файлы в `frontend/dist`.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/projectTheoryGraph.ts` - добавлены графы «Гипотезы», «Проверки», «Решения» и их связи.
+- `frontend/src/components/projects/ProjectDependencyGraph.tsx` - добавлены колонки новых разделов.
+- `frontend/src/components/projects/ProjectFrameworkSectionCanvas.tsx` - добавлены `refOptions` для структурных ссылок generic-разделов.
+- `frontend/src/components/projects/projectEditApplier.ts` - добавлена нормализация generic ref-полей при применении правок Методолога.
+- `frontend/src/components/projects/projectEditModel.ts` - generic ref-поля отдают Методологу реальные опции ссылок.
+- `frontend/src/components/projects/projectTheoryGraph.test.ts` - тесты графов новых разделов.
+- `frontend/src/components/projects/projectEditApplier.test.ts` - тест нормализации generic ref-полей.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновлены build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run test -- projectTheoryGraph.test.ts` в `frontend` - успешно, 19 тестов пройдены.
+- `npm.cmd run test -- projectEditApplier.test.ts` в `frontend` - успешно, 39 тестов пройдены.
+- `npm.cmd exec eslint src/components/projects/projectTheoryGraph.ts src/components/projects/ProjectDependencyGraph.tsx src/components/projects/ProjectFrameworkSectionCanvas.tsx src/components/projects/projectEditApplier.ts src/components/projects/projectEditModel.ts src/components/projects/projectTheoryGraph.test.ts src/components/projects/projectEditApplier.test.ts` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+- Проверка dist для Amvera: `localhost:8000` / `127.0.0.1:8000` в assets не найдены; ссылки из `index.html`/`portal.html` на assets корректны.
+
+### Риски и следующие шаги
+
+- Как и в остальных разделах графа, `ref`-связи появляются только при раскрытых блоках источника и цели.
+- Раздел «Стратегическая карта» пока не добавлен в общий граф, поэтому поле `hypotheses.mapNode` зарегистрировано как ref-поле для Методолога, но визуальная связь с картой появится после подключения этого раздела.
+
+---
+
 ## Граф «Целевое состояние» на экране «Весь проект»
 
 ### Контекст

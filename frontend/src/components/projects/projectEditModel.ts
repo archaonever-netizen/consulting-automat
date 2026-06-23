@@ -77,7 +77,10 @@ function buildSectionEditable(projectId: number, cardId: string): EditableCard {
   const records = (snap?.form as RecordState[] | undefined) ?? [];
   const item_fields: EditableFieldSchema[] = [
     { key: NAME_KEY, label: 'Название карточки' },
-    ...config.fields.map(f => ({ key: f.key, label: f.label, ...(f.options ? { options: f.options } : {}) })),
+    ...config.fields.map(f => {
+      const options = f.refOptions ?? f.options;
+      return { key: f.key, label: f.label, ...(options && options.length ? { options } : {}) };
+    }),
   ];
   const items: EditableItem[] = records.map(record => {
     const values: Record<string, string> = {};

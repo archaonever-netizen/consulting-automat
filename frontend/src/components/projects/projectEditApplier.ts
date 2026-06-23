@@ -69,6 +69,30 @@ function normalizeValues(config: ScreenConfig, raw: Record<string, unknown> | un
   return out;
 }
 
+function normalizeSectionRefFields(config: ScreenConfig, values: Record<string, string>): { values: Record<string, string>; missing: RefMiss[] } {
+  const out = { ...values };
+  const missing: RefMiss[] = [];
+  for (const field of config.fields) {
+    if (!field.refOptions?.length || !(field.key in out)) continue;
+    const raw = out[field.key];
+    if (!raw.trim()) continue;
+    const parts = raw.split(/[;,]\s*/).map(part => part.trim()).filter(Boolean);
+    const normalized: string[] = [];
+    let failed = false;
+    for (const part of parts) {
+      const canon = resolveRefOption(field.refOptions, part);
+      if (canon) normalized.push(canon);
+      else {
+        missing.push({ field: field.key, targetTitle: field.refTargetTitle ?? field.label, text: part });
+        failed = true;
+      }
+    }
+    if (failed) delete out[field.key];
+    else out[field.key] = Array.from(new Set(normalized)).join('; ');
+  }
+  return { values: out, missing };
+}
+
 function loadRecords(projectId: number, cardId: string): RecordState[] {
   const form = readProjectFrameworkSectionSnapshot(projectId, cardId)?.form as RecordState[] | undefined;
   return Array.isArray(form) ? form.map(r => ({ id: r.id, values: { ...r.values } })) : [];
@@ -85,16 +109,23 @@ function applySectionEdit(projectId: number, proposal: Proposal): ApplyResult {
 
   if (op === 'add_item') {
     const record = createRecord(config, sources, nextId);
-    Object.assign(record.values, normalizeValues(config, proposal.values));
+    const norm = normalizeSectionRefFields(config, normalizeValues(config, proposal.values));
+    Object.assign(record.values, norm.values);
     records.push(record);
+    writeProjectFrameworkSectionSnapshot(projectId, cardId, buildSectionSnapshot(projectId, config, sources, records));
+    return ok(norm.missing.length ? `Добавлено новое окно. ${refMissingMessage(norm.missing)}` : 'Добавлено новое окно.');
   } else if (op === 'update_item' || op === 'update_field') {
     const idx = pickIndex(records, proposal.item_id, r => String(r.id), labelOf);
     if (idx === -1) return fail('Не найден элемент для изменения.');
-    const values = op === 'update_field' && proposal.field
+    const rawValues = op === 'update_field' && proposal.field
       ? normalizeValues(config, { [proposal.field]: proposal.value })
       : normalizeValues(config, proposal.values);
+    const norm = normalizeSectionRefFields(config, rawValues);
+    const values = norm.values;
     if (Object.keys(values).length === 0) return fail('Нечего изменять: не указаны поля.');
     records[idx] = { ...records[idx], values: { ...records[idx].values, ...values } };
+    writeProjectFrameworkSectionSnapshot(projectId, cardId, buildSectionSnapshot(projectId, config, sources, records));
+    return ok(norm.missing.length ? `Формулировка обновлена. ${refMissingMessage(norm.missing)}` : 'Формулировка обновлена.');
   } else if (op === 'delete_item') {
     const idx = pickIndex(records, proposal.item_id, r => String(r.id), labelOf);
     if (idx === -1) return fail('Не найден элемент для удаления.');
@@ -104,7 +135,7 @@ function applySectionEdit(projectId: number, proposal: Proposal): ApplyResult {
   }
 
   writeProjectFrameworkSectionSnapshot(projectId, cardId, buildSectionSnapshot(projectId, config, sources, records));
-  return ok(op === 'add_item' ? 'Добавлено новое окно.' : op === 'delete_item' ? 'Окно удалено.' : 'Формулировка обновлена.');
+  return ok('Окно удалено.');
 }
 
 // ===== Сложные карточки =====

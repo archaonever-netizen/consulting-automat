@@ -6,6 +6,16 @@ import {
   DIAGNOSIS_CARD_ID,
   DIAGNOSIS_ROOT_NODE_ID,
   DIAGNOSIS_SECTION_NODE_ID,
+  DECISIONS_CARD_ID,
+  DECISIONS_ROOT_NODE_ID,
+  DECISIONS_SECTION_NODE_ID,
+  EXPERIMENTS_CARD_ID,
+  EXPERIMENTS_ROOT_NODE_ID,
+  EXPERIMENTS_SECTION_NODE_ID,
+  GENERIC_GRAPH_SECTIONS,
+  HYPOTHESES_CARD_ID,
+  HYPOTHESES_ROOT_NODE_ID,
+  HYPOTHESES_SECTION_NODE_ID,
   MISSION_NODE_ID,
   SECTION_NODE_ID,
   STRATEGY_BLOCKS,
@@ -41,6 +51,8 @@ const setStrategy = (field: string, value: string) =>
   applyProjectEdit(PID, { id: 'sf', op: 'update_field', card_id: STRATEGY_CARD_ID, field, value, human: 'set strategy' } as Proposal);
 const addTarget = (list: string, values: Record<string, string>) =>
   applyProjectEdit(PID, { id: 't', op: 'add_item', card_id: TARGET_CARD_ID, list, human: 'add target', values } as Proposal);
+const addSection = (cardId: string, values: Record<string, string>) =>
+  applyProjectEdit(PID, { id: 'g', op: 'add_item', card_id: cardId, human: 'add section', values } as Proposal);
 // Диагноз — сложная карточка с засеянными «разрывами» (createItem: null), поэтому
 // для тестов пишем форму снапшота напрямую (как это делает редактор при первом открытии).
 const seedDiagnosis = (form: Record<string, unknown>) =>
@@ -257,5 +269,45 @@ describe('buildTheoryGraph', () => {
     expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:preserveTargets:') && e.target.includes('item:project-theory:preserve:'))).toBe(true);
     expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:constraints:') && e.target.includes('item:project-theory:constraints:'))).toBe(true);
     expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:target-state:keyResults:') && e.target.includes('item:project-theory:results:'))).toBe(true);
+  });
+
+  it('добавляет разделы «Гипотезы», «Проверки», «Решения» с корнями, блоками и методологической цепочкой', () => {
+    const g = buildTheoryGraph(PID);
+    expect(g.nodes.find(n => n.id === HYPOTHESES_SECTION_NODE_ID)?.type).toBe('sectionNode');
+    expect(g.nodes.find(n => n.id === HYPOTHESES_ROOT_NODE_ID)?.type).toBe('missionNode');
+    expect(g.nodes.find(n => n.id === EXPERIMENTS_SECTION_NODE_ID)?.type).toBe('sectionNode');
+    expect(g.nodes.find(n => n.id === EXPERIMENTS_ROOT_NODE_ID)?.type).toBe('missionNode');
+    expect(g.nodes.find(n => n.id === DECISIONS_SECTION_NODE_ID)?.type).toBe('sectionNode');
+    expect(g.nodes.find(n => n.id === DECISIONS_ROOT_NODE_ID)?.type).toBe('missionNode');
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === TARGET_SECTION_NODE_ID && e.target === HYPOTHESES_SECTION_NODE_ID)).toBe(true);
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === HYPOTHESES_SECTION_NODE_ID && e.target === EXPERIMENTS_SECTION_NODE_ID)).toBe(true);
+    expect(g.edges.some(e => e.kind === 'sectionLink' && e.source === EXPERIMENTS_SECTION_NODE_ID && e.target === DECISIONS_SECTION_NODE_ID)).toBe(true);
+    for (const section of GENERIC_GRAPH_SECTIONS) {
+      expect(blockNodes(g, section.cardId)).toHaveLength(1);
+      expect(g.edges.some(e => e.kind === 'origin' && e.source === section.rootId)).toBe(true);
+    }
+  });
+
+  it('гипотезы, проверки и решения строят ref-связи из реальных полей-ссылок', () => {
+    add('results', { statement: 'Рост выручки' });
+    add('constraints', { statement: 'Без остановки продаж' });
+    addStrategy('capabilities', { name: 'Интеграция данных' });
+    addSection(HYPOTHESES_CARD_ID, { __cardName: 'H1', statement: 'Если интегрируем данные, то вырастет выручка', strategicChoice: 'Интеграция данных' });
+    addSection(EXPERIMENTS_CARD_ID, { __cardName: 'E1', subject: 'Пилот интеграции', hypothesis: 'H1', metric: 'Рост выручки', constraints: 'Без остановки продаж' });
+    addSection(DECISIONS_CARD_ID, { __cardName: 'D1', statement: 'Запустить интеграцию', checkResult: 'E1', relatedHypothesis: 'H1', relatedCriterion: 'Рост выручки', constraints: 'Без остановки продаж' });
+
+    const g = buildTheoryGraph(PID, new Set([
+      'results', 'constraints', 'strategic-choice:capabilities',
+      'hypotheses:hypotheses', 'experiments:experiments', 'decisions:decisions',
+    ]));
+
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:hypotheses:hypotheses:') && e.target.includes('item:strategic-choice:capabilities:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:experiments:experiments:') && e.target.includes('item:hypotheses:hypotheses:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:experiments:experiments:') && e.target.includes('item:project-theory:results:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:experiments:experiments:') && e.target.includes('item:project-theory:constraints:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:decisions:decisions:') && e.target.includes('item:experiments:experiments:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:decisions:decisions:') && e.target.includes('item:hypotheses:hypotheses:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:decisions:decisions:') && e.target.includes('item:project-theory:results:'))).toBe(true);
+    expect(g.edges.some(e => e.kind === 'ref' && e.source.includes('item:decisions:decisions:') && e.target.includes('item:project-theory:constraints:'))).toBe(true);
   });
 });

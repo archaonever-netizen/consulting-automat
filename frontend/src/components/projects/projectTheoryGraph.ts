@@ -24,6 +24,15 @@ export const DIAGNOSIS_ROOT_NODE_ID = 'root:diagnosis';
 export const TARGET_CARD_ID = 'target-state';
 export const TARGET_SECTION_NODE_ID = 'section:target-state';
 export const TARGET_ROOT_NODE_ID = 'root:target-state';
+export const HYPOTHESES_CARD_ID = 'hypotheses';
+export const HYPOTHESES_SECTION_NODE_ID = 'section:hypotheses';
+export const HYPOTHESES_ROOT_NODE_ID = 'root:hypotheses';
+export const EXPERIMENTS_CARD_ID = 'experiments';
+export const EXPERIMENTS_SECTION_NODE_ID = 'section:experiments';
+export const EXPERIMENTS_ROOT_NODE_ID = 'root:experiments';
+export const DECISIONS_CARD_ID = 'decisions';
+export const DECISIONS_SECTION_NODE_ID = 'section:decisions';
+export const DECISIONS_ROOT_NODE_ID = 'root:decisions';
 
 interface SectionLink { source: string; target: string; label: string }
 // Методологическая цепочка разделов в верхнем слое: Теория → Диагноз → Стратегический выбор → Целевое состояние.
@@ -31,6 +40,9 @@ const SECTION_LINKS: SectionLink[] = [
   { source: SECTION_NODE_ID, target: DIAGNOSIS_SECTION_NODE_ID, label: 'проверяется диагнозом' },
   { source: DIAGNOSIS_SECTION_NODE_ID, target: STRATEGY_SECTION_NODE_ID, label: 'обосновывает выбор' },
   { source: STRATEGY_SECTION_NODE_ID, target: TARGET_SECTION_NODE_ID, label: 'задаёт цель' },
+  { source: TARGET_SECTION_NODE_ID, target: HYPOTHESES_SECTION_NODE_ID, label: 'порождает гипотезы' },
+  { source: HYPOTHESES_SECTION_NODE_ID, target: EXPERIMENTS_SECTION_NODE_ID, label: 'проверяются' },
+  { source: EXPERIMENTS_SECTION_NODE_ID, target: DECISIONS_SECTION_NODE_ID, label: 'обосновывают решения' },
 ];
 
 // Блоки Теории строго в порядке экрана (list = ключ списка в модели Теории, nameField — куда писать имя при +).
@@ -77,6 +89,13 @@ export const TARGET_BLOCKS: TargetBlockSpec[] = [
   { list: 'comparisonRows', title: 'Что изменится / сохранится', nameField: 'change', addable: false },
   { list: 'constraints', title: 'Ограничения', nameField: 'name', addable: true },
   { list: 'keyResults', title: 'Key results', nameField: 'name', addable: true },
+];
+
+export interface GenericSectionSpec { cardId: string; sectionId: string; rootId: string; title: string; rootTitle: string; blockTitle: string; primaryField: string; }
+export const GENERIC_GRAPH_SECTIONS: GenericSectionSpec[] = [
+  { cardId: HYPOTHESES_CARD_ID, sectionId: HYPOTHESES_SECTION_NODE_ID, rootId: HYPOTHESES_ROOT_NODE_ID, title: 'Гипотезы', rootTitle: 'Реестр гипотез', blockTitle: 'Гипотезы', primaryField: 'statement' },
+  { cardId: EXPERIMENTS_CARD_ID, sectionId: EXPERIMENTS_SECTION_NODE_ID, rootId: EXPERIMENTS_ROOT_NODE_ID, title: 'Проверки', rootTitle: 'План проверок', blockTitle: 'Проверки', primaryField: 'subject' },
+  { cardId: DECISIONS_CARD_ID, sectionId: DECISIONS_SECTION_NODE_ID, rootId: DECISIONS_ROOT_NODE_ID, title: 'Решения', rootTitle: 'Реестр решений', blockTitle: 'Решения', primaryField: 'statement' },
 ];
 
 // Каждая смысловая связь относится к СЕМЕЙСТВУ (принцип, виден по умолчанию) и имеет точный
@@ -132,6 +151,8 @@ export const ENTITY_COLORS: { list: string; title: string; color: string }[] = [
   { list: 'qualityTargets', title: 'Целевое качество', color: '#CA8A04' },
   { list: 'preserveTargets', title: 'Сохраняемое ядро', color: '#DB2777' },
   { list: 'keyResults', title: 'Key results', color: '#0891B2' },
+  { list: 'experiments', title: 'Проверки', color: '#0D9488' },
+  { list: 'decisions', title: 'Решения', color: '#16A34A' },
 ];
 const ENTITY_COLOR = new Map(ENTITY_COLORS.map(e => [e.list, e.color] as const));
 export const NEUTRAL_COLOR = '#475569';
@@ -187,6 +208,8 @@ export const RELATION_FAMILIES: RelationFamily[] = [
   { id: 'refute', label: 'опровержение', about: 'факт опровергает альтернативное объяснение', color: '#E11D48' },
   { id: 'checksTheory', label: 'проверка Теории', about: 'разрыв Диагноза проверяет блок Теории проекта', color: NEUTRAL_COLOR },
   { id: 'targetLevel', label: 'целевой уровень', about: 'Целевое состояние задаёт желаемый уровень для элемента Теории или Стратегии', color: '#0F766E' },
+  { id: 'testsHypothesis', label: 'проверяет гипотезу', about: 'проверка собирает факт для конкретной гипотезы', color: '#0D9488' },
+  { id: 'decisionBasis', label: 'основание решения', about: 'решение опирается на проверку, гипотезу или измеримый критерий', color: '#16A34A' },
 ];
 const FAMILY_LABEL = new Map(RELATION_FAMILIES.map(f => [f.id, f.label] as const));
 const familyLabel = (id: string): string => FAMILY_LABEL.get(id) ?? id;
@@ -235,6 +258,9 @@ function strategyCard(model: ProjectEditModel): EditableCard | undefined {
 function targetCard(model: ProjectEditModel): EditableCard | undefined {
   return model.editable_cards.find(c => c.card_id === TARGET_CARD_ID);
 }
+function editableCard(model: ProjectEditModel, cardId: string): EditableCard | undefined {
+  return model.editable_cards.find(c => c.card_id === cardId);
+}
 function missionStatement(card: EditableCard | undefined): string {
   const fields = card?.fields ?? [];
   const get = (k: string) => trimmed(fields.find(f => f.key === k)?.value);
@@ -262,6 +288,10 @@ function diagnosisStatement(card: EditableCard | undefined): string {
 function targetStatement(card: EditableCard | undefined): string {
   const fields = fieldsMap(card);
   return trimmed(fields.get('finalStatement')) || trimmed(fields.get('statement')) || trimmed(fields.get('objective')) || '';
+}
+function genericSectionStatement(card: EditableCard | undefined, primaryField: string): string {
+  const first = card?.lists[0]?.items.find(it => meaningful(it.label) || meaningful(it.values[primaryField]));
+  return trimmed(first?.label) || trimmed(first?.values[primaryField]) || '';
 }
 // Имя-опция разрыва в редакторе Диагноза: «N. <блок Теории>» (так хранятся ссылки relatedGap/confirms).
 const THEORY_BLOCK_TITLE = new Map<string, string>(PROJECT_THEORY_BLOCKS.map(b => [b.id, b.title]));
@@ -734,6 +764,103 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
   for (const keyResult of targetItemsByList.get('keyResults') ?? []) {
     const source = itemNodeId(TARGET_CARD_ID, 'keyResults', String(keyResult.id));
     refToItem(source, keyResult.values.metric, THEORY_CARD_ID, 'results', resultIdx, 'toResult', 'измеряет');
+  }
+
+  // Generic-разделы после целевого состояния: «Гипотезы» → «Проверки» → «Решения».
+  // У каждого generic-раздела один блок (повторяемые карточки экрана), а ref-связи берутся из
+  // select/multiselect-полей, зарегистрированных в ProjectFrameworkSectionCanvas.
+  const genericItemsByCard = new Map<string, EditableItem[]>();
+  const genericLabelIndex = new Map<string, Map<string, string>>();
+  for (const spec of GENERIC_GRAPH_SECTIONS) {
+    const generic = editableCard(m, spec.cardId);
+    nodes.push({
+      id: spec.sectionId, type: 'sectionNode',
+      data: { kind: 'section', cardId: spec.cardId, title: spec.title, subtitle: 'Раздел проекта' },
+    });
+    edges.push({ id: `section:${spec.cardId}->root`, source: spec.sectionId, target: spec.rootId, kind: 'section', label: spec.title.toLowerCase() });
+    nodes.push({
+      id: spec.rootId, type: 'missionNode',
+      data: { kind: 'mission', cardId: spec.cardId, title: spec.rootTitle, statement: genericSectionStatement(generic, spec.primaryField), isEmpty: !generic?.lists[0]?.items.some(it => hasContent(it)) },
+    });
+
+    const list = spec.cardId;
+    const key = expandKey(spec.cardId, list);
+    const items = (generic?.lists[0]?.items ?? []).filter(it => hasContent(it));
+    genericItemsByCard.set(spec.cardId, items);
+    genericLabelIndex.set(spec.cardId, itemByLabel(items));
+    nodes.push({
+      id: blockNodeId(spec.cardId, list), type: 'blockNode',
+      data: {
+        kind: 'block', cardId: spec.cardId, list, title: spec.blockTitle, index: 0, nameField: '__cardName', expandKey: key,
+        itemCount: items.length, isEmpty: items.length === 0, expanded: expanded.has(key), expandable: items.length > 0, addable: true,
+      },
+    });
+    edges.push({ id: `origin:${spec.cardId}:${list}`, source: spec.rootId, target: blockNodeId(spec.cardId, list), kind: 'origin' });
+
+    if (expanded.has(key)) {
+      for (const it of items) {
+        const nid = itemNodeId(spec.cardId, list, String(it.id));
+        presentItems.add(nid);
+        nodes.push({ id: nid, type: 'itemNode', data: { kind: 'item', cardId: spec.cardId, list, itemId: String(it.id), label: it.label, blockTitle: spec.blockTitle } });
+        edges.push({ id: `containment:${nid}`, source: blockNodeId(spec.cardId, list), target: nid, kind: 'containment' });
+      }
+    }
+  }
+
+  const refToRootByLabel = (source: string, raw: string | undefined, target: string, labels: string[], family: string, verb: string) => {
+    if (!presentItems.has(source)) return;
+    const allowed = new Set(labels.flatMap(label => tokenize(label)));
+    if (tokenize(raw).some(token => allowed.has(token))) targetRef(source, target, family, verb);
+  };
+  const strategyRootLabels = [
+    strategyFields.get('acceptedChoice'),
+    strategyFields.get('howApproach'),
+    strategyFields.get('howToWin'),
+    strategyFields.get('guidingPolicy'),
+    strategyFields.get('whereToPlay'),
+  ].map(v => v ?? '').filter(Boolean);
+  const strategyActionIdx = strategyLabelIndex.get('actions') ?? new Map();
+  const strategyHypothesisIdx = strategyLabelIndex.get('hypotheses') ?? new Map();
+  const targetResultIdx = targetLabelIndex.get('results') ?? new Map();
+  const targetKeyResultIdx = targetLabelIndex.get('keyResults') ?? new Map();
+  const targetQualityIdx = targetLabelIndex.get('qualityTargets') ?? new Map();
+  const targetConstraintIdx = targetLabelIndex.get('constraints') ?? new Map();
+  const targetPreserveIdx = targetLabelIndex.get('preserveTargets') ?? new Map();
+  const hypothesesIdx = genericLabelIndex.get(HYPOTHESES_CARD_ID) ?? new Map();
+  const experimentsIdx = genericLabelIndex.get(EXPERIMENTS_CARD_ID) ?? new Map();
+
+  for (const hypothesis of genericItemsByCard.get(HYPOTHESES_CARD_ID) ?? []) {
+    const source = itemNodeId(HYPOTHESES_CARD_ID, HYPOTHESES_CARD_ID, String(hypothesis.id));
+    refToItem(source, hypothesis.values.strategicChoice, STRATEGY_CARD_ID, 'capabilities', strategyCapabilityIdx, 'testsChoice', 'проверяет выбор');
+    refToItem(source, hypothesis.values.strategicChoice, STRATEGY_CARD_ID, 'actions', strategyActionIdx, 'testsChoice', 'проверяет действие');
+    refToRootByLabel(source, hypothesis.values.strategicChoice, STRATEGY_ROOT_NODE_ID, strategyRootLabels, 'testsChoice', 'проверяет выбор');
+  }
+
+  for (const experiment of genericItemsByCard.get(EXPERIMENTS_CARD_ID) ?? []) {
+    const source = itemNodeId(EXPERIMENTS_CARD_ID, EXPERIMENTS_CARD_ID, String(experiment.id));
+    refToItem(source, experiment.values.hypothesis, HYPOTHESES_CARD_ID, HYPOTHESES_CARD_ID, hypothesesIdx, 'testsHypothesis', 'проверяет');
+    refToItem(source, experiment.values.hypothesis, STRATEGY_CARD_ID, 'hypotheses', strategyHypothesisIdx, 'testsHypothesis', 'проверяет');
+    refToItem(source, experiment.values.metric, THEORY_CARD_ID, 'results', resultIdx, 'toResult', 'измеряет');
+    refToItem(source, experiment.values.metric, TARGET_CARD_ID, 'results', targetResultIdx, 'toResult', 'измеряет');
+    refToItem(source, experiment.values.metric, TARGET_CARD_ID, 'keyResults', targetKeyResultIdx, 'toResult', 'измеряет');
+    refToItem(source, experiment.values.metric, THEORY_CARD_ID, 'quality', qualityIdx, 'targetLevel', 'измеряет качество');
+    refToItem(source, experiment.values.metric, TARGET_CARD_ID, 'qualityTargets', targetQualityIdx, 'targetLevel', 'измеряет качество');
+    refToItem(source, experiment.values.constraints, THEORY_CARD_ID, 'constraints', constraintIdx, 'withinLimit', 'учитывает');
+    refToItem(source, experiment.values.constraints, TARGET_CARD_ID, 'constraints', targetConstraintIdx, 'withinLimit', 'учитывает');
+  }
+
+  for (const decision of genericItemsByCard.get(DECISIONS_CARD_ID) ?? []) {
+    const source = itemNodeId(DECISIONS_CARD_ID, DECISIONS_CARD_ID, String(decision.id));
+    refToItem(source, decision.values.checkResult, EXPERIMENTS_CARD_ID, EXPERIMENTS_CARD_ID, experimentsIdx, 'decisionBasis', 'основано на проверке');
+    refToItem(source, decision.values.relatedHypothesis, HYPOTHESES_CARD_ID, HYPOTHESES_CARD_ID, hypothesesIdx, 'decisionBasis', 'основано на гипотезе');
+    refToItem(source, decision.values.relatedHypothesis, STRATEGY_CARD_ID, 'hypotheses', strategyHypothesisIdx, 'decisionBasis', 'основано на гипотезе');
+    refToItem(source, decision.values.relatedCriterion, THEORY_CARD_ID, 'results', resultIdx, 'toResult', 'влияет на результат');
+    refToItem(source, decision.values.relatedCriterion, TARGET_CARD_ID, 'results', targetResultIdx, 'toResult', 'влияет на результат');
+    refToItem(source, decision.values.relatedCriterion, TARGET_CARD_ID, 'keyResults', targetKeyResultIdx, 'toResult', 'влияет на KR');
+    refToItem(source, decision.values.constraints, THEORY_CARD_ID, 'constraints', constraintIdx, 'withinLimit', 'соблюдает');
+    refToItem(source, decision.values.constraints, TARGET_CARD_ID, 'constraints', targetConstraintIdx, 'withinLimit', 'соблюдает');
+    refToItem(source, decision.values.preserve, THEORY_CARD_ID, 'preserve', preserveIdx, 'targetLevel', 'сохраняет');
+    refToItem(source, decision.values.preserve, TARGET_CARD_ID, 'preserveTargets', targetPreserveIdx, 'targetLevel', 'сохраняет');
   }
 
   return { nodes, edges };

@@ -424,6 +424,50 @@ describe('applyProjectEdit (complex cards)', () => {
     expect(form.targetResults[0].criterion).toBe('Рост выручки');
   });
 
+  it('generic sections: гипотезы/проверки/решения видят и нормализуют ref-поля', () => {
+    applyProjectEdit(PROJECT_ID, { id: 'r', op: 'add_item', card_id: 'project-theory', list: 'results', human: 'add', values: { statement: 'Рост выручки' } });
+    applyProjectEdit(PROJECT_ID, { id: 'c', op: 'add_item', card_id: 'project-theory', list: 'constraints', human: 'add', values: { statement: 'Без остановки продаж' } });
+    applyProjectEdit(PROJECT_ID, { id: 's', op: 'add_item', card_id: 'strategic-choice', list: 'capabilities', human: 'add', values: { name: 'Интеграция данных' } });
+
+    let model = buildProjectEditModel(PROJECT_ID);
+    const hypotheses = model.editable_cards.find(c => c.card_id === 'hypotheses')!;
+    expect(hypotheses.lists[0].item_fields!.find(f => f.key === 'strategicChoice')!.options).toContain('Интеграция данных');
+
+    const hypRes = applyProjectEdit(PROJECT_ID, {
+      id: 'h', op: 'add_item', card_id: 'hypotheses', human: 'add',
+      values: { __cardName: 'H1', statement: 'Если X, то Y', strategicChoice: 'интеграция' },
+    });
+    expect(hypRes.ok).toBe(true);
+    expect(records('hypotheses')[0].values.strategicChoice).toBe('Интеграция данных');
+
+    model = buildProjectEditModel(PROJECT_ID);
+    const experiments = model.editable_cards.find(c => c.card_id === 'experiments')!;
+    expect(experiments.lists[0].item_fields!.find(f => f.key === 'hypothesis')!.options).toContain('H1');
+    expect(experiments.lists[0].item_fields!.find(f => f.key === 'metric')!.options).toContain('Рост выручки');
+
+    const expRes = applyProjectEdit(PROJECT_ID, {
+      id: 'e', op: 'add_item', card_id: 'experiments', human: 'add',
+      values: { __cardName: 'E1', subject: 'Пилот', hypothesis: 'h1', metric: 'выручки', constraints: 'остановки продаж' },
+    });
+    expect(expRes.ok).toBe(true);
+    expect(records('experiments')[0].values.hypothesis).toBe('H1');
+    expect(records('experiments')[0].values.metric).toBe('Рост выручки');
+    expect(records('experiments')[0].values.constraints).toBe('Без остановки продаж');
+
+    model = buildProjectEditModel(PROJECT_ID);
+    const decisions = model.editable_cards.find(c => c.card_id === 'decisions')!;
+    expect(decisions.lists[0].item_fields!.find(f => f.key === 'checkResult')!.options).toContain('E1');
+
+    const decRes = applyProjectEdit(PROJECT_ID, {
+      id: 'd', op: 'add_item', card_id: 'decisions', human: 'add',
+      values: { __cardName: 'D1', statement: 'Запустить', checkResult: 'e1', relatedHypothesis: 'h1', relatedCriterion: 'выручки', constraints: 'остановки продаж' },
+    });
+    expect(decRes.ok).toBe(true);
+    expect(records('decisions')[0].values.checkResult).toBe('E1');
+    expect(records('decisions')[0].values.relatedHypothesis).toBe('H1');
+    expect(records('decisions')[0].values.relatedCriterion).toBe('Рост выручки');
+  });
+
   it('target-state: methodologist sees and fills the comparison table (change/preserve)', () => {
     // Канвас сохраняет фиксированные строки сравнения только в lossless-form; сидим минимальный снапшот.
     writeProjectTargetStateSnapshot(PROJECT_ID, {

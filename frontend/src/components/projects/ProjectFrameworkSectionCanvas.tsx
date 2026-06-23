@@ -15,6 +15,8 @@ type FieldDef = {
   label: string;
   type?: FieldType;
   options?: string[];
+  refOptions?: string[];
+  refTargetTitle?: string;
   placeholder?: string;
 };
 
@@ -224,6 +226,10 @@ export function createConfigs(sources: SourceContext): Record<string, ScreenConf
     ...sources.strategy.capabilities.map(item => item.label),
     ...sources.strategy.actions.map(item => item.label),
   ].filter(Boolean)));
+  const resultRefOptions = sources.resultOptions;
+  const constraintRefOptions = sources.constraintOptions;
+  const qualityRefOptions = sources.qualityOptions;
+  const preserveRefOptions = sources.preserveOptions;
 
   return {
     'strategy-map': {
@@ -277,8 +283,8 @@ export function createConfigs(sources: SourceContext): Record<string, ScreenConf
         { key: 'source', label: 'Источник гипотезы', type: 'select', options: ['диагноз', 'стратегический выбор', 'целевое состояние', 'стратегическая карта', 'ограничение', 'качество', 'компетенция'] },
         { key: 'type', label: 'Тип гипотезы', type: 'select', options: ['причинно-следственная', 'клиентская', 'операционная', 'финансовая', 'компетентностная', 'ограничение / риск'] },
         { key: 'statement', label: 'Формулировка если → то → потому что', type: 'textarea' },
-        { key: 'strategicChoice', label: 'Связанный стратегический выбор', type: 'select', options: strategyChoiceOptions },
-        { key: 'mapNode', label: 'Связанный узел стратегической карты', type: 'select', options: strategyMapOptions },
+        { key: 'strategicChoice', label: 'Связанный стратегический выбор', type: 'select', options: strategyChoiceOptions, refOptions: strategyChoiceOptions, refTargetTitle: 'элемент Стратегического выбора' },
+        { key: 'mapNode', label: 'Связанный узел стратегической карты', type: 'select', options: strategyMapOptions, refOptions: strategyMapOptions, refTargetTitle: 'узел стратегической карты' },
         { key: 'expectedEffect', label: 'Ожидаемый эффект' },
         { key: 'confirmFact', label: 'Факт подтверждения', type: 'textarea' },
         { key: 'refuteFact', label: 'Факт опровержения', type: 'textarea' },
@@ -304,10 +310,10 @@ export function createConfigs(sources: SourceContext): Record<string, ScreenConf
         { title: 'Метрики результата', value: compactJoin([s.target.keyResults[0]?.label, s.target.results[0]?.label]) || 'Сначала заполните целевые результаты', note: 'Порог проверки лучше связывать с KR/KPI/качеством.' },
       ],
       fields: [
-        { key: 'hypothesis', label: 'Проверяемая гипотеза', type: 'select', options: hypothesisOptions },
+        { key: 'hypothesis', label: 'Проверяемая гипотеза', type: 'select', options: hypothesisOptions, refOptions: hypothesisOptions, refTargetTitle: 'гипотеза' },
         { key: 'subject', label: 'Что проверяем', type: 'textarea' },
         { key: 'method', label: 'Метод проверки', type: 'select', options: ['анализ данных', 'пилот', 'интервью', 'опрос', 'аудит процесса', 'наблюдение', 'сравнение периодов', 'сравнение сегментов', 'проверка KPI', 'приемка результата'] },
-        { key: 'metric', label: 'Проверяемая метрика', type: 'select', options: [...resultOptions, ...qualityOptions] },
+        { key: 'metric', label: 'Проверяемая метрика', type: 'select', options: [...resultOptions, ...qualityOptions], refOptions: [...resultRefOptions, ...qualityRefOptions], refTargetTitle: 'критерий результата или показатель качества' },
         { key: 'baseline', label: 'Базовое значение' },
         { key: 'confirmThreshold', label: 'Порог подтверждения' },
         { key: 'refuteThreshold', label: 'Порог опровержения' },
@@ -315,7 +321,7 @@ export function createConfigs(sources: SourceContext): Record<string, ScreenConf
         { key: 'period', label: 'Период проверки' },
         { key: 'owner', label: 'Ответственный за проверку', placeholder: ownerPlaceholder },
         { key: 'resource', label: 'Стоимость / ресурс проверки' },
-        { key: 'constraints', label: 'Ограничения проверки', type: 'select', options: constraintOptions },
+        { key: 'constraints', label: 'Ограничения проверки', type: 'select', options: constraintOptions, refOptions: constraintRefOptions, refTargetTitle: 'ограничение' },
         { key: 'result', label: 'Результат проверки', type: 'select', options: ['подтверждена', 'опровергнута', 'недостаточно данных'] },
         { key: 'fact', label: 'Полученный факт', type: 'textarea' },
         { key: 'nextAction', label: 'Следующее действие', type: 'select', options: ['принять решение', 'продлить проверку', 'изменить гипотезу', 'остановить инициативу', 'пересмотреть стратегический выбор'] },
@@ -341,14 +347,14 @@ export function createConfigs(sources: SourceContext): Record<string, ScreenConf
         { key: 'type', label: 'Тип решения', type: 'select', options: ['подтвердить выбор', 'изменить выбор', 'запустить инициативу', 'остановить инициативу', 'изменить KPI', 'изменить процесс', 'изменить ограничение', 'пересмотреть диагноз', 'ничего не делать'] },
         { key: 'statement', label: 'Формулировка решения', type: 'textarea' },
         { key: 'confirmFact', label: 'Почему принято: подтверждающий факт', type: 'textarea' },
-        { key: 'checkResult', label: 'Почему принято: результат проверки', type: 'select', options: experimentOptions },
-        { key: 'relatedHypothesis', label: 'Почему принято: связанная гипотеза', type: 'select', options: hypothesisOptions },
-        { key: 'relatedCriterion', label: 'Почему принято: связанный критерий результата', type: 'select', options: resultOptions },
+        { key: 'checkResult', label: 'Почему принято: результат проверки', type: 'select', options: experimentOptions, refOptions: experimentOptions, refTargetTitle: 'проверка' },
+        { key: 'relatedHypothesis', label: 'Почему принято: связанная гипотеза', type: 'select', options: hypothesisOptions, refOptions: hypothesisOptions, refTargetTitle: 'гипотеза' },
+        { key: 'relatedCriterion', label: 'Почему принято: связанный критерий результата', type: 'select', options: resultOptions, refOptions: resultRefOptions, refTargetTitle: 'критерий результата' },
         { key: 'alternatives', label: 'Альтернативы', type: 'textarea' },
         { key: 'excluded', label: 'Что исключаем / trade-off', type: 'textarea' },
         { key: 'guidingPolicy', label: 'Связь с guiding policy', type: 'textarea' },
-        { key: 'constraints', label: 'Ограничения решения', type: 'select', options: constraintOptions },
-        { key: 'preserve', label: 'Что нельзя разрушить', type: 'select', options: preserveOptions },
+        { key: 'constraints', label: 'Ограничения решения', type: 'select', options: constraintOptions, refOptions: constraintRefOptions, refTargetTitle: 'ограничение' },
+        { key: 'preserve', label: 'Что нельзя разрушить', type: 'select', options: preserveOptions, refOptions: preserveRefOptions, refTargetTitle: 'сохраняемое ядро' },
         { key: 'actions', label: 'Действия для реализации', type: 'textarea' },
         { key: 'owner', label: 'Ответственный за решение', placeholder: ownerPlaceholder },
         { key: 'approver', label: 'Кто утверждает', placeholder: ownerPlaceholder },
