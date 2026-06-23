@@ -106,6 +106,8 @@ function SectionNode({ data }: NodeProps) {
   const d = data as unknown as SectionNodeData;
   return (
     <div className="pg-section" onClick={d.onOpen} role="button" title="Открыть раздел">
+      <Handle type="target" position={Position.Left} id="l" />
+      <Handle type="source" position={Position.Right} id="r" />
       <Handle type="source" position={Position.Bottom} id="b" />
       <span className="pg-section-kicker">{d.subtitle}</span>
       <b className="pg-section-title">{d.title}</b>
@@ -211,6 +213,7 @@ function layout(model: TheoryNode[]): Node[] {
 // handles по типу ребра
 function handlesFor(kind: TheoryEdgeKind, source: string): [string, string] {
   if (kind === 'section') return ['b', 't'];           // раздел (низ) → Миссия (верх), прямой столбец
+  if (kind === 'sectionLink') return ['r', 'l'];       // карточка-раздел → следующая карточка-раздел
   if (kind === 'origin') return ['b', 'l'];           // Миссия (низ) → блок (лево)
   if (kind === 'containment') return ['r', 'l'];       // блок (право) → элемент (лево)
   return [source === MISSION_NODE_ID || source.startsWith('root:') ? 'r' : 'rs', 'rt']; // ref: справа источника → справа цели
@@ -339,8 +342,16 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     const rf: Edge[] = graph.edges.map(e => {
       const isRef = e.kind === 'ref';
       const [sourceHandle, targetHandle] = handlesFor(e.kind, e.source);
+      const sourceColumn = columnOfCard(nodeCard(e.source));
       const offset = edgeColumn(e) * SECTION_COLUMN_W;
-      const rail = e.kind === 'origin' ? TRUNK_X + offset : e.kind === 'section' ? COL_CENTER_X + offset : CHILD_RAIL_X + offset;
+      const sectionLinkRail = BLOCK_X + sourceColumn * SECTION_COLUMN_W + MISSION_W + (SECTION_COLUMN_W - MISSION_W) / 2;
+      const rail = e.kind === 'sectionLink'
+        ? sectionLinkRail
+        : e.kind === 'origin'
+          ? TRUNK_X + offset
+          : e.kind === 'section'
+            ? COL_CENTER_X + offset
+            : CHILD_RAIL_X + offset;
       const hot = hoveredEdge === e.id || pinnedEdges.has(e.id);
       const vis = edgeVisual(e.kind, e.target);
       const width = vis.width + (hot ? 1.5 : 0);

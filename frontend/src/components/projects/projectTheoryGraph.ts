@@ -18,6 +18,11 @@ export const STRATEGY_CARD_ID = 'strategic-choice';
 export const STRATEGY_SECTION_NODE_ID = 'section:strategic-choice';
 export const STRATEGY_ROOT_NODE_ID = 'root:strategic-choice';
 
+interface SectionLink { source: string; target: string; label: string }
+const SECTION_LINKS: SectionLink[] = [
+  { source: SECTION_NODE_ID, target: STRATEGY_SECTION_NODE_ID, label: 'задаёт контекст' },
+];
+
 // Блоки Теории строго в порядке экрана (list = ключ списка в модели Теории, nameField — куда писать имя при +).
 export interface TheoryBlockSpec { list: string; title: string; nameField: string; }
 export const THEORY_BLOCKS: TheoryBlockSpec[] = [
@@ -98,7 +103,7 @@ export const EDGE_FAMILIES: { family: EdgeFamily; title: string; dash: string; w
   { family: 'semantic', title: 'Смысловая связь', dash: SEMANTIC_DASH, width: 2 },
 ];
 const FAMILY_BY_KIND: Record<TheoryEdgeKind, EdgeFamily> = {
-  section: 'structural', origin: 'decomposition', containment: 'containment', ref: 'semantic',
+  section: 'structural', sectionLink: 'structural', origin: 'decomposition', containment: 'containment', ref: 'semantic',
 };
 const FAMILY_STYLE = new Map(EDGE_FAMILIES.map(f => [f.family, f] as const));
 
@@ -152,7 +157,7 @@ export type TheoryNode =
   | { id: string; type: 'blockNode'; data: TheoryBlockData }
   | { id: string; type: 'itemNode'; data: TheoryItemData };
 
-export type TheoryEdgeKind = 'section' | 'origin' | 'ref' | 'containment';
+export type TheoryEdgeKind = 'section' | 'sectionLink' | 'origin' | 'ref' | 'containment';
 // family — подпись-семейство (по умолчанию на карте), verb — точный глагол (показываем по наведению).
 export interface TheoryEdge { id: string; source: string; target: string; kind: TheoryEdgeKind; label?: string; family?: string; verb?: string; }
 export interface TheoryGraph { nodes: TheoryNode[]; edges: TheoryEdge[]; }
@@ -307,6 +312,10 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     data: { kind: 'section', cardId: STRATEGY_CARD_ID, title: 'Стратегический выбор', subtitle: 'Раздел проекта' },
   });
   edges.push({ id: 'section:strategy->root', source: STRATEGY_SECTION_NODE_ID, target: STRATEGY_ROOT_NODE_ID, kind: 'section', label: 'выбор' });
+
+  for (const link of SECTION_LINKS) {
+    edges.push({ id: `section-link:${link.source}->${link.target}`, source: link.source, target: link.target, kind: 'sectionLink', label: link.label });
+  }
 
   nodes.push({
     id: STRATEGY_ROOT_NODE_ID, type: 'missionNode',

@@ -2,6 +2,45 @@
 
 Этот файл нужен, чтобы любые изменения из lab-веток можно было понятно перенести в основной репозиторий. Формат рассчитан и на человека, и на ИИ: заголовки стабильные, факты отделены от заметок, команды тестов указаны явно.
 
+## Визуальная связь карточек разделов в графе «Весь проект»
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-23
+- Цель: показать визуальную связь между карточками разделов верхнего слоя на экране «Весь проект».
+
+### Что реализовано
+
+- По инструкции из `THEORY_GRAPH.md` добавлена отдельная каркасная связь между section-карточками:
+  - `Теория проекта` → `Стратегический выбор`.
+- Связь вынесена в отдельный тип `sectionLink`, чтобы не смешивать её со смысловыми `ref`-связями элементов.
+- В React Flow для `sectionNode` добавлены left/right handles, а рендер дерева научен прокладывать горизонтальную линию между карточками-разделами.
+- `THEORY_GRAPH.md` не изменялся.
+- Выполнен `npm.cmd run build`, поэтому обновлены hash-файлы в `frontend/dist`.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/projectTheoryGraph.ts` - добавлен реестр и тип каркасной связи `sectionLink`.
+- `frontend/src/components/projects/ProjectDependencyGraph.tsx` - добавлены handles и маршрут линии между section-карточками.
+- `frontend/src/components/projects/projectTheoryGraph.test.ts` - тест на связь `sectionLink`.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновлены build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run test -- projectTheoryGraph.test.ts` в `frontend` - успешно, 9 тестов.
+- `npm.cmd exec eslint src/components/projects/projectTheoryGraph.ts src/components/projects/ProjectDependencyGraph.tsx src/components/projects/projectTheoryGraph.test.ts` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- Сейчас визуальная межсекционная связь добавлена только для `Теория проекта → Стратегический выбор`.
+- Когда экран «Диагноз» будет готов, его нужно вставить в этот верхний слой отдельной карточкой и перестроить цепочку разделов.
+
+---
+
 ## Инструкция по заполнению
 
 Для каждого нового блока изменений добавляй отдельный раздел по шаблону ниже. Не смешивай несколько крупных задач в один блок, если они могут переноситься независимо.
