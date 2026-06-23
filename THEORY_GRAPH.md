@@ -28,8 +28,13 @@
 | [`frontend/src/components/projects/ProjectTheoryCanvas.tsx`](frontend/src/components/projects/ProjectTheoryCanvas.tsx) | Живой редактор Теории (где пользователь заполняет поля; хранит **id**) |
 | [`frontend/src/components/projects/projectTheorySnapshot.ts`](frontend/src/components/projects/projectTheorySnapshot.ts) | Чтение/запись снапшота Теории (localStorage) |
 
-Тесты: [`projectTheoryGraph.test.ts`](frontend/src/components/projects/projectTheoryGraph.test.ts) (модель графа),
-[`projectTheoryCards.test.ts`](frontend/src/components/projects/projectTheoryCards.test.ts) (гарда ссылок Методолога).
+Тесты: [`projectTheoryGraph.test.ts`](frontend/src/components/projects/projectTheoryGraph.test.ts) (модель графа, вкл. Диагноз),
+[`projectTheoryCards.test.ts`](frontend/src/components/projects/projectTheoryCards.test.ts) (гарда ссылок Теории),
+[`projectEditApplier.test.ts`](frontend/src/components/projects/projectEditApplier.test.ts) (опции/нормализация связей Диагноза),
+[`projectCardValidation.test.ts`](frontend/src/components/projects/projectCardValidation.test.ts) (аудит связей в отчёте).
+
+> Документ изначально про «Теорию», но экран и механика связей теперь охватывают несколько разделов
+> (Теория → Диагноз → Стратегический выбор). Специфика Диагноза — §9–§10.
 
 ---
 
@@ -194,8 +199,12 @@ ProjectDependencyGraph (React Flow)          ← раскладка + касто
 - **ИИ-Методолог** (`applyTheoryEdit`) присылает текст, но перед записью **резолвит его в ID
   существующего элемента**: id → точная метка → **однозначное** частичное совпадение.
   Если элемент не найден — **сырой текст не пишется**, а в ответ идёт просьба
-  «Сначала добавьте элемент …». Эта гарда — **только в Теории** (другие разделы пишут текст
-  без проверки; см. их аппликаторы в `projectEditApplier.ts`).
+  «Сначала добавьте элемент …».
+- **Сложные карточки (Диагноз)** теперь гардят поля-ссылки тем же принципом, но через общий
+  механизм: реестр `refFields` в [`projectComplexCards.ts`](frontend/src/components/projects/projectComplexCards.ts)
+  задаёт цель связи и **динамические опции** (существующие элементы); `resolveRefOption`/`normalizeRefFields`
+  при применении приводят значение к канонической опции, а ненайденное не пишут (`refMissingMessage`).
+  То есть гарда **больше не только в Теории** (подробности — §10).
 
 ---
 
@@ -217,8 +226,11 @@ ProjectDependencyGraph (React Flow)          ← раскладка + касто
    `section → корень раздела`. Межсекционные связи (раздел↔раздел) описывай отдельным реестром
    и резолвь по реальным `*Ref`-полям (часть уже есть в
    [`projectCrossRefs.ts`](frontend/src/components/projects/projectCrossRefs.ts)).
-6. **Гарда ссылок в аппликаторе** раздела (как в Теории): нет id → не писать текст, просить
-   добавить элемент. Сейчас это реализовано только для Теории — при расширении вынеси в общий хелпер.
+6. **Гарда ссылок в аппликаторе** раздела: нет цели → не писать текст, просить добавить элемент.
+   Для сложных карточек уже есть **переиспользуемый** механизм — `refFields` + `normalizeRefFields`
+   в [`projectComplexCards.ts`](frontend/src/components/projects/projectComplexCards.ts) (срабатывает в
+   `applyComplexEdit`); Теория делает то же своим `applyTheoryEdit`. Новый раздел подключается к этому
+   механизму, а не дублирует его (см. §10).
 
 **Главный инвариант:** на графе визуализируются только реально предусмотренные в проекте
 зависимости (из полей-ссылок), плюс методологический каркас. Любую новую связь сначала заводи
@@ -270,3 +282,56 @@ ProjectDependencyGraph (React Flow)          ← раскладка + касто
 теперь есть target-handle `rt` (как у элементов), чтобы `BusEdge` корректно приходил справа. Кросс-связь
 «разрыв → блок Теории» раскрашивается по сущности-цели Теории (цвет блока), остальные — по сущности
 Диагноза (`gaps`/`facts`/`symptoms` в `ENTITY_COLORS`).
+
+---
+
+## 10. Методолог: видит, заполняет и проверяет связи Диагноза
+
+Те же поля-ссылки, что визуализирует граф, теперь умеет **корректно заполнять** ИИ-Методолог (единый
+источник — данные карточки, а не отдельная «графовая» правда):
+
+- **Видит варианты.** В модели правок каждое поле-ссылка Диагноза отдаёт **динамические опции** —
+  существующие цели: `relatedGap`→разрывы, `confirmingFact`/`alternatives.confirms`/`alternatives.refutes`→факты,
+  `facts.confirms`→симптомы + разрывы + «Диагностическое суждение». Реестр — `refFields` в
+  [`projectComplexCards.ts`](frontend/src/components/projects/projectComplexCards.ts); опции считаются из
+  текущего `form` (`listItemFields(listSpec, items, form)`). Модель выбирает существующий элемент, а не
+  пишет произвольный текст. Имена разрывов — те же `«N. <блок Теории>»`, что и в редакторе/графе.
+- **Гарда на применении.** `resolveRefOption`/`normalizeRefFields` приводят присланное значение к
+  канонической опции (точное → без регистра → однозначное частичное); ненайденное **не пишется**, в ответ —
+  `refMissingMessage` («Не нашёл цель для связи… сначала добавьте/назовите элемент»). Связи ставятся
+  **только к уже существующим** целям (без досоздания ради связи) — иначе ответ раздувается.
+- **Аудит в RAG.** `buildDiagnosisLinks` ([`projectCardValidation.ts`](frontend/src/components/projects/projectCardValidation.ts))
+  выводит поля-связи в «кратком отчёте» для оценки (иначе они в выжимку не попадают) и помечает
+  незаполненные `⚠`; правило вынесено и в `REVIEW_SYSTEM_PROMPT` — Методолог понижает RAG (amber/red)
+  и кладёт пробелы в `missing`.
+- **Заполнение по частям.** Кнопка «Заполнить по плану» ([`ProjectMethodologist.tsx`](frontend/src/components/projects/ProjectMethodologist.tsx))
+  заполняет карточку **по одному списку за запрос** (плюс отдельный проход на скаляры): каждый вызов мал
+  и не упирается в таймаут, но модель в каждом запросе видит всю карточку — полнота и связность
+  сохраняются. Однолистовые карточки/без фокуса — одним запросом.
+
+> Инвариант остаётся: и граф, и Методолог работают с одними и теми же структурными полями-ссылками.
+> Новую связь сначала заводи как поле-ссылку (+`refFields` для опций/гарды), потом — в реестр графа.
+
+---
+
+## 11. Стратегический выбор: связи на том же механизме
+
+Раздел «Стратегический выбор» рисует те же `ref`-связи, что и Теория/Диагноз (граф строит их в
+[`projectTheoryGraph.ts`](frontend/src/components/projects/projectTheoryGraph.ts) — корень→выбранная
+альтернатива, действие/гипотеза→альтернатива, capability→компетенция Теории). Раньше эти поля
+**не были** зарегистрированы как `refFields`, поэтому ИИ-Методолог их не видел и не заполнял —
+на графе Стратвыбора связи не появлялись, хотя код графа корректен. Теперь поля подключены к тому же
+механизму ([`projectComplexCards.ts`](frontend/src/components/projects/projectComplexCards.ts)):
+
+| Поле-источник | → цель | опции (`refFields`/`refOptions`) |
+|---|---|---|
+| `actions.supportsChoice` | стратегическая альтернатива | `choiceAlternativeNames` (из `form.alternatives`) |
+| `hypotheses.choiceLink` | стратегическая альтернатива | `choiceAlternativeNames` |
+| `capabilities.competency` | компетенция Теории (**кросс-карточно**) | `theoryCompetencyNames(projectId)` — из снапшота Теории |
+| `selectedAlternative` (скаляр) | стратегическая альтернатива | `refOptions` скаляра (новый хук `ComplexScalarField.refOptions`) |
+
+Две доработки общего механизма: (1) `ComplexRefField.options(form, projectId)` получает `projectId` —
+для **кросс-карточных** опций (компетенции Теории не лежат в `form` Стратвыбора); (2) у скаляров
+появился `refOptions`/`refTargetTitle` — динамические опции + гарда в `applyComplexEdit`
+(`update_field`), как у списочных `refFields`. Диагноз не затронут (его опции — из своего `form`).
+Тесты — в [`projectEditApplier.test.ts`](frontend/src/components/projects/projectEditApplier.test.ts).
