@@ -4,9 +4,11 @@ import type { Project } from '../../types/projects';
 
 interface ProjectToolbarProps {
   project: Project;
+  onComposeProject?: () => void;
+  composingProject?: boolean;
 }
 
-export default function ProjectToolbar({ project }: ProjectToolbarProps) {
+export default function ProjectToolbar({ project, onComposeProject, composingProject = false }: ProjectToolbarProps) {
   return (
     <div className="project-toolbar">
       <div className="project-toolbar-main">
@@ -19,6 +21,15 @@ export default function ProjectToolbar({ project }: ProjectToolbarProps) {
         </div>
       </div>
       <div className="project-toolbar-actions">
+        <button
+          className="btn btn-primary btn-sm"
+          type="button"
+          onClick={onComposeProject}
+          disabled={!onComposeProject || composingProject}
+        >
+          {composingProject ? <span className="spinner" /> : <Icon name="sparkle" size={15} />}
+          Композиция проекта
+        </button>
         <Link to={`/clients/${project.client_id}`} className="btn btn-ghost btn-sm">
           <Icon name="users" size={15} />Клиент
         </Link>

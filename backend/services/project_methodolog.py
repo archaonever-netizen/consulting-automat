@@ -18,7 +18,7 @@ import json
 import logging
 import re
 
-from .knowledge_search import search, SearchHit
+from .knowledge_search import SearchHit, search
 from .methodolog import (
     METHODOLOG_MODEL,
     MAX_EVIDENCE,
@@ -397,6 +397,65 @@ PLAN_INSTRUCTION = (
     "questions только реально оставшиеся вопросы (пустой массив [], если всё ясно для заполнения). "
     "Пользователь ответит на вопросы и нажмёт «Заполнить по плану». Пиши по-русски."
 )
+
+
+COMPOSITION_SYSTEM_PROMPT = (
+    "Ты — ИИ-Методолог проекта. Твоя задача — собрать композицию проекта: "
+    "стройный, связный русский текст, "
+    "который полностью отображает информацию, уже внесённую в карточки проекта.\n\n"
+    "ЖЁСТКИЕ ПРАВИЛА:\n"
+    "1. Используй ТОЛЬКО данные из PROJECT_MODEL. Не используй внешние знания, "
+    "методологии, память, догадки или типовые шаблоны.\n"
+    "2. Ничего не придумывай и не дополняй. Если поле пустое или данных нет — "
+    "не заполняй его смыслом от себя.\n"
+    "3. Не оценивай проект, не валидируй, не указывай ошибки, не давай "
+    "рекомендации и не предлагай правки.\n"
+    "4. Не упоминай технические id, card_id, JSON, PROJECT_MODEL, валидацию, "
+    "RAG, источники или процесс работы интерфейса.\n"
+    "5. Сохрани полноту: отрази все непустые поля и все непустые элементы "
+    "карточек, но объедини их в читаемый текст.\n"
+    "6. Если в данных есть противоречия или незаполненные связи, просто передай "
+    "то, что указано, без трактовки.\n\n"
+    "Верни ТОЛЬКО валидный JSON по схеме:\n"
+    "{\n"
+    '  "composition": "связный текст композиции проекта"\n'
+    "}\n"
+)
+
+
+async def compose_project(
+    project_model: dict | None,
+    *,
+    model: str = METHODOLOG_MODEL,
+) -> dict:
+    """Собрать read-only композицию проекта из текущей карты карточек без RAG и без правок."""
+    if not isinstance(project_model, dict):
+        return {"composition": "В проекте пока нет данных для композиции.", "raw": {}, "usage": {}}
+
+    payload = json.dumps(project_model, ensure_ascii=False)
+    user = (
+        "PROJECT_MODEL:\n"
+        f"{payload[:70000]}\n\n"
+        "Собери композицию проекта строго из этих данных. Отрази все непустые поля и элементы. "
+        "Не добавляй ничего от себя."
+    )
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    try:
+        raw, usage = await asyncio.to_thread(
+            _chat_json, model, COMPOSITION_SYSTEM_PROMPT, user, max_tokens=6000,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "compose_project: вызов модели упал (model=%s): %s: %s",
+            model,
+            type(e).__name__,
+            str(e)[:300],
+        )
+        raise RuntimeError("Не удалось собрать композицию проекта. Попробуйте ещё раз.") from e
+    composition = str(raw.get("composition") or "").strip()
+    if not composition:
+        composition = "В проекте пока нет данных для композиции."
+    return {"composition": composition, "raw": raw, "usage": usage}
 
 
 async def chat_methodolog(

@@ -1,5 +1,51 @@
 # Журнал переноса изменений
 
+## Композиция проекта через ИИ-Методолога
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-24
+- Цель: добавить в верхнюю панель workspace проекта действие "Композиция проекта", которое собирает связный read-only текст строго из текущей информации карточек.
+
+### Что реализовано
+
+- Добавлен отдельный backend endpoint `POST /api/projects/{project_id}/composition`.
+- Endpoint использует модель ИИ-Методолога, но не запускает RAG, валидацию, оценку или предложения правок.
+- В системном prompt закреплены правила: использовать только переданный `PROJECT_MODEL`, ничего не придумывать, не давать рекомендаций и не менять проект.
+- В верхний toolbar проекта добавлена кнопка "Композиция проекта".
+- При нажатии frontend собирает текущую карту проекта из `buildProjectEditModel(project.id)` и передает ее вместе с базовыми данными проекта.
+- Результат отображается отдельной read-only панелью под toolbar, без controls редактирования и без сохранения в карточки.
+- Существующие режимы `edit/compact`, левое дерево разделов, canvas, правый ИИ-Методолог, чат, валидация и применение правок не менялись.
+- `frontend/dist` пересобран после изменения frontend.
+
+### Изменённые файлы
+
+- `backend/schemas/projects.py` - добавлен payload `ProjectCompositionRequest`.
+- `backend/services/project_methodolog.py` - добавлен prompt и сервис `compose_project`.
+- `backend/routes/projects.py` - добавлен endpoint композиции проекта.
+- `frontend/src/components/projects/ProjectToolbar.tsx` - добавлена верхняя кнопка "Композиция проекта".
+- `frontend/src/components/projects/ProjectWorkspace.tsx` - добавлена панель результата и вызов composition API.
+- `frontend/src/components/projects/projectReview.ts` - добавлена API-обёртка `composeProject`.
+- `frontend/src/styles/styles.css` - добавлены стили read-only панели композиции.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновленные build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `.\\.venv\\Scripts\\python.exe -m ruff check --select F,E9 backend\\routes\\projects.py backend\\schemas\\projects.py backend\\services\\project_methodolog.py` - успешно.
+- `npm.cmd exec eslint -- src/components/projects/ProjectWorkspace.tsx src/components/projects/ProjectToolbar.tsx src/components/projects/projectReview.ts` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+- Полный `ruff check` по трём backend-файлам не использован как блокирующий: в `backend/routes/projects.py` и `backend/services/project_methodolog.py` уже есть существующие lint-замечания по B904/E501 вне текущего изменения.
+
+### Риски и следующие шаги
+
+- Качество текста зависит от полноты данных в карточках; при пустых карточках модель не должна дополнять содержание от себя.
+- Если композицию нужно сохранять как артефакт проекта, потребуется отдельное поле/таблица и явная кнопка сохранения. Сейчас результат только отображается в workspace.
+
+---
+
 Этот файл нужен, чтобы любые изменения из lab-веток можно было понятно перенести в основной репозиторий. Формат рассчитан и на человека, и на ИИ: заголовки стабильные, факты отделены от заметок, команды тестов указаны явно.
 
 ## Связь capabilities стратегии с компетенциями Теории

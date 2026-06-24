@@ -1,7 +1,7 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-
-from datetime import datetime, timezone
 
 from ..core.database import get_db
 from ..routes._ratelimit import rate_limit
@@ -10,6 +10,7 @@ from ..schemas.projects import (
     CardContentUpsert,
     CardValidateRequest,
     ProjectChatRequest,
+    ProjectCompositionRequest,
     ProjectCreate,
     ProjectReviewRequest,
     ProjectUpdate,
@@ -136,6 +137,27 @@ async def review_project(
     }
     await project_cards.save_review(db, project_id, review)
     return review
+
+
+@router.post(
+    "/{project_id}/composition",
+    dependencies=[Depends(rate_limit("project_composition", 10))],
+)
+async def compose_project(
+    project_id: int,
+    data: ProjectCompositionRequest,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Read-only композиция проекта из текущих карточек без RAG, оценки и правок."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    model = await bots.get_methodolog_model(db)
+    try:
+        result = await project_methodolog.compose_project(data.project_model, model=model)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return {"composition": result["composition"]}
 
 
 @router.post(

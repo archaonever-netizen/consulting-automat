@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Project } from '../../types/projects';
+import Icon from '../Icon';
 import ProjectCanvas from './ProjectCanvas';
 import { seedFrameworkSectionSnapshots } from './ProjectFrameworkSectionCanvas';
 import ProjectLeftPanel from './ProjectLeftPanel';
@@ -8,7 +9,9 @@ import ProjectRightPanel from './ProjectRightPanel';
 import ProjectToolbar from './ProjectToolbar';
 import { hydrateProjectCards } from './projectCardSync';
 import type { CanvasFocusTarget } from './projectCanvasFocus';
+import { buildProjectEditModel } from './projectEditModel';
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
+import { composeProject } from './projectReview';
 
 export interface ProjectSection {
   id: string;
@@ -75,6 +78,14 @@ function readCollapsedSections(): Set<string> {
   }
 }
 
+function compositionLines(text: string): string[] {
+  return text
+    .replace(/\*\*/g, '')
+    .split('\n')
+    .map(line => line.trim())
+    .filter(Boolean);
+}
+
 interface ProjectWorkspaceProps {
   project: Project;
 }
@@ -103,6 +114,10 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   // Цель центрирования канваса после двойного клика по узлу графа «Весь проект».
   const [focusTarget, setFocusTarget] = useState<CanvasFocusTarget | null>(null);
   const focusNonce = useRef(0);
+  const [compositionOpen, setCompositionOpen] = useState(false);
+  const [compositionText, setCompositionText] = useState('');
+  const [compositionError, setCompositionError] = useState('');
+  const [composingProject, setComposingProject] = useState(false);
 
   // Ширина правой панели (чат Методолога) — тянется мышью, запоминается в localStorage.
   const RP_MIN = 300;
@@ -199,9 +214,64 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
     setFocusTarget(null);
   }
 
+  async function runProjectComposition() {
+    if (composingProject) return;
+    setCompositionOpen(true);
+    setCompositionError('');
+    setComposingProject(true);
+    try {
+      const result = await composeProject(project.id, {
+        project: {
+          id: project.id,
+          name: project.name,
+          client_name: project.client_name,
+          description: project.description || '',
+        },
+        cards: buildProjectEditModel(project.id),
+      });
+      setCompositionText(result.composition || 'В проекте пока нет данных для композиции.');
+    } catch {
+      setCompositionError('Не удалось собрать композицию проекта. Попробуйте ещё раз.');
+    } finally {
+      setComposingProject(false);
+    }
+  }
+
   return (
     <div className="project-workspace">
-      <ProjectToolbar project={project} />
+      <ProjectToolbar project={project} onComposeProject={runProjectComposition} composingProject={composingProject} />
+      {compositionOpen && (
+        <section className="project-composition-panel">
+          <div className="project-composition-head">
+            <div>
+              <p className="eyebrow">Композиция проекта</p>
+              <h2>Собранный текст проекта</h2>
+            </div>
+            <button
+              type="button"
+              className="project-composition-close"
+              onClick={() => setCompositionOpen(false)}
+              aria-label="Закрыть композицию"
+            >
+              <Icon name="close" size={16} />
+            </button>
+          </div>
+          {composingProject && (
+            <div className="project-composition-loading">
+              <span className="spinner" />
+              Методолог собирает композицию проекта...
+            </div>
+          )}
+          {compositionError && <div className="project-card-validator-error">{compositionError}</div>}
+          {!composingProject && !compositionError && compositionText && (
+            <div className="project-composition-text">
+              {compositionLines(compositionText).map((line, index) => (
+                <p key={`${index}:${line.slice(0, 16)}`}>{line}</p>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
       <div className="project-workspace-grid" ref={gridRef} style={{ '--rp-width': `${rightWidth}px` } as React.CSSProperties}>
         <ProjectLeftPanel
           project={project}

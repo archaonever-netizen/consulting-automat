@@ -1230,6 +1230,29 @@ a:hover { color: var(--accent-hover); }
 .project-toolbar-title,
 .project-toolbar-sub { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-toolbar-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.project-composition-panel {
+  flex: 0 0 auto; max-height: min(42vh, 420px); overflow: auto;
+  padding: 16px 18px; border-bottom: 1px solid var(--line); background: var(--card-bg);
+}
+.project-composition-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px;
+}
+.project-composition-head h2 {
+  margin: 2px 0 0; font-family: var(--font-display); font-size: 18px; font-weight: 800; letter-spacing: 0; line-height: 1.2;
+}
+.project-composition-close {
+  flex: 0 0 auto; width: 32px; height: 32px; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--text-secondary);
+  background: var(--card-bg); cursor: pointer; transition: var(--transition);
+}
+.project-composition-close:hover { color: var(--accent-ink); border-color: var(--accent); background: var(--accent-weak); }
+.project-composition-loading {
+  display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; font-weight: 700;
+}
+.project-composition-text {
+  display: grid; gap: 8px; max-width: 960px; color: var(--text-primary); font-size: 13.5px; line-height: 1.6;
+}
+.project-composition-text p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .project-workspace-grid {
   flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr) var(--rp-width, 360px);
   grid-template-rows: minmax(0, 1fr);

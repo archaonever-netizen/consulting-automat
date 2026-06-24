@@ -55,6 +55,10 @@ export interface ChatResponse {
   evidence: EvidenceRef[];
 }
 
+export interface ProjectCompositionResponse {
+  composition: string;
+}
+
 // Согласованный план Методолога: текст плана + уточняющие вопросы и ответы пользователя.
 // Персистится на сервере и подкладывается в каждый запрос (мимо лимита истории).
 export interface ProjectPlan {
@@ -120,6 +124,13 @@ export async function runProjectReview(projectId: number): Promise<ProjectReview
     `/api/projects/${projectId}/review`, buildReviewPayload(projectId), { timeout: AI_CALL_TIMEOUT_MS },
   );
   return data as ProjectReview;
+}
+
+export async function composeProject(projectId: number, projectModel: unknown): Promise<ProjectCompositionResponse> {
+  const { data } = await api.post(`/api/projects/${projectId}/composition`, {
+    project_model: projectModel,
+  }, { timeout: AI_CALL_TIMEOUT_MS });
+  return data as ProjectCompositionResponse;
 }
 
 export async function sendProjectChat(

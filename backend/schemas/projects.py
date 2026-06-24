@@ -76,6 +76,11 @@ class ProjectReviewRequest(BaseModel):
     sections: list[ProjectReviewSection] = []
 
 
+class ProjectCompositionRequest(BaseModel):
+    # Машиночитаемая карта проекта из frontend: все карточки, поля и элементы.
+    project_model: Optional[dict] = None
+
+
 class ProjectChatMessage(BaseModel):
     role: str
     content: str
