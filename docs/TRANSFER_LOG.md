@@ -44,6 +44,53 @@
 
 ---
 
+## Компазированный раздел проекта
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-24
+- Цель: добавить для разделов проекта отдельный read-only экран "Компазированный раздел", который показывает уже внесенную в карточку информацию в кратком собранном формате, не меняя структуру текущих рабочих экранов.
+
+### Что реализовано
+
+- В workspace проекта добавлен отдельный UI-режим активного экрана: `edit` или `compact`, при этом реальные `cardId` не меняются и fake-id вида `compact:*` не используются.
+- В левой панели проекта у карточек разделов добавлена отдельная кнопка "Компазированный раздел".
+- Добавлен новый read-only canvas `ProjectCompactSectionCanvas`, который показывает:
+  - заголовок и описание раздела;
+  - статус заполненности;
+  - ключевые поля;
+  - группы повторяемых элементов;
+  - пустое состояние, если раздел еще не заполнен.
+- Добавлен адаптер `projectCompactSectionModel`, который строит компактную модель из существующей `buildProjectEditModel(projectId)` и snapshot-readers.
+- Существующие рабочие Canvas-экраны, граф "Весь проект", API, БД, сохранение карточек и Методолог не менялись.
+- `frontend/dist` пересобран после изменения frontend.
+
+### Измененные файлы
+
+- `frontend/src/components/projects/ProjectWorkspace.tsx` - добавлен UI-режим `edit/compact` без изменения реальных `cardId`.
+- `frontend/src/components/projects/ProjectLeftPanel.tsx` - добавлена кнопка открытия compact-экрана для разделов.
+- `frontend/src/components/projects/ProjectCanvas.tsx` - добавлена отдельная ветка рендера compact-экрана.
+- `frontend/src/components/projects/ProjectCompactSectionCanvas.tsx` - новый read-only экран.
+- `frontend/src/components/projects/projectCompactSectionModel.ts` - новая read-only модель compact-представления.
+- `frontend/src/styles/styles.css` - стили кнопки и compact-экрана.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновленные build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `npm.cmd run build` в `frontend` - успешно.
+- `git diff --check` - успешно.
+- Дополнительно проверено, что compact-модель не содержит `writeProject...`, `pushCardSnapshot`, `api.put` и fake-id `compact:`.
+
+### Риски и следующие шаги
+
+- Compact-экран является read-only проекцией существующей модели `buildProjectEditModel`; если в будущем появятся новые типы карточек вне этой модели, для них потребуется добавить адаптацию.
+- В `.md` файлах инструкции по Amvera не найдены; текущий деплой ориентируется на `amvera.yaml` и remote `amvera`.
+
+---
+
 ## Графы «Гипотезы», «Проверки», «Решения» на экране «Весь проект»
 
 ### Контекст

@@ -1410,6 +1410,22 @@ a:hover { color: var(--accent-hover); }
 }
 .project-tree-item:hover { background: var(--surface-2); color: var(--text-primary); }
 .project-tree-item.active { background: var(--accent-weak); color: var(--accent-ink); }
+.project-tree-row {
+  display: grid; grid-template-columns: minmax(0, 1fr) 32px; gap: 4px; align-items: center;
+}
+.project-tree-row .project-tree-item { min-width: 0; }
+.project-tree-row.compact-active .project-tree-item {
+  background: var(--accent-weak); color: var(--accent-ink);
+}
+.project-tree-compact-btn {
+  width: 30px; height: 30px; display: grid; place-items: center; flex: 0 0 auto;
+  border: 1px solid transparent; border-radius: var(--radius-sm); background: transparent;
+  color: var(--ink-3); cursor: pointer; transition: var(--transition);
+}
+.project-tree-compact-btn:hover,
+.project-tree-row.compact-active .project-tree-compact-btn {
+  border-color: var(--accent-weak-2); background: var(--card-bg); color: var(--accent-ink);
+}
 
 /* Структурные секции дерева — сворачиваемые группы карточек фреймворка */
 .project-section-groups {
@@ -1448,6 +1464,80 @@ a:hover { color: var(--accent-hover); }
 }
 .project-canvas-empty b { font-family: var(--font-display); font-size: 20px; color: var(--text-primary); }
 .project-canvas-empty span { font-size: 14px; line-height: 1.55; }
+.project-compact-section {
+  width: min(100%, 1080px); margin: 0 auto; display: flex; flex-direction: column; gap: 14px;
+}
+.project-compact-hero {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 18px;
+  padding: 2px 2px 0;
+}
+.project-compact-hero h2 {
+  margin: 0 0 6px; font-family: var(--font-display); font-size: 22px; font-weight: 800;
+  letter-spacing: 0; line-height: 1.18;
+}
+.project-compact-hero p:not(.eyebrow) {
+  margin: 0; max-width: 760px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.55;
+}
+.project-compact-status {
+  min-width: 170px; display: grid; gap: 3px; padding: 12px 14px; border: 1px solid var(--line);
+  border-radius: var(--radius-md); background: var(--card-bg); text-align: right;
+}
+.project-compact-status span,
+.project-compact-status small {
+  color: var(--text-secondary); font-size: 12px; font-weight: 800;
+}
+.project-compact-status b {
+  color: var(--text-primary); font-family: var(--font-display); font-size: 24px; line-height: 1;
+}
+.project-compact-meta {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.project-compact-meta span {
+  padding: 6px 9px; border: 1px solid var(--line); border-radius: var(--radius-pill);
+  background: var(--card-bg); color: var(--text-secondary); font-size: 12px; font-weight: 800;
+}
+.project-compact-block {
+  display: flex; flex-direction: column; gap: 12px; padding: 16px 18px;
+  border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card-bg);
+}
+.project-compact-block h3 {
+  margin: 0; font-family: var(--font-display); font-size: 16px; font-weight: 800; letter-spacing: 0;
+}
+.project-compact-fields {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 12px; margin: 0;
+}
+.project-compact-field {
+  min-width: 0; display: grid; gap: 4px; padding: 10px 11px;
+  border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.project-compact-field dt {
+  color: var(--text-secondary); font-size: 11.5px; font-weight: 800; line-height: 1.35;
+}
+.project-compact-field dd {
+  margin: 0; color: var(--text-primary); font-size: 13.5px; line-height: 1.5; white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.project-compact-items {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
+}
+.project-compact-item {
+  min-width: 0; padding: 13px; border: 1px solid var(--line); border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+.project-compact-item h4 {
+  margin: 0 0 10px; font-size: 13.5px; font-weight: 800; line-height: 1.35; letter-spacing: 0;
+  color: var(--text-primary);
+}
+.project-compact-item .project-compact-fields {
+  grid-template-columns: 1fr; gap: 8px;
+}
+.project-compact-empty {
+  display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
+  padding: 34px 22px; border: 1px dashed var(--line-2); border-radius: var(--radius-md);
+  background: var(--card-bg); color: var(--text-secondary);
+}
+.project-compact-empty b { color: var(--text-primary); font-size: 17px; }
+.project-compact-empty span { max-width: 520px; font-size: 13.5px; line-height: 1.5; }
 .project-theory {
   width: min(100%, 1080px); margin: 0 auto; display: flex; flex-direction: column; gap: 16px;
 }
@@ -2057,6 +2147,10 @@ a:hover { color: var(--accent-hover); }
   .project-workspace-grid { grid-template-columns: 1fr; }
   .project-side { border-right: none; border-bottom: 1px solid var(--line); }
   .project-canvas { min-height: 300px; padding: 16px; }
+  .project-compact-hero { flex-direction: column; }
+  .project-compact-status { width: 100%; min-width: 0; text-align: left; }
+  .project-compact-fields,
+  .project-compact-items { grid-template-columns: 1fr; }
   .project-theory-hero { flex-direction: column; }
   .project-theory-status { width: 100%; flex-basis: auto; }
   .project-theory-grid.two,

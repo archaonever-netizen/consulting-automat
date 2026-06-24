@@ -4,6 +4,7 @@ import { useCanvasFocus, type CanvasFocusTarget } from './projectCanvasFocus';
 import ProjectDiagnosisCanvas from './ProjectDiagnosisCanvas';
 import ProjectFrameworkSectionCanvas from './ProjectFrameworkSectionCanvas';
 import ProjectOkrCanvas from './ProjectOkrCanvas';
+import ProjectCompactSectionCanvas from './ProjectCompactSectionCanvas';
 import ProjectStrategicChoiceCanvas from './ProjectStrategicChoiceCanvas';
 import ProjectTargetStateCanvas from './ProjectTargetStateCanvas';
 import ProjectTheoryCanvas from './ProjectTheoryCanvas';
@@ -14,6 +15,7 @@ export interface ProjectCanvasView {
   title: string;
   description: string;
   frameworkCardId?: string;
+  mode?: 'edit' | 'compact';
 }
 
 interface ProjectCanvasProps {
@@ -59,8 +61,17 @@ function renderCanvasBody(
 
 export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSelectFrameworkCard, focusTarget }: ProjectCanvasProps) {
   const cardId = view.frameworkCardId;
-  const body = cardId ? renderCanvasBody(projectId, cardId, reloadNonce, onSelectFrameworkCard) : null;
   const focusRef = useCanvasFocus<HTMLElement>(focusTarget);
+
+  if (cardId && view.mode === 'compact') {
+    return (
+      <section className="project-canvas project-canvas-work">
+        <ProjectCompactSectionCanvas key={`${projectId}-${cardId}:${reloadNonce}`} projectId={projectId} cardId={cardId} />
+      </section>
+    );
+  }
+
+  const body = cardId ? renderCanvasBody(projectId, cardId, reloadNonce, onSelectFrameworkCard) : null;
 
   if (cardId && body) {
     // Экран «Весь проект» — граф во всю рабочую область (flex-колонка), остальные — обычные формы.

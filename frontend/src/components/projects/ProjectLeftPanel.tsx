@@ -10,7 +10,9 @@ interface ProjectLeftPanelProps {
   wholeProjectCardId: string;
   frameworkCards: ProjectFrameworkCard[];
   activeCardId: string;
+  activeMode: 'edit' | 'compact';
   onSelectFrameworkCard: (cardId: string) => void;
+  onSelectCompactCard: (cardId: string) => void;
   expandedSections: Set<string>;
   onToggleSection: (sectionId: string) => void;
 }
@@ -21,7 +23,9 @@ export default function ProjectLeftPanel({
   wholeProjectCardId,
   frameworkCards,
   activeCardId,
+  activeMode,
   onSelectFrameworkCard,
+  onSelectCompactCard,
   expandedSections,
   onToggleSection,
 }: ProjectLeftPanelProps) {
@@ -63,14 +67,27 @@ export default function ProjectLeftPanel({
                 <div className="project-section-cards">
                   {cards.length ? (
                     cards.map(card => (
-                      <button
+                      <div
+                        className={`project-tree-row${card.id === activeCardId ? ' active' : ''}${card.id === activeCardId && activeMode === 'compact' ? ' compact-active' : ''}`}
                         key={card.id}
-                        className={`project-tree-item project-tree-subitem${card.id === activeCardId ? ' active' : ''}`}
-                        type="button"
-                        onClick={() => onSelectFrameworkCard(card.id)}
                       >
-                        <span>{card.title}</span>
-                      </button>
+                        <button
+                          className={`project-tree-item project-tree-subitem${card.id === activeCardId ? ' active' : ''}`}
+                          type="button"
+                          onClick={() => onSelectFrameworkCard(card.id)}
+                        >
+                          <span>{card.title}</span>
+                        </button>
+                        <button
+                          className="project-tree-compact-btn"
+                          type="button"
+                          onClick={() => onSelectCompactCard(card.id)}
+                          title="Компазированный раздел"
+                          aria-label={`Компазированный раздел: ${card.title}`}
+                        >
+                          <Icon name="book" size={14} />
+                        </button>
+                      </div>
                     ))
                   ) : (
                     <div className="project-section-empty">Раздел появится позже</div>

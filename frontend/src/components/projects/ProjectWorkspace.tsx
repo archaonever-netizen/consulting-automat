@@ -79,8 +79,15 @@ interface ProjectWorkspaceProps {
   project: Project;
 }
 
+type ActiveProjectView =
+  | { mode: 'edit'; cardId: string }
+  | { mode: 'compact'; cardId: string };
+
 export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
-  const [activeCardId, setActiveCardId] = useState(PROJECT_FRAMEWORK_CARDS[0].id);
+  const [activeView, setActiveView] = useState<ActiveProjectView>(() => ({
+    mode: 'edit',
+    cardId: PROJECT_FRAMEWORK_CARDS[0].id,
+  }));
   // Раскрытые структурные секции дерева (сворачиваемые группы). По умолчанию раскрыты все,
   // кроме явно свёрнутых ранее (запоминаем в localStorage).
   const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
@@ -162,23 +169,34 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       window.clearTimeout(resetTimer);
     };
   }, [project.id]);
-  const activeFrameworkCard = PROJECT_FRAMEWORK_CARDS.find(card => card.id === activeCardId) || PROJECT_FRAMEWORK_CARDS[0];
+  const activeFrameworkCard = PROJECT_FRAMEWORK_CARDS.find(card => card.id === activeView.cardId) || PROJECT_FRAMEWORK_CARDS[0];
   const canvasView = {
     icon: 'template',
     title: activeFrameworkCard.title,
     description: activeFrameworkCard.description,
     frameworkCardId: activeFrameworkCard.id,
+    mode: activeView.mode,
   };
 
-  function selectFrameworkCard(cardId: string, focus?: { list?: string; itemId?: string }) {
-    setActiveCardId(cardId);
-    // Раскрываем секцию выбранной карточки, чтобы она была видна в дереве
-    // (например, при переходе из узла графа «Весь проект»).
+  function revealFrameworkCard(cardId: string) {
     const sectionId = SECTION_BY_CARD_ID.get(cardId);
     if (sectionId) {
       setExpandedSections(prev => (prev.has(sectionId) ? prev : new Set(prev).add(sectionId)));
     }
+  }
+
+  function selectFrameworkCard(cardId: string, focus?: { list?: string; itemId?: string }) {
+    setActiveView({ mode: 'edit', cardId });
+    // Раскрываем секцию выбранной карточки, чтобы она была видна в дереве
+    // (например, при переходе из узла графа «Весь проект»).
+    revealFrameworkCard(cardId);
     setFocusTarget(focus ? { cardId, list: focus.list, itemId: focus.itemId, nonce: ++focusNonce.current } : null);
+  }
+
+  function selectCompactCard(cardId: string) {
+    setActiveView({ mode: 'compact', cardId });
+    revealFrameworkCard(cardId);
+    setFocusTarget(null);
   }
 
   return (
@@ -191,7 +209,9 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           wholeProjectCardId={WHOLE_PROJECT_CARD_ID}
           frameworkCards={PROJECT_FRAMEWORK_CARDS}
           activeCardId={activeFrameworkCard.id}
+          activeMode={activeView.mode}
           onSelectFrameworkCard={selectFrameworkCard}
+          onSelectCompactCard={selectCompactCard}
           expandedSections={expandedSections}
           onToggleSection={toggleSection}
         />
@@ -201,7 +221,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
             view={canvasView}
             reloadNonce={reloadNonce}
             onSelectFrameworkCard={selectFrameworkCard}
-            focusTarget={focusTarget}
+            focusTarget={activeView.mode === 'edit' ? focusTarget : null}
           />
         ) : (
           <section className="project-canvas">
