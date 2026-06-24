@@ -38,7 +38,6 @@ export default function ProjectLeftPanel({
           type="button"
           onClick={() => onSelectFrameworkCard(wholeProjectCard.id)}
         >
-          <Icon name="grid" size={16} />
           <span>{wholeProjectCard.title}</span>
         </button>
       )}
@@ -58,7 +57,6 @@ export default function ProjectLeftPanel({
                 onClick={() => onToggleSection(section.id)}
               >
                 <Icon name="chevron" size={14} className={`project-section-chevron${expanded ? ' open' : ''}`} />
-                <Icon name={section.icon} size={16} />
                 <span>{section.label}</span>
               </button>
               {expanded && (
@@ -84,9 +82,9 @@ export default function ProjectLeftPanel({
         })}
       </div>
 
-      <div className="project-panel-note">
-        {project.description || 'Добавьте описание проекта, чтобы команда быстрее понимала контекст.'}
-      </div>
+      {project.description && (
+        <div className="project-panel-note">{project.description}</div>
+      )}
     </aside>
   );
 }

@@ -231,14 +231,10 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
     <div className="project-theory project-framework-section">
       <section className="project-theory-hero">
         <div>
-          <span>Проекты / OKR / KPI</span>
           <h2>OKR / KPI</h2>
           <p>OKR / KPI переводят стратегию, целевое состояние и решения в измеримые цели, key results и показатели контроля.</p>
         </div>
-        <label className="project-theory-field compact">
-          <span>Методологическая проверка</span>
-          <input className="form-input" value={`${completedChecks} из ${validationChecks.length}`} readOnly />
-        </label>
+        <span className="project-readiness-pill">Готовность {completedChecks}/{validationChecks.length}</span>
       </section>
 
       <Section number="0" title="Связь с предыдущими разделами" note="Целевое состояние / Стратегическая карта / Решения / Инициативы → OKR / KPI">

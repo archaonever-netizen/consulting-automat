@@ -163,15 +163,14 @@ function TextField({ field, value, onChange }: { field: FieldDef; value: string;
   );
 }
 
-function Section({ number, title, note, children }: { number: string; title: string; note: string; children: ReactNode }) {
+function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
     <section className="project-theory-section">
       <div className="project-theory-section-head">
         <div>
-          <span>{number}</span>
           <h3>{title}</h3>
+          {note && <p>{note}</p>}
         </div>
-        <p>{note}</p>
       </div>
       {children}
     </section>
@@ -615,29 +614,32 @@ export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: P
     <div className="project-theory project-framework-section">
       <section className="project-theory-hero">
         <div>
-          <span>Проекты / {config.title}</span>
           <h2>{config.title}</h2>
-          <p>{config.lead}</p>
         </div>
-        <label className="project-theory-field compact">
-          <span>Методологическая проверка</span>
-          <input className="form-input" value={`${completedChecks} из ${validationChecks.length}`} readOnly />
-        </label>
+        <span className="project-readiness-pill">Готовность {completedChecks}/{validationChecks.length}</span>
       </section>
 
-      <Section number="0" title="Связь с предыдущими разделами" note={config.dependency}>
-        <div className="project-strategy-sources">
-          {config.sourceCards(sources).map(card => (
-            <div className="project-strategy-source-card" key={card.title}>
-              <span>{card.title}</span>
-              <strong>{card.value}</strong>
-              <em>{card.note}</em>
-            </div>
-          ))}
+      <details className="project-disclosure">
+        <summary>
+          <Icon name="chevron" size={14} className="project-disclosure-chevron" />
+          <span>Контекст — откуда берутся данные</span>
+        </summary>
+        <div className="project-disclosure-body">
+          <p className="project-disclosure-dependency">{config.dependency}</p>
+          <p className="project-disclosure-dependency">{config.lead}</p>
+          <div className="project-strategy-source-grid">
+            {config.sourceCards(sources).map(card => (
+              <div className="project-strategy-source-card" key={card.title}>
+                <span>{card.title}</span>
+                <strong>{card.value}</strong>
+                <em>{card.note}</em>
+              </div>
+            ))}
+          </div>
         </div>
-      </Section>
+      </details>
 
-      <Section number="1" title={config.cardName} note="Повторяемая карточка: добавляйте столько элементов, сколько нужно для проекта.">
+      <Section title={config.cardName}>
         <div className="project-theory-repeater">
           {records.map((record, index) => (
             <DraftCard
@@ -682,16 +684,23 @@ export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: P
         </div>
       </Section>
 
-      <Section number="2" title="Методологическая проверка" note="Раздел считается готовым, когда он связан с предыдущими экранами, имеет владельца, измеримость и заполненные обязательные поля.">
-        <div className="project-theory-validation-list">
-          {validationChecks.map(([label, value]) => (
-            <label className="project-theory-validation-item" key={label}>
-              <input type="checkbox" checked={hasText(String(value))} readOnly />
-              <span>{label}</span>
-            </label>
-          ))}
+      <details className="project-disclosure">
+        <summary>
+          <Icon name="chevron" size={14} className="project-disclosure-chevron" />
+          <span>Проверка готовности</span>
+          <span className="project-disclosure-count">{completedChecks} из {validationChecks.length}</span>
+        </summary>
+        <div className="project-disclosure-body">
+          <div className="project-theory-validation-grid">
+            {validationChecks.map(([label, value]) => (
+              <label className="project-theory-validation-item" key={label}>
+                <input type="checkbox" checked={hasText(String(value))} readOnly />
+                <span>{label}</span>
+              </label>
+            ))}
+          </div>
         </div>
-      </Section>
+      </details>
     </div>
   );
 }

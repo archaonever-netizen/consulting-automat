@@ -78,7 +78,6 @@ export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSele
         <div className="ei"><Icon name={view.icon} size={24} /></div>
         <b>{view.title}</b>
         <span>{view.description}</span>
-        <span>Контент раздела будет добавлен позже.</span>
       </div>
     </section>
   );

@@ -22,12 +22,6 @@ export default function ProjectToolbar({ project }: ProjectToolbarProps) {
         <Link to={`/clients/${project.client_id}`} className="btn btn-ghost btn-sm">
           <Icon name="users" size={15} />Клиент
         </Link>
-        <button className="btn btn-ghost btn-sm" type="button">
-          <Icon name="share" size={15} />Экспорт
-        </button>
-        <button className="btn btn-primary btn-sm" type="button">
-          <Icon name="sparkle" size={15} />ИИ-анализ
-        </button>
       </div>
     </div>
   );

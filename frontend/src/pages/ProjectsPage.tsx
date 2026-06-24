@@ -11,13 +11,12 @@ const ProjectCard = memo(function ProjectCard({ project, navigate }: { project: 
   return (
     <article className="project-card">
       <div className="project-card-head">
-        <span className="project-icon"><Icon name="template" size={19} /></span>
         <div className="project-card-title">
           <h3>{project.name}</h3>
           <Link to={`/clients/${project.client_id}`} onClick={e => e.stopPropagation()}>{project.client_name}</Link>
         </div>
       </div>
-      <p>{project.description || 'Описание проекта пока не добавлено.'}</p>
+      {project.description && <p>{project.description}</p>}
       <div className="project-card-foot">
         <span>Обновлено: {project.updated_at_fmt}</span>
         <button className="btn btn-soft btn-sm" onClick={() => navigate(`/projects/${project.id}`)}>
@@ -72,7 +71,6 @@ export default function ProjectsPage() {
       <div className="page-head rise">
         <div>
           <h1>Проекты</h1>
-          <p>Рабочие пространства проектирования, привязанные к клиентам.</p>
         </div>
         <div className="head-actions">
           <button className="btn btn-primary" onClick={() => setModalOpen(true)} disabled={clients.length === 0}>

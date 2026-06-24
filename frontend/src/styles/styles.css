@@ -1440,7 +1440,7 @@ a:hover { color: var(--accent-hover); }
   margin-top: 14px; padding: 12px; border-radius: var(--radius-md); background: var(--surface-2);
   color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;
 }
-.project-canvas { min-width: 0; overflow: auto; padding: 22px; display: grid; place-items: center; }
+.project-canvas { min-width: 0; overflow: auto; padding: 22px; display: grid; place-items: center; background: var(--surface-2); }
 .project-canvas-work { display: block; }
 .project-canvas-empty {
   display: flex; flex-direction: column; align-items: center; text-align: center; gap: 8px;
@@ -1453,15 +1453,14 @@ a:hover { color: var(--accent-hover); }
 }
 .project-theory-hero {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
-  padding: 22px; border: 1px solid var(--line); border-radius: var(--radius-lg);
-  background: var(--card-bg); box-shadow: var(--sh-sm);
+  padding: 2px 2px 0;
 }
 .project-theory-hero h2 {
-  margin: 8px 0 8px; font-family: var(--font-display); font-size: 24px; font-weight: 800;
-  letter-spacing: -.03em; line-height: 1.1;
+  margin: 0 0 6px; font-family: var(--font-display); font-size: 21px; font-weight: 800;
+  letter-spacing: -.03em; line-height: 1.15;
 }
 .project-theory-hero p {
-  margin: 0; max-width: 720px; color: var(--text-secondary); font-size: 14px; line-height: 1.6;
+  margin: 0; max-width: 720px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.55;
 }
 .project-theory-status {
   flex: 0 0 245px; display: flex; flex-direction: column; gap: 7px;
@@ -1474,24 +1473,57 @@ a:hover { color: var(--accent-hover); }
 .project-theory-checks .pill {
   font-size: 11.5px; line-height: 1.2;
 }
+/* Секции-контейнеры перестают быть «коробками»: белое поле без рамки и тени,
+   разделённое воздухом. Вложенные карточки (серые) остаются читаемыми на белом. */
 .project-theory-section {
-  padding: 18px; border: 1px solid var(--line); border-radius: var(--radius-lg);
-  background: var(--card-bg); box-shadow: var(--sh-sm);
+  padding: 16px 18px; border: none; border-radius: var(--radius-lg);
+  background: var(--card-bg); box-shadow: none;
 }
 .project-theory-section-head {
-  display: flex; gap: 13px; align-items: flex-start; margin-bottom: 16px;
+  display: flex; gap: 13px; align-items: flex-start; margin-bottom: 12px;
 }
+/* Номерные бейджи секций (0/1/2…) — визуальный шум, скрываем на всех канвасах. */
 .project-theory-section-head > span {
-  display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px;
-  flex: 0 0 auto; border-radius: var(--radius-sm); background: var(--accent-weak);
-  color: var(--accent-ink); font-size: 13px; font-weight: 800;
+  display: none;
 }
 .project-theory-section-head h3 {
-  margin: 0 0 5px; font-family: var(--font-display); font-size: 17px; font-weight: 800; letter-spacing: -.02em;
+  margin: 0 0 4px; font-family: var(--font-display); font-size: 16px; font-weight: 800; letter-spacing: -.02em;
 }
 .project-theory-section-head p {
   margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5;
 }
+
+/* === Складные блоки методологии (контекст / проверка готовности) ===
+   Прячут вспомогательную методологию под клик — рабочие формы остаются в фокусе.
+   По умолчанию закрыты (без атрибута open). */
+.project-disclosure {
+  border: 1px solid var(--line); border-radius: var(--radius-md);
+  background: var(--card-bg);
+}
+.project-disclosure > summary {
+  display: flex; align-items: center; gap: 10px; padding: 11px 14px; cursor: pointer;
+  list-style: none; user-select: none; color: var(--text-secondary);
+  font-size: 12.5px; font-weight: 800;
+}
+.project-disclosure > summary::-webkit-details-marker { display: none; }
+.project-disclosure > summary::marker { content: ''; }
+.project-disclosure > summary:hover { color: var(--text-primary); }
+.project-disclosure-chevron { flex: 0 0 auto; color: var(--ink-3); transition: transform .15s ease; }
+.project-disclosure[open] .project-disclosure-chevron { transform: rotate(90deg); }
+.project-disclosure-count { margin-left: auto; flex: 0 0 auto; color: var(--ink-3); font-weight: 800; }
+.project-disclosure-body { padding: 2px 14px 14px; display: flex; flex-direction: column; gap: 12px; }
+.project-disclosure-body .project-theory-validation-item { background: var(--surface-2); }
+.project-disclosure-dependency {
+  margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; font-weight: 700;
+}
+
+/* Тихая плашка готовности раздела (замена readonly-инпута в hero). */
+.project-readiness-pill {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px;
+  border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--line);
+  color: var(--text-secondary); font-size: 12px; font-weight: 800; white-space: nowrap;
+}
+
 .project-theory-grid {
   display: grid; gap: 12px;
 }

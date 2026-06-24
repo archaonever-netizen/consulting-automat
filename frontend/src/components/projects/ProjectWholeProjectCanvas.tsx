@@ -1,4 +1,5 @@
 import { Suspense, lazy, useMemo } from 'react';
+import Icon from '../Icon';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectFrameworkSectionSnapshot } from './projectFrameworkSectionSnapshot';
 import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
@@ -115,14 +116,19 @@ export default function ProjectWholeProjectCanvas({ projectId, onSelectCard }: P
 
       <section className="project-theory-hero">
         <div>
-          <span>Проекты / Весь проект</span>
           <h2>Весь проект</h2>
-          <p>Верхний слой — карточки-разделы в методологической цепочке «Теория проекта → Диагноз → Стратегический выбор»: из каждой выходит её корень (Миссия / Диагностическое суждение / Принятый выбор), из корня — блоки раздела. Кросс-связи показывают, как разделы держатся друг за друга (например, разрыв Диагноза проверяет конкретный блок Теории). Раскрывайте блоки, чтобы видеть элементы. Наведение на узел подсвечивает связи временно, клик — закрепляет (повторный клик/клик по полю — снимает), двойной клик по узлу открывает раздел. Связь тоже можно навести или кликнуть, чтобы зафиксировать. Визуальный язык: цвет линии = сущность-цель, тип линии = род связи, а подпись по умолчанию показывает семейство связи (принцип) — точный глагол открывается по наведению на связь (см. легенду ниже).</p>
+          <p>Карта связей всех разделов в методологической цепочке. Наведите на узел или связь, чтобы подсветить зависимости; двойной клик по узлу открывает раздел.</p>
+          <details className="project-disclosure">
+            <summary>
+              <Icon name="chevron" size={14} className="project-disclosure-chevron" />
+              <span>Как читать граф</span>
+            </summary>
+            <div className="project-disclosure-body">
+              <p className="project-disclosure-dependency">Верхний слой — карточки-разделы в методологической цепочке «Теория проекта → Диагноз → Стратегический выбор»: из каждой выходит её корень (Миссия / Диагностическое суждение / Принятый выбор), из корня — блоки раздела. Кросс-связи показывают, как разделы держатся друг за друга (например, разрыв Диагноза проверяет конкретный блок Теории). Раскрывайте блоки, чтобы видеть элементы. Наведение на узел подсвечивает связи временно, клик — закрепляет (повторный клик/клик по полю — снимает), двойной клик по узлу открывает раздел. Связь тоже можно навести или кликнуть, чтобы зафиксировать. Визуальный язык: цвет линии = сущность-цель, тип линии = род связи, а подпись по умолчанию показывает семейство связи (принцип) — точный глагол открывается по наведению на связь (см. легенду ниже).</p>
+            </div>
+          </details>
         </div>
-        <label className="project-theory-field compact">
-          <span>Готовность</span>
-          <input className="form-input" value={`${completed} из ${checks.length}: ${readiness}`} readOnly />
-        </label>
+        <span className="project-readiness-pill" title={readiness}>Готовность {completed}/{checks.length}</span>
       </section>
 
       <ConnectionsLegend />
