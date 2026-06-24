@@ -29,7 +29,7 @@ const SECTION_TOP = 0, SECTION_H = 60;               // верхний слой:
 const MISSION_TOP = SECTION_TOP + SECTION_H + 56;    // Миссия — под карточкой-разделом
 const BLOCKS_TOP = MISSION_TOP + MISSION_H + 64;
 const COL_CENTER_X = BLOCK_X + MISSION_W / 2;        // ось столбца раздел↔миссия (для прямой связи)
-const ITEM_W = 168, ITEM_H = 62, ITEM_GAP = 14;
+const ITEM_W = 200, ITEM_H = 86, ITEM_GAP = 14;
 const ITEM_X = BLOCK_X + BLOCK_W + 150;      // столбец элементов справа от блоков
 const TRUNK_X = 60;                          // ствол структурного дерева (слева)
 const CHILD_RAIL_X = BLOCK_X + BLOCK_W + 64; // рейка блок→элементы (между блоком и элементами)
