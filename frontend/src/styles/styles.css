@@ -2171,6 +2171,7 @@ a:hover { color: var(--accent-hover); }
 .pg-item-sub { font-size: 9.5px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; color: var(--text-secondary); }
 .pg-item-label {
   font-size: 12px; font-weight: 700; color: var(--text-primary); line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
 }
 .pg-item-del {
   position: absolute; top: 3px; right: 4px; width: 16px; height: 16px; line-height: 14px; padding: 0;

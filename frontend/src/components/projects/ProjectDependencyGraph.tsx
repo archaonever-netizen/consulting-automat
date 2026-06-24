@@ -159,7 +159,7 @@ function ItemNode({ id, data }: NodeProps) {
       <Handle type="target" position={Position.Right} id="rt" style={{ top: '70%' }} />
       <button type="button" className="pg-item-del" title="Удалить" onClick={e => { stop(e); d.onDelete(d); }} onDoubleClick={stop}>×</button>
       <span className="pg-item-sub">{d.blockTitle}</span>
-      <span className="pg-item-label">{d.label}</span>
+      <span className="pg-item-label" title={d.label}>{d.label}</span>
     </div>
   );
 }
