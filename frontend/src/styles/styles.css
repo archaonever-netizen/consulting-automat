@@ -2043,15 +2043,18 @@ a:hover { color: var(--accent-hover); }
   background: var(--surface-2); box-shadow: var(--sh-sm); overflow: hidden;
 }
 /* Экран «Весь проект»: граф занимает всю рабочую область — во всю ширину между
-   боковыми панелями и на всю высоту, без центрирующих отступов и внешнего скролла. */
+   боковыми панелями и на всю высоту. Канвас здесь — flex-колонка (а не grid с
+   центрированием), чтобы граф растягивался во всю оставшуюся высоту, а не схлопывался
+   в узкую полосу. */
 .project-canvas-work:has(.project-whole-project) {
-  padding: 0; place-items: stretch; overflow: auto;
+  display: flex; flex-direction: column; padding: 0; overflow: hidden;
 }
 .project-canvas-work .project-whole-project {
-  width: 100%; max-width: none; height: 100%; margin: 0; padding: 12px; gap: 12px;
+  flex: 1 1 auto; min-height: 0;
+  width: 100%; max-width: none; margin: 0; padding: 12px; gap: 12px;
 }
 .project-whole-project .project-graph {
-  flex: 1 1 auto; height: auto; min-height: 0; max-height: none;
+  flex: 1 1 auto; min-height: 0; height: auto; max-height: none;
 }
 .project-graph-loading {
   display: flex; align-items: center; justify-content: center; gap: 10px;
