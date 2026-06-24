@@ -2045,15 +2045,15 @@ a:hover { color: var(--accent-hover); }
 /* Экран «Весь проект»: граф занимает всю рабочую область — во всю ширину между
    боковыми панелями и на всю высоту. Канвас здесь — flex-колонка (а не grid с
    центрированием), чтобы граф растягивался во всю оставшуюся высоту, а не схлопывался
-   в узкую полосу. */
-.project-canvas-work:has(.project-whole-project) {
+   в узкую полосу. Класс задаётся в ProjectCanvas (без :has — надёжнее по совместимости). */
+.project-canvas-graph {
   display: flex; flex-direction: column; padding: 0; overflow: hidden;
 }
-.project-canvas-work .project-whole-project {
+.project-canvas-graph .project-whole-project {
   flex: 1 1 auto; min-height: 0;
   width: 100%; max-width: none; margin: 0; padding: 12px; gap: 12px;
 }
-.project-whole-project .project-graph {
+.project-canvas-graph .project-graph {
   flex: 1 1 auto; min-height: 0; height: auto; max-height: none;
 }
 .project-graph-loading {

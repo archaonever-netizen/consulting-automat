@@ -63,8 +63,10 @@ export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSele
   const focusRef = useCanvasFocus<HTMLElement>(focusTarget);
 
   if (cardId && body) {
+    // Экран «Весь проект» — граф во всю рабочую область (flex-колонка), остальные — обычные формы.
+    const isGraph = cardId === 'whole-project';
     return (
-      <section className="project-canvas project-canvas-work" ref={focusRef}>
+      <section className={`project-canvas project-canvas-work${isGraph ? ' project-canvas-graph' : ''}`} ref={focusRef}>
         {body}
       </section>
     );
