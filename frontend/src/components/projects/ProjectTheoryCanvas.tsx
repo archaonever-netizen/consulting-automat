@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import { focusKey } from './projectCanvasFocus';
 import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot, writeProjectTheorySnapshot, type ProjectTheoryBlockSnapshot, type ProjectTheorySnapshotItem } from './projectTheorySnapshot';
 
 type ResultCriterion = {
@@ -2860,6 +2861,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <DraftCard
               key={stakeholder.id}
               card={stakeholder}
+              focusId={focusKey('project-theory', 'stakeholder', String(stakeholder.id))}
               title={`Стейкхолдер ${index + 1}`}
               onApply={next => setStakeholders(current => current.map(item => item.id === next.id ? next : item))}
             >
@@ -3044,6 +3046,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <DraftCard
               key={criterion.id}
               card={criterion}
+              focusId={focusKey('project-theory', 'results', String(criterion.id))}
               title={`Критерий результата ${index + 1}`}
               onApply={next => setCriteria(current => current.map(item => item.id === next.id ? next : item))}
             >
@@ -3278,6 +3281,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <DraftCard
               key={competency.id}
               card={competency}
+              focusId={focusKey('project-theory', 'competencies', String(competency.id))}
               title={`Компетенция ${index + 1}`}
               onApply={next => setCompetencies(current => current.map(item => item.id === next.id ? next : item))}
             >
@@ -3486,6 +3490,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <DraftCard
               key={constraint.id}
               card={constraint}
+              focusId={focusKey('project-theory', 'constraints', String(constraint.id))}
               title={`Ограничение ${index + 1}`}
               onApply={next => setConstraints(current => current.map(item => item.id === next.id ? next : item))}
             >
@@ -3666,6 +3671,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <DraftCard
               key={indicator.id}
               card={indicator}
+              focusId={focusKey('project-theory', 'quality', String(indicator.id))}
               title={`Показатель качества ${index + 1}`}
               onApply={next => setQualityIndicators(current => current.map(item => item.id === next.id ? next : item))}
             >
@@ -3888,6 +3894,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             <DraftCard
               key={element.id}
               card={element}
+              focusId={focusKey('project-theory', 'preserve', String(element.id))}
               title={`Сохраняемый элемент ${index + 1}`}
               onApply={next => setPreserveElements(current => current.map(item => item.id === next.id ? next : item))}
             >

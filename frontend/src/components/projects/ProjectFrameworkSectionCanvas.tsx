@@ -4,6 +4,7 @@ import DraftCard from './DraftCard';
 import Icon from '../Icon';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectFrameworkSectionSnapshot, writeProjectFrameworkSectionSnapshot, type ProjectFrameworkSectionSnapshot } from './projectFrameworkSectionSnapshot';
+import { focusKey } from './projectCanvasFocus';
 import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { getFallbackProjectTargetStateSnapshot, readProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
 import { getFallbackProjectTheorySnapshot, readProjectTheorySnapshot } from './projectTheorySnapshot';
@@ -643,6 +644,7 @@ export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: P
               key={record.id}
               card={record}
               title={`${config.cardName} ${index + 1}`}
+              focusId={focusKey(config.id, config.id, String(record.id))}
               onApply={next => setRecords(current => current.map(item => item.id === next.id ? next : item))}
             >
               {(draft, patch) => {

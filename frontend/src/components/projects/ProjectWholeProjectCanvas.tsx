@@ -71,8 +71,9 @@ function hasText(value: string | undefined) {
 
 interface ProjectWholeProjectCanvasProps {
   projectId: number;
-  // Открыть каркасную карточку (клик по узлу графа).
-  onSelectCard?: (cardId: string) => void;
+  // Открыть каркасную карточку (двойной клик по узлу графа) и опционально
+  // центрировать раздел на конкретном блоке/элементе.
+  onSelectCard?: (cardId: string, focus?: { list?: string; itemId?: string }) => void;
 }
 
 export default function ProjectWholeProjectCanvas({ projectId, onSelectCard }: ProjectWholeProjectCanvasProps) {

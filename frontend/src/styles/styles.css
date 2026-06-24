@@ -1694,6 +1694,17 @@ a:hover { color: var(--accent-hover); }
 .project-theory-card {
   padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-md);
   background: var(--surface-2);
+  scroll-margin: 24px;
+}
+/* Подсветка карточки, к которой перешли двойным кликом по узлу графа «Весь проект». */
+.project-theory-card.is-focus-flash {
+  animation: pgFocusFlash 1.8s ease-out;
+  border-color: #2563EB;
+}
+@keyframes pgFocusFlash {
+  0% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
+  12% { box-shadow: 0 0 0 4px rgba(37, 99, 235, .45); }
+  100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, 0); }
 }
 .project-theory-card-title {
   margin-bottom: 12px; font-size: 12px; font-weight: 800; letter-spacing: .08em;

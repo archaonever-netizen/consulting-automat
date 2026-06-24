@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import { focusKey } from './projectCanvasFocus';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectStrategicChoiceSnapshot, writeProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import ProjectLinkField from './ProjectLinkField';
@@ -589,6 +590,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
               <DraftCard
                 key={capability.id}
                 card={capability}
+                focusId={focusKey('strategic-choice', 'capabilities', String(capability.id))}
                 title={`Способность ${index + 1}`}
                 onApply={next => setCapabilities(current => current.map(item => item.id === next.id ? next : item))}
               >
@@ -638,6 +640,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
             <DraftCard
               key={alternative.id}
               card={alternative}
+              focusId={focusKey('strategic-choice', 'alternatives', String(alternative.id))}
               title={`Альтернатива ${index + 1}`}
               onApply={next => setAlternatives(current => current.map(item => item.id === next.id ? next : item))}
             >
@@ -692,6 +695,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
               <DraftCard
                 key={tradeOff.id}
                 card={tradeOff}
+                focusId={focusKey('strategic-choice', 'tradeOffs', String(tradeOff.id))}
                 title={`Отказ ${index + 1}`}
                 onApply={next => setTradeOffs(current => current.map(item => item.id === next.id ? next : item))}
               >
@@ -723,6 +727,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
               <DraftCard
                 key={action.id}
                 card={action}
+                focusId={focusKey('strategic-choice', 'actions', String(action.id))}
                 title={`Действие ${index + 1}`}
                 onApply={next => setActions(current => current.map(item => item.id === next.id ? next : item))}
               >
@@ -760,6 +765,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
             <DraftCard
               key={hypothesis.id}
               card={hypothesis}
+              focusId={focusKey('strategic-choice', 'hypotheses', String(hypothesis.id))}
               title={`Гипотеза ${index + 1}`}
               onApply={next => setHypotheses(current => current.map(item => item.id === next.id ? next : item))}
             >

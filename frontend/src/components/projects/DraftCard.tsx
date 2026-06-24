@@ -8,11 +8,14 @@ export default function DraftCard<T extends { id: number }>({
   title,
   onApply,
   children,
+  focusId,
 }: {
   card: T;
   title: ReactNode;
   onApply: (next: T) => void;
   children: (draft: T, patch: (value: Partial<T>) => void) => ReactNode;
+  // Якорь для центрирования при переходе с графа «Весь проект» (data-focus-id).
+  focusId?: string;
 }) {
   const [draft, setDraft] = useState<T>(card);
   const [committed, setCommitted] = useState<T>(card);
@@ -33,7 +36,7 @@ export default function DraftCard<T extends { id: number }>({
   const patch = (value: Partial<T>) => setDraft(current => ({ ...current, ...value }) as T);
 
   return (
-    <div className="project-theory-card">
+    <div className="project-theory-card" data-focus-id={focusId}>
       <div className="project-theory-card-head">
         <div className="project-theory-card-title">{title}</div>
         <span className={`project-theory-status-badge${dirty ? ' is-draft' : ''}`}>

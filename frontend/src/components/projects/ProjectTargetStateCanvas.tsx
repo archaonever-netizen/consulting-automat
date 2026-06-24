@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import { focusKey } from './projectCanvasFocus';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
 import { readProjectTargetStateSnapshot, writeProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
@@ -594,7 +595,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">5. Целевые результаты</div>
             {targetResults.map((item, index) => (
-              <DraftCard key={item.id} card={item} title={`Результат ${index + 1}`} onApply={next => setTargetResults(current => current.map(row => row.id === next.id ? next : row))}>
+              <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'results', String(item.id))} title={`Результат ${index + 1}`} onApply={next => setTargetResults(current => current.map(row => row.id === next.id ? next : row))}>
                 {(draft, patch) => (
                   <>
                     <label className="project-theory-field">
@@ -624,7 +625,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">6. Клиентская ценность</div>
             {stakeholderValues.map((item, index) => (
-              <DraftCard key={item.id} card={item} title={`Ценность ${index + 1}`} onApply={next => setStakeholderValues(current => current.map(row => row.id === next.id ? next : row))}>
+              <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'stakeholderValues', String(item.id))} title={`Ценность ${index + 1}`} onApply={next => setStakeholderValues(current => current.map(row => row.id === next.id ? next : row))}>
                 {(draft, patch) => (
                   <>
                     <label className="project-theory-field">
@@ -651,7 +652,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         <div className="project-theory-repeater" style={{ marginTop: 12 }}>
           <div className="project-theory-card-title">7. Целевая операционная модель</div>
           {operatingModels.map((item, index) => (
-            <DraftCard key={item.id} card={item} title={`Процесс / система ${index + 1}`} onApply={next => setOperatingModels(current => current.map(row => row.id === next.id ? next : row))}>
+            <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'operatingModels', String(item.id))} title={`Процесс / система ${index + 1}`} onApply={next => setOperatingModels(current => current.map(row => row.id === next.id ? next : row))}>
               {(draft, patch) => (
                 <>
                   <label className="project-theory-field">
@@ -682,7 +683,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">8. Целевые capabilities</div>
             {capabilityTargets.map((item, index) => (
-              <DraftCard key={item.id} card={item} title={`Компетенция ${index + 1}`} onApply={next => setCapabilityTargets(current => current.map(row => row.id === next.id ? next : row))}>
+              <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'capabilities', String(item.id))} title={`Компетенция ${index + 1}`} onApply={next => setCapabilityTargets(current => current.map(row => row.id === next.id ? next : row))}>
                 {(draft, patch) => (
                   <>
                     <label className="project-theory-field">
@@ -709,7 +710,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">9. Management systems</div>
             {managementTargets.map((item, index) => (
-              <DraftCard key={item.id} card={item} title={`Система ${index + 1}`} onApply={next => setManagementTargets(current => current.map(row => row.id === next.id ? next : row))}>
+              <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'managementSystems', String(item.id))} title={`Система ${index + 1}`} onApply={next => setManagementTargets(current => current.map(row => row.id === next.id ? next : row))}>
                 {(draft, patch) => (
                   <>
                     <label className="project-theory-field">
@@ -737,7 +738,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">10. Целевое качество</div>
             {qualityTargets.map((item, index) => (
-              <DraftCard key={item.id} card={item} title={`Качество ${index + 1}`} onApply={next => setQualityTargets(current => current.map(row => row.id === next.id ? next : row))}>
+              <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'qualityTargets', String(item.id))} title={`Качество ${index + 1}`} onApply={next => setQualityTargets(current => current.map(row => row.id === next.id ? next : row))}>
                 {(draft, patch) => (
                   <>
                     <label className="project-theory-field">
@@ -763,7 +764,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">11. Сохраняемое ядро</div>
             {preserveTargets.map((item, index) => (
-              <DraftCard key={item.id} card={item} title={`Ядро ${index + 1}`} onApply={next => setPreserveTargets(current => current.map(row => row.id === next.id ? next : row))}>
+              <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'preserveTargets', String(item.id))} title={`Ядро ${index + 1}`} onApply={next => setPreserveTargets(current => current.map(row => row.id === next.id ? next : row))}>
                 {(draft, patch) => (
                   <>
                     <label className="project-theory-field">
@@ -801,7 +802,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         </div>
         <div className="project-theory-repeater" style={{ marginTop: 12 }}>
           {constraintTargets.map((item, index) => (
-            <DraftCard key={item.id} card={item} title={`Ограничение ${index + 1}`} onApply={next => setConstraintTargets(current => current.map(row => row.id === next.id ? next : row))}>
+            <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'constraints', String(item.id))} title={`Ограничение ${index + 1}`} onApply={next => setConstraintTargets(current => current.map(row => row.id === next.id ? next : row))}>
               {(draft, patch) => (
                 <>
                   <label className="project-theory-field">
@@ -833,7 +834,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         </div>
         <div className="project-theory-repeater" style={{ marginTop: 12 }}>
           {keyResults.map((item, index) => (
-            <DraftCard key={item.id} card={item} title={`Key Result ${index + 1}`} onApply={next => setKeyResults(current => current.map(row => row.id === next.id ? next : row))}>
+            <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'keyResults', String(item.id))} title={`Key Result ${index + 1}`} onApply={next => setKeyResults(current => current.map(row => row.id === next.id ? next : row))}>
               {(draft, patch) => (
                 <>
                   <label className="project-theory-field">

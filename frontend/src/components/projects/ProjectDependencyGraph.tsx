@@ -251,7 +251,9 @@ function handlesFor(kind: TheoryEdgeKind, source: string): [string, string] {
   return [source === MISSION_NODE_ID || source.startsWith('root:') ? 'r' : 'rs', 'rt']; // ref: справа источника → справа цели
 }
 
-interface GraphProps { projectId: number; onOpenCard: (cardId: string) => void }
+// focus — какой блок/элемент центрировать в открываемом разделе (двойной клик по узлу графа).
+export interface GraphOpenFocus { list?: string; itemId?: string }
+interface GraphProps { projectId: number; onOpenCard: (cardId: string, focus?: GraphOpenFocus) => void }
 
 function GraphInner({ projectId, onOpenCard }: GraphProps) {
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
@@ -300,7 +302,7 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     applyEdit({ id: 'del', op: 'delete_item', card_id: d.cardId, list: d.list, item_id: d.itemId, human: 'Удалить' } as Proposal);
   }, [applyEdit]);
 
-  const openCard = useCallback((cardId: string) => onOpenCard(cardId), [onOpenCard]);
+  const openCard = useCallback((cardId: string, focus?: GraphOpenFocus) => onOpenCard(cardId, focus), [onOpenCard]);
 
   // editNonce — намеренная зависимость: после applyProjectEdit меняется localStorage, граф пересобираем.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -320,11 +322,11 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
       }
       if (n.type === 'blockNode') {
         const data = n.data as TheoryBlockData;
-        return { ...n, className, data: { ...data, onOpen: () => openCard(data.cardId), onPin, onToggle: toggle, onAdd } };
+        return { ...n, className, data: { ...data, onOpen: () => openCard(data.cardId, { list: data.list }), onPin, onToggle: toggle, onAdd } };
       }
       if (n.type === 'itemNode') {
         const data = n.data as TheoryItemData;
-        return { ...n, className, data: { ...data, onOpen: () => openCard(data.cardId), onPin, onDelete } };
+        return { ...n, className, data: { ...data, onOpen: () => openCard(data.cardId, { list: data.list, itemId: data.itemId }), onPin, onDelete } };
       }
       return n;
     });

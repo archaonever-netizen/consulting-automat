@@ -7,6 +7,7 @@ import { seedOkrSnapshot } from './ProjectOkrCanvas';
 import ProjectRightPanel from './ProjectRightPanel';
 import ProjectToolbar from './ProjectToolbar';
 import { hydrateProjectCards } from './projectCardSync';
+import type { CanvasFocusTarget } from './projectCanvasFocus';
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
 
 export interface ProjectSection {
@@ -62,6 +63,9 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   // Инкрементируется после применённой Методологом правки, чтобы перемонтировать
   // открытый канвас и подхватить свежий снапшот из localStorage.
   const [reloadNonce, setReloadNonce] = useState(0);
+  // Цель центрирования канваса после двойного клика по узлу графа «Весь проект».
+  const [focusTarget, setFocusTarget] = useState<CanvasFocusTarget | null>(null);
+  const focusNonce = useRef(0);
 
   // Ширина правой панели (чат Методолога) — тянется мышью, запоминается в localStorage.
   const RP_MIN = 300;
@@ -135,9 +139,10 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
     setActiveSectionId(sectionId);
   }
 
-  function selectFrameworkCard(cardId: string) {
+  function selectFrameworkCard(cardId: string, focus?: { list?: string; itemId?: string }) {
     setActiveCardId(cardId);
     setActiveSectionId(null);
+    setFocusTarget(focus ? { cardId, list: focus.list, itemId: focus.itemId, nonce: ++focusNonce.current } : null);
   }
 
   return (
@@ -159,6 +164,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
             view={canvasView}
             reloadNonce={reloadNonce}
             onSelectFrameworkCard={selectFrameworkCard}
+            focusTarget={focusTarget}
           />
         ) : (
           <section className="project-canvas">

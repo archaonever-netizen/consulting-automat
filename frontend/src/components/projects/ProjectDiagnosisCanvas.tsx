@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import { focusKey } from './projectCanvasFocus';
 import { readProjectDiagnosisSnapshot, writeProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import {
   getFallbackProjectTheorySnapshot,
@@ -564,6 +565,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
             <DraftCard
               key={gap.id}
               card={gap}
+              focusId={focusKey('diagnosis', 'gaps', String(gap.id))}
               title={`Разрыв теории и реальности ${index + 1}`}
               onApply={next => updateGap(gap.id, next)}
             >
@@ -601,6 +603,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
               <DraftCard
                 key={symptom.id}
                 card={symptom}
+                focusId={focusKey('diagnosis', 'symptoms', String(symptom.id))}
                 title={`Симптом ${index + 1}`}
                 onApply={next => updateSymptom(symptom.id, next)}
               >
@@ -628,6 +631,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
               <DraftCard
                 key={fact.id}
                 card={fact}
+                focusId={focusKey('diagnosis', 'facts', String(fact.id))}
                 title={`Факт ${index + 1}`}
                 onApply={next => updateFact(fact.id, next)}
               >
@@ -669,6 +673,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
               <DraftCard
                 key={alternative.id}
                 card={alternative}
+                focusId={focusKey('diagnosis', 'alternatives', String(alternative.id))}
                 title={`Альтернатива ${index + 1}`}
                 onApply={next => updateAlternative(alternative.id, next)}
               >
@@ -694,6 +699,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
               <DraftCard
                 key={verification.id}
                 card={verification}
+                focusId={focusKey('diagnosis', 'verifications', String(verification.id))}
                 title={`Проверка ${index + 1}`}
                 onApply={next => updateVerification(verification.id, next)}
               >
@@ -721,6 +727,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
               <DraftCard
                 key={consequence.id}
                 card={consequence}
+                focusId={focusKey('diagnosis', 'consequences', String(consequence.id))}
                 title={`Последствие ${index + 1}`}
                 onApply={next => updateConsequence(consequence.id, next)}
               >

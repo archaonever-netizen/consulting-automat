@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import Icon from '../Icon';
 import ProjectCardValidator from './ProjectCardValidator';
+import { useCanvasFocus, type CanvasFocusTarget } from './projectCanvasFocus';
 import ProjectDiagnosisCanvas from './ProjectDiagnosisCanvas';
 import ProjectFrameworkSectionCanvas from './ProjectFrameworkSectionCanvas';
 import ProjectOkrCanvas from './ProjectOkrCanvas';
@@ -23,6 +24,8 @@ interface ProjectCanvasProps {
   reloadNonce?: number;
   // Открыть каркасную карточку по id (граф зависимостей на «Весь проект» → клик по узлу).
   onSelectFrameworkCard?: (cardId: string) => void;
+  // Центрировать открытый раздел на блоке/элементе (двойной клик по узлу графа).
+  focusTarget?: CanvasFocusTarget | null;
 }
 
 const SECTION_CARD_IDS = [
@@ -55,13 +58,14 @@ function renderCanvasBody(
   return null;
 }
 
-export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSelectFrameworkCard }: ProjectCanvasProps) {
+export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSelectFrameworkCard, focusTarget }: ProjectCanvasProps) {
   const cardId = view.frameworkCardId;
   const body = cardId ? renderCanvasBody(projectId, cardId, reloadNonce, onSelectFrameworkCard) : null;
+  const focusRef = useCanvasFocus<HTMLElement>(focusTarget);
 
   if (cardId && body) {
     return (
-      <section className="project-canvas project-canvas-work">
+      <section className="project-canvas project-canvas-work" ref={focusRef}>
         {body}
         <ProjectCardValidator projectId={projectId} cardId={cardId} cardTitle={view.title} />
       </section>
