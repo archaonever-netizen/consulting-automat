@@ -134,6 +134,111 @@ export async function composeProject(projectId: number, projectModel: unknown): 
   return data as ProjectCompositionResponse;
 }
 
+// ── Многоэтапная композиция (SSE-конвейер с поэтапным сохранением в БД) ──
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
+
+export type CompositionStageKey = 'collect' | 'structure' | 'review' | 'finalize';
+export type CompositionStageStatus = 'running' | 'done' | 'fallback' | 'skipped';
+
+export interface CompositionStageEvent {
+  type: 'stage';
+  stage: CompositionStageKey;
+  stage_no: number;
+  model: string;
+  status: CompositionStageStatus;
+  cached?: boolean;
+  error?: string;
+  recommendations?: string[];
+  verdict?: string;
+}
+
+export interface CompositionSection {
+  manifest: string;
+  composition: string;
+}
+
+// Чекпоинт композиции из БД (источник истины для гидрации после обновления страницы).
+export interface CompositionState {
+  status: 'idle' | 'collecting' | 'structuring' | 'reviewing' | 'finalizing' | 'done' | 'failed';
+  stage_no?: number;
+  draft?: CompositionSection;
+  structured?: CompositionSection;
+  recommendations?: { verdict: string; recommendations: string[] };
+  final?: CompositionSection;
+  error?: string;
+  updated_at?: string;
+}
+
+type CompositionEvent =
+  | CompositionStageEvent
+  | { type: 'done'; manifest?: string; composition?: string }
+  | { type: 'error'; error?: string };
+
+export async function fetchCompositionState(projectId: number, cardId: string): Promise<CompositionState> {
+  const { data } = await api.get(`/api/projects/${projectId}/composition`, { params: { card_id: cardId } });
+  return data as CompositionState;
+}
+
+export async function resetComposition(projectId: number, cardId: string): Promise<void> {
+  await api.post(`/api/projects/${projectId}/composition/reset`, null, { params: { card_id: cardId } });
+}
+
+interface CompositionStreamHandlers {
+  onStage?: (event: CompositionStageEvent) => void;
+  onDone?: (section: CompositionSection) => void;
+  onError?: (message: string) => void;
+  signal?: AbortSignal;
+}
+
+/**
+ * Запустить (или возобновить) многоэтапную композицию раздела и читать прогресс по SSE.
+ * Возобновление — повторный вызов с тем же card_id: бэкенд продолжит с незавершённого этапа.
+ */
+export async function streamComposition(
+  projectId: number,
+  cardId: string,
+  projectModel: unknown,
+  handlers: CompositionStreamHandlers,
+): Promise<void> {
+  const token = localStorage.getItem('access_token');
+  const response = await fetch(`${API_BASE}/api/projects/${projectId}/composition/stream`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ project_model: projectModel, card_id: cardId }),
+    signal: handlers.signal,
+  });
+  if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  // SSE-события разделены '\n\n'; сетевой чанк может разорвать событие.
+  let buffer = '';
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split('\n\n');
+    buffer = events.pop() ?? '';
+    for (const evt of events) {
+      for (const line of evt.split('\n')) {
+        if (!line.startsWith('data: ')) continue;
+        let parsed: CompositionEvent;
+        try {
+          parsed = JSON.parse(line.slice(6)) as CompositionEvent;
+        } catch {
+          continue; // неполный фрагмент
+        }
+        if (parsed.type === 'stage') handlers.onStage?.(parsed);
+        else if (parsed.type === 'done') handlers.onDone?.({ manifest: parsed.manifest ?? '', composition: parsed.composition ?? '' });
+        else if (parsed.type === 'error') handlers.onError?.(parsed.error ?? 'Ошибка композиции');
+      }
+    }
+  }
+}
+
 export async function sendProjectChat(
   projectId: number,
   message: string,

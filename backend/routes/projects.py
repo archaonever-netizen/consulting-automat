@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
@@ -158,6 +159,65 @@ async def compose_project(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"manifest": result["manifest"], "composition": result["composition"]}
+
+
+@router.get("/{project_id}/composition")
+async def get_composition_state(
+    project_id: int,
+    card_id: str = Query(...),
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Текущий чекпоинт композиции карточки — гидрация после обновления страницы/рестарта."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    return await project_cards.get_composition(db, project_id, card_id)
+
+
+@router.post("/{project_id}/composition/reset")
+async def reset_composition_state(
+    project_id: int,
+    card_id: str = Query(...),
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Сбросить чекпоинт композиции карточки (пересборка «с нуля»)."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    await project_cards.reset_composition(db, project_id, card_id)
+    return {"status": "idle"}
+
+
+@router.post(
+    "/{project_id}/composition/stream",
+    dependencies=[Depends(rate_limit("project_composition", 10))],
+)
+async def stream_composition(
+    project_id: int,
+    data: ProjectCompositionRequest,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Многоэтапная композиция раздела с SSE-стримингом прогресса.
+
+    Content-Type: text/event-stream. События этапов: data: {type:'stage', stage, model, status}.
+    Финал: data: {type:'done', manifest, composition}. Каждый этап сохраняется в БД сразу,
+    поэтому обрыв соединения/рестарт сервера не теряют готовые этапы (возобновление —
+    повторным вызовом этого же эндпоинта).
+    """
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    card_id = (data.card_id or "").strip()
+    if not card_id:
+        raise HTTPException(status_code=422, detail="card_id is required")
+    return StreamingResponse(
+        project_methodolog.compose_stream(db, project_id, card_id, data.project_model),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.post(

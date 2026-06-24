@@ -1247,6 +1247,30 @@ a:hover { color: var(--accent-hover); }
   display: grid; gap: 8px; max-width: 960px; color: var(--text-primary); font-size: 13.5px; line-height: 1.6;
 }
 .project-composition-text p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Прогресс-степпер многоэтапной композиции: какой этап идёт и что делает модель. */
+.project-composition-steps {
+  list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; max-width: 960px;
+}
+.project-composition-step {
+  display: flex; align-items: center; gap: 9px; font-size: 13px; color: var(--text-secondary);
+}
+.project-composition-step-icon {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; flex: none; font-size: 12px; font-weight: 800;
+}
+.project-composition-step.is-running,
+.project-composition-step.is-done { color: var(--text-primary); }
+.project-composition-step.is-running { font-weight: 700; }
+.project-composition-step.is-done .project-composition-step-icon { color: #2e7d32; }
+.project-composition-step.is-fallback,
+.project-composition-step.is-fallback .project-composition-step-icon { color: #b26a00; }
+.project-composition-step-note { font-size: 11.5px; color: #b26a00; }
+.project-composition-recs { max-width: 960px; margin-bottom: 12px; }
+.project-composition-recs b {
+  display: block; margin-bottom: 5px; font-size: 12px; font-weight: 800; color: var(--text-secondary);
+}
+.project-composition-recs ul { margin: 0; padding-left: 18px; display: grid; gap: 3px; }
+.project-composition-recs li { font-size: 12.5px; color: var(--text-primary); line-height: 1.5; }
 .project-workspace-grid {
   flex: 1; min-height: 0; display: grid; grid-template-columns: 240px minmax(0, 1fr) var(--rp-width, 360px);
   grid-template-rows: minmax(0, 1fr);

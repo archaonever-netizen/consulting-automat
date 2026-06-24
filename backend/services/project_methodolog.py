@@ -17,7 +17,11 @@ import asyncio
 import json
 import logging
 import re
+from typing import AsyncGenerator
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from . import project_cards
 from .knowledge_search import SearchHit, search
 from .methodolog import (
     METHODOLOG_MODEL,
@@ -469,6 +473,290 @@ async def compose_project(
     if not composition:
         composition = "В разделе пока нет данных для композиции."
     return {"manifest": manifest, "composition": composition, "raw": raw, "usage": usage}
+
+
+# ══════════════════════ Многоэтапная композиция (SSE-конвейер) ══════════════════════
+# Цель — снизить расход токенов и итоговую стоимость: дорогой Opus видит уже СЖАТЫЙ
+# текст, а не сырой PROJECT_MODEL. Этапы:
+#   1) collect   — deepseek-v4-pro: сбор данных + черновая композиция (весь PROJECT_MODEL);
+#   2) structure — claude-sonnet-4.6: структурирование, перевод на ясный язык, сжатие;
+#   3) review    — claude-opus-4.8: ёмкие рекомендации (только сжатый текст → короткий JSON);
+#   4) finalize  — claude-sonnet-4.6: финальные правки по рекомендациям.
+# Этап 4 пропускается, если рецензент вернул verdict='ok' / пустой список (экономия).
+# Каждый этап коммитится в БД сразу (project_cards.save_composition_stage) → защита от
+# падения: обрыв SSE / рестарт сервера теряют максимум один незавершённый этап.
+
+COMPOSE_COLLECT_MODEL = "deepseek/deepseek-v4-pro"
+COMPOSE_STRUCTURE_MODEL = "anthropic/claude-sonnet-4.6"
+COMPOSE_REVIEW_MODEL = "anthropic/claude-opus-4.8"
+COMPOSE_FINALIZE_MODEL = "anthropic/claude-sonnet-4.6"
+
+# Человекочитаемые подписи этапов для прогресс-степпера на фронте.
+COMPOSE_STAGES = [
+    {"key": "collect", "no": 1, "model": COMPOSE_COLLECT_MODEL, "title": "Сбор данных и черновик"},
+    {"key": "structure", "no": 2, "model": COMPOSE_STRUCTURE_MODEL, "title": "Структурирование и ясный язык"},
+    {"key": "review", "no": 3, "model": COMPOSE_REVIEW_MODEL, "title": "Проверка и рекомендации"},
+    {"key": "finalize", "no": 4, "model": COMPOSE_FINALIZE_MODEL, "title": "Финальные правки"},
+]
+
+
+STRUCTURE_SYSTEM_PROMPT = (
+    "Ты — редактор-методолог. Тебе дают ЧЕРНОВУЮ композицию одного раздела проекта "
+    "(manifest + composition), уже собранную из данных проекта.\n\n"
+    "ЗАДАЧА: структурировать и переписать на ясном человеческом языке — убрать "
+    "канцелярит, повторы и воду, сделать связно и ёмко, чтобы смысл считывался с "
+    "первого прочтения.\n\n"
+    "ЖЁСТКИЕ ПРАВИЛА:\n"
+    "1. Сохрани ВСЕ конкретные факты, цифры, названия и элементы из черновика — ничего "
+    "важного не теряй.\n"
+    "2. Ничего НЕ придумывай и не добавляй от себя; работай только с тем, что в черновике.\n"
+    "3. Не оценивай проект, не указывай ошибки, не давай рекомендаций.\n"
+    "4. Не упоминай технические id, JSON, модель или процесс.\n\n"
+    "Верни ТОЛЬКО валидный JSON по схеме:\n"
+    '{\n  "manifest": "сжатый манифест раздела",\n'
+    '  "composition": "связный, ёмкий текст раздела"\n}\n'
+)
+
+REVIEW_SYSTEM_PROMPT = (
+    "Ты — строгий рецензент-методолог. Тебе дают ГОТОВЫЙ текст одного раздела проекта "
+    "(manifest + composition).\n\n"
+    "ЗАДАЧА: дать короткие конкретные правки для улучшения ясности, полноты и связности.\n\n"
+    "ПРАВИЛА ЭКОНОМИИ (важно):\n"
+    "• НЕ переписывай текст и НЕ цитируй его целиком.\n"
+    "• НЕ добавляй новых данных и фактов.\n"
+    "• Каждая рекомендация — ОДНО короткое предложение, строго по делу.\n"
+    "• Максимум 6 рекомендаций; только существенное.\n"
+    "• Если текст уже ясный, полный и связный — верни verdict 'ok' и пустой список.\n\n"
+    "Верни ТОЛЬКО валидный JSON по схеме:\n"
+    '{\n  "verdict": "ok | revise",\n'
+    '  "recommendations": ["короткая правка 1", "короткая правка 2"]\n}\n'
+)
+
+FINALIZE_SYSTEM_PROMPT = (
+    "Ты — редактор-методолог. Тебе дают текст одного раздела проекта (manifest + "
+    "composition) и список КОНКРЕТНЫХ правок рецензента.\n\n"
+    "ЗАДАЧА: внести ровно эти правки. Сохрани все факты и полноту, пиши ясно и ёмко.\n\n"
+    "ЖЁСТКИЕ ПРАВИЛА:\n"
+    "1. Не выдумывай ничего сверх исходного текста и правок.\n"
+    "2. Не теряй конкретные факты, цифры, названия и элементы.\n"
+    "3. Не упоминай технические id, JSON, модель или процесс.\n\n"
+    "Верни ТОЛЬКО валидный JSON по схеме:\n"
+    '{\n  "manifest": "финальный манифест раздела",\n'
+    '  "composition": "финальный текст раздела"\n}\n'
+)
+
+
+def _compose_clean(raw: dict) -> dict:
+    """Нормализовать ответ модели этапа в {manifest, composition}."""
+    manifest = str(raw.get("manifest") or "").strip()
+    composition = str(raw.get("composition") or "").strip()
+    if not composition:
+        composition = "В разделе пока нет данных для композиции."
+    return {"manifest": manifest, "composition": composition}
+
+
+def _section_text(section: dict) -> str:
+    return (
+        f"МАНИФЕСТ: {section.get('manifest') or '—'}\n\n"
+        f"ТЕКСТ:\n{section.get('composition') or '—'}"
+    )
+
+
+def _run_collect(project_model: dict | None) -> dict:
+    """Этап 1 — deepseek-v4-pro: собрать черновую композицию из всего PROJECT_MODEL."""
+    if not isinstance(project_model, dict):
+        return {"manifest": "", "composition": "В разделе пока нет данных для композиции."}
+    payload = json.dumps(project_model, ensure_ascii=False)
+    user = (
+        "PROJECT_MODEL:\n"
+        f"{payload[:70000]}\n\n"
+        "Собери композицию одного выбранного раздела строго из этих данных. "
+        "Сначала дай короткий манифест всего композированного экрана, затем "
+        "основной текст раздела. Отрази все непустые поля и элементы. Пиши "
+        "ёмко, без лишнего переусложнения. Не добавляй ничего от себя."
+    )
+    raw, usage = _chat_json(COMPOSE_COLLECT_MODEL, COMPOSITION_SYSTEM_PROMPT, user, max_tokens=6000)
+    logger.info("compose stage=collect usage=%s", usage)
+    return _compose_clean(raw)
+
+
+def _run_structure(draft: dict) -> dict:
+    """Этап 2 — claude-sonnet-4.6: структурировать и сжать черновик (без потери фактов)."""
+    user = (
+        "ЧЕРНОВАЯ КОМПОЗИЦИЯ:\n"
+        f"{_section_text(draft)}\n\n"
+        "Структурируй и перепиши ёмко на ясном языке, сохрани все факты черновика. "
+        "Верни JSON {manifest, composition}."
+    )
+    raw, usage = _chat_json(COMPOSE_STRUCTURE_MODEL, STRUCTURE_SYSTEM_PROMPT, user, max_tokens=4000)
+    logger.info("compose stage=structure usage=%s", usage)
+    return _compose_clean(raw)
+
+
+def _run_review(structured: dict) -> dict:
+    """Этап 3 — claude-opus-4.8: ёмкие рекомендации (минимум токенов на входе и выходе)."""
+    user = (
+        "ТЕКСТ РАЗДЕЛА:\n"
+        f"{_section_text(structured)}\n\n"
+        "Дай ёмкие правки по схеме. Если всё хорошо — verdict 'ok', recommendations []."
+    )
+    raw, usage = _chat_json(COMPOSE_REVIEW_MODEL, REVIEW_SYSTEM_PROMPT, user, max_tokens=800)
+    logger.info("compose stage=review usage=%s", usage)
+    verdict = str(raw.get("verdict") or "").strip().lower()
+    if verdict not in {"ok", "revise"}:
+        verdict = "revise"
+    recs = [str(r).strip() for r in (raw.get("recommendations") or []) if str(r).strip()][:6]
+    if not recs:
+        verdict = "ok"
+    return {"verdict": verdict, "recommendations": recs}
+
+
+def _run_finalize(structured: dict, recommendations: list[str]) -> dict:
+    """Этап 4 — claude-sonnet-4.6: внести правки рецензента, сохранив факты."""
+    recs_block = "\n".join(f"• {r}" for r in recommendations) or "—"
+    user = (
+        "ТЕКСТ РАЗДЕЛА:\n"
+        f"{_section_text(structured)}\n\n"
+        f"ПРАВКИ РЕЦЕНЗЕНТА:\n{recs_block}\n\n"
+        "Внеси только эти правки, сохрани все факты. Верни JSON {manifest, composition}."
+    )
+    raw, usage = _chat_json(COMPOSE_FINALIZE_MODEL, FINALIZE_SYSTEM_PROMPT, user, max_tokens=4000)
+    logger.info("compose stage=finalize usage=%s", usage)
+    return _compose_clean(raw)
+
+
+def _sse(payload: dict) -> str:
+    """Сериализовать событие в формат SSE (как в agent_network.stream_network)."""
+    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+
+
+def _stage_event(key: str, status: str, **extra) -> dict:
+    meta = next((s for s in COMPOSE_STAGES if s["key"] == key), {"no": 0, "model": ""})
+    return {"type": "stage", "stage": key, "stage_no": meta["no"],
+            "model": meta["model"], "status": status, **extra}
+
+
+async def compose_stream(
+    db: AsyncSession,
+    project_id: int,
+    card_id: str,
+    project_model: dict | None,
+) -> AsyncGenerator[str, None]:
+    """SSE-конвейер композиции с поэтапным сохранением в БД и возобновлением.
+
+    Стримит события этапов (`type:'stage'`) и финал (`type:'done'`). Каждый этап
+    коммитится сразу после завершения, поэтому обрыв соединения (обновление
+    страницы) или рестарт сервера не теряют готовые этапы — повторный вызов
+    продолжит с первого незавершённого этапа.
+    """
+    ckpt = await project_cards.get_composition(db, project_id, card_id)
+    draft = ckpt.get("draft")
+    structured = ckpt.get("structured")
+    recommendations = ckpt.get("recommendations")
+    final = ckpt.get("final")
+
+    # Уже собрано целиком → сразу отдаём результат (быстрая гидрация).
+    if ckpt.get("status") == "done" and isinstance(final, dict):
+        for s in COMPOSE_STAGES:
+            yield _sse(_stage_event(s["key"], "done", cached=True))
+        yield _sse({"type": "done", **_compose_clean(final)})
+        return
+
+    try:
+        # ── Этап 1: collect (deepseek) ──
+        if not isinstance(draft, dict):
+            yield _sse(_stage_event("collect", "running"))
+            draft = await asyncio.to_thread(_run_collect, project_model)
+            await project_cards.save_composition_stage(
+                db, project_id, card_id,
+                patch={"status": "collecting", "stage_no": 1, "draft": draft},
+            )
+            yield _sse(_stage_event("collect", "done"))
+        else:
+            yield _sse(_stage_event("collect", "done", cached=True))
+
+        # ── Этап 2: structure (sonnet), откат к черновику при сбое ──
+        if not isinstance(structured, dict):
+            yield _sse(_stage_event("structure", "running"))
+            try:
+                structured = await asyncio.to_thread(_run_structure, draft)
+                yield _sse(_stage_event("structure", "done"))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("compose structure failed: %s", exc)
+                structured = dict(draft)
+                yield _sse(_stage_event("structure", "fallback", error=str(exc)[:160]))
+            await project_cards.save_composition_stage(
+                db, project_id, card_id,
+                patch={"status": "structuring", "stage_no": 2, "structured": structured},
+            )
+        else:
+            yield _sse(_stage_event("structure", "done", cached=True))
+
+        # ── Этап 3: review (opus), при сбое — verdict ok (этап 4 пропустится) ──
+        if not isinstance(recommendations, dict):
+            yield _sse(_stage_event("review", "running"))
+            try:
+                recommendations = await asyncio.to_thread(_run_review, structured)
+                yield _sse(_stage_event("review", "done",
+                                        recommendations=recommendations.get("recommendations", []),
+                                        verdict=recommendations.get("verdict")))
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("compose review failed: %s", exc)
+                recommendations = {"verdict": "ok", "recommendations": []}
+                yield _sse(_stage_event("review", "fallback", error=str(exc)[:160]))
+            await project_cards.save_composition_stage(
+                db, project_id, card_id,
+                patch={"status": "reviewing", "stage_no": 3, "recommendations": recommendations},
+            )
+        else:
+            yield _sse(_stage_event("review", "done", cached=True,
+                                    recommendations=recommendations.get("recommendations", []),
+                                    verdict=recommendations.get("verdict")))
+
+        # ── Этап 4: finalize (sonnet) или skip ──
+        if not isinstance(final, dict):
+            recs = recommendations.get("recommendations") or []
+            if recommendations.get("verdict") == "ok" or not recs:
+                final = dict(structured)
+                yield _sse(_stage_event("finalize", "skipped"))
+            else:
+                yield _sse(_stage_event("finalize", "running"))
+                try:
+                    final = await asyncio.to_thread(_run_finalize, structured, recs)
+                    yield _sse(_stage_event("finalize", "done"))
+                except Exception as exc:  # noqa: BLE001
+                    logger.warning("compose finalize failed: %s", exc)
+                    final = dict(structured)
+                    yield _sse(_stage_event("finalize", "fallback", error=str(exc)[:160]))
+            await project_cards.save_composition_stage(
+                db, project_id, card_id,
+                patch={"status": "done", "stage_no": 4, "final": final},
+            )
+        else:
+            yield _sse(_stage_event("finalize", "done", cached=True))
+            await project_cards.save_composition_stage(
+                db, project_id, card_id, patch={"status": "done", "stage_no": 4},
+            )
+
+        yield _sse({"type": "done", **_compose_clean(final)})
+
+    except asyncio.CancelledError:
+        # Клиент отключился (обновление страницы) — готовые этапы уже в БД, просто выходим.
+        raise
+    except Exception as exc:  # noqa: BLE001 — крайний случай: отдаём лучший доступный текст
+        logger.warning("compose_stream failed: %s", exc)
+        best = final or structured or draft or {
+            "manifest": "", "composition": "Не удалось собрать композицию раздела. Попробуйте ещё раз.",
+        }
+        try:
+            await project_cards.save_composition_stage(
+                db, project_id, card_id,
+                patch={"status": "failed", "error": str(exc)[:200]},
+            )
+        except Exception:  # noqa: BLE001
+            await db.rollback()
+        yield _sse({"type": "error", "error": str(exc)[:200]})
+        yield _sse({"type": "done", **_compose_clean(best)})
 
 
 async def chat_methodolog(

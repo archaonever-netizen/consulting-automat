@@ -156,3 +156,64 @@ async def reset_chat(db: AsyncSession, project_id: int, card_id: str | None = No
     content.pop("plan", None)
     row.content_json = content
     await db.commit()
+
+
+# ───────────────────── Композиция раздела (многоэтапная) ─────────────────────
+# Чекпоинт композиции живёт в отдельной синтетической строке на каждую карточку
+# (__composition__:<card_id>), чтобы не пересекаться ни с содержимым карточки
+# (content_json реальных card_id), ни с чатом методолога (__project_review__).
+#
+# ГЛАВНОЕ ПРО ДОЛГОВЕЧНОСТЬ: каждый этап конвейера коммитится СРАЗУ после
+# завершения. Поэтому при обрыве SSE (обновление страницы) или перезапуске
+# сервера готовые этапы остаются в БД, а возобновление идёт с первого
+# незавершённого этапа — переделывается максимум один (in-flight) этап.
+COMPOSITION_PREFIX = "__composition__:"
+
+
+def _composition_card_id(card_id: str) -> str:
+    return f"{COMPOSITION_PREFIX}{card_id}"
+
+
+async def get_composition(db: AsyncSession, project_id: int, card_id: str) -> dict:
+    """Вернуть чекпоинт композиции карточки (или {'status': 'idle'}) — источник истины
+    для гидрации после обновления страницы / рестарта сервера."""
+    row = (await db.scalars(
+        select(ProjectCardState).where(
+            ProjectCardState.project_id == project_id,
+            ProjectCardState.card_id == _composition_card_id(card_id),
+        )
+    )).first()
+    if row is None or not isinstance(row.content_json, dict):
+        return {"status": "idle"}
+    return row.content_json
+
+
+async def save_composition_stage(
+    db: AsyncSession, project_id: int, card_id: str, *, patch: dict
+) -> dict:
+    """Слить `patch` в чекпоинт композиции и НЕМЕДЛЕННО закоммитить.
+
+    Коммит на каждый этап — это и есть защита от падения: завершённые этапы
+    сохраняются ещё до того, как соединение/процесс могут оборваться.
+    """
+    row = await _get_or_create(db, project_id, _composition_card_id(card_id))
+    content = dict(row.content_json) if isinstance(row.content_json, dict) else {}
+    content.update(patch)
+    content["updated_at"] = datetime.utcnow().isoformat()
+    row.content_json = content
+    await db.commit()
+    return content
+
+
+async def reset_composition(db: AsyncSession, project_id: int, card_id: str) -> None:
+    """Сбросить чекпоинт композиции карточки (перезапуск «с нуля»)."""
+    row = (await db.scalars(
+        select(ProjectCardState).where(
+            ProjectCardState.project_id == project_id,
+            ProjectCardState.card_id == _composition_card_id(card_id),
+        )
+    )).first()
+    if row is None:
+        return
+    row.content_json = {"status": "idle"}
+    await db.commit()

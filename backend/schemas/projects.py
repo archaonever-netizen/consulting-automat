@@ -79,6 +79,8 @@ class ProjectReviewRequest(BaseModel):
 class ProjectCompositionRequest(BaseModel):
     # Машиночитаемая карта проекта из frontend: все карточки, поля и элементы.
     project_model: Optional[dict] = None
+    # id карточки-раздела: ключ чекпоинта композиции (нужен для SSE-стрима и гидрации).
+    card_id: Optional[str] = None
 
 
 class ProjectChatMessage(BaseModel):

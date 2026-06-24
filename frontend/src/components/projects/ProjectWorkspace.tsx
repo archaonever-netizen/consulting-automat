@@ -11,7 +11,43 @@ import { hydrateProjectCards } from './projectCardSync';
 import type { CanvasFocusTarget } from './projectCanvasFocus';
 import { buildProjectEditModel } from './projectEditModel';
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
-import { composeProject } from './projectReview';
+import {
+  fetchCompositionState,
+  resetComposition,
+  streamComposition,
+  type CompositionSection,
+  type CompositionStageEvent,
+  type CompositionStageKey,
+  type CompositionState,
+} from './projectReview';
+
+// Этапы конвейера композиции — для прогресс-степпера (порядок = порядку выполнения).
+type StageStatus = 'pending' | 'running' | 'done' | 'fallback' | 'skipped';
+const COMPOSITION_STEPS: { key: CompositionStageKey; title: string }[] = [
+  { key: 'collect', title: 'Сбор данных и черновик · DeepSeek' },
+  { key: 'structure', title: 'Структурирование и ясный язык · Sonnet' },
+  { key: 'review', title: 'Проверка и рекомендации · Opus' },
+  { key: 'finalize', title: 'Финальные правки · Sonnet' },
+];
+
+function emptyStages(): Record<CompositionStageKey, StageStatus> {
+  return { collect: 'pending', structure: 'pending', review: 'pending', finalize: 'pending' };
+}
+
+// Лучший доступный текст композиции из чекпоинта: финал → структурированный → черновик.
+function bestSection(state: CompositionState): CompositionSection | null {
+  return state.final ?? state.structured ?? state.draft ?? null;
+}
+
+// Статусы этапов по сохранённому чекпоинту (для паузы/гидрации после обновления страницы).
+function stagesFromState(state: CompositionState): Record<CompositionStageKey, StageStatus> {
+  return {
+    collect: state.draft ? 'done' : 'pending',
+    structure: state.structured ? 'done' : 'pending',
+    review: state.recommendations ? 'done' : 'pending',
+    finalize: state.final ? 'done' : 'pending',
+  };
+}
 
 export interface ProjectSection {
   id: string;
@@ -99,25 +135,6 @@ function compositionStorageKey(projectId: number, cardId: string): string {
   return `${COMPOSITION_STORAGE_PREFIX}:${projectId}:${cardId}`;
 }
 
-function readStoredComposition(projectId: number, cardId: string): StoredProjectComposition | null {
-  try {
-    const raw = localStorage.getItem(compositionStorageKey(projectId, cardId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<StoredProjectComposition>;
-    const composition = typeof parsed.composition === 'string' ? parsed.composition : '';
-    const manifest = typeof parsed.manifest === 'string' ? parsed.manifest : '';
-    if (!composition && !manifest) return null;
-    return {
-      title: typeof parsed.title === 'string' ? parsed.title : '',
-      manifest,
-      composition,
-      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
-    };
-  } catch {
-    return null;
-  }
-}
-
 function writeStoredComposition(projectId: number, cardId: string, value: StoredProjectComposition) {
   try {
     localStorage.setItem(compositionStorageKey(projectId, cardId), JSON.stringify(value));
@@ -160,6 +177,13 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   const [compositionSectionTitle, setCompositionSectionTitle] = useState('');
   const [compositionError, setCompositionError] = useState('');
   const [composingProject, setComposingProject] = useState(false);
+  // Прогресс по этапам конвейера композиции (для степпера) + рекомендации Opus.
+  const [stageStatus, setStageStatus] = useState<Record<CompositionStageKey, StageStatus>>(emptyStages);
+  const [reviewRecs, setReviewRecs] = useState<string[]>([]);
+  // Незавершённый чекпоинт (частичная композиция) → доступна кнопка «Продолжить».
+  const [compositionResumable, setCompositionResumable] = useState(false);
+  // Управление активным SSE-стримом (отмена при смене карточки/размонтировании).
+  const composeAbortRef = useRef<AbortController | null>(null);
 
   // Ширина правой панели (чат Методолога) — тянется мышью, запоминается в localStorage.
   const RP_MIN = 300;
@@ -248,92 +272,171 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
     // (например, при переходе из узла графа «Весь проект»).
     revealFrameworkCard(cardId);
     setFocusTarget(focus ? { cardId, list: focus.list, itemId: focus.itemId, nonce: ++focusNonce.current } : null);
-    syncCompositionForCard(cardId);
   }
 
   function selectCompactCard(cardId: string) {
     setActiveView({ mode: 'compact', cardId });
     revealFrameworkCard(cardId);
     setFocusTarget(null);
-    syncCompositionForCard(cardId);
   }
 
-  function syncCompositionForCard(cardId: string) {
-    if (!compositionOpen) return;
+  // Применить чекпоинт композиции из БД к UI (гидрация после обновления страницы/рестарта).
+  function applyCompositionState(cardId: string, state: CompositionState) {
     const card = PROJECT_FRAMEWORK_CARDS.find(item => item.id === cardId);
-    const stored = readStoredComposition(project.id, cardId);
-    setCompositionSectionTitle(stored?.title || card?.title || '');
-    setCompositionManifest(stored?.manifest || '');
-    setCompositionText(stored?.composition || '');
-    setCompositionError('');
+    setCompositionSectionTitle(card?.title || '');
+    setCompositionError(state.status === 'failed' && state.error ? state.error : '');
+    setStageStatus(stagesFromState(state));
+    setReviewRecs(state.recommendations?.recommendations ?? []);
+    const best = bestSection(state);
+    setCompositionManifest(best?.manifest ?? '');
+    setCompositionText(best?.composition ?? '');
+    // Частичный (или сбойный) чекпоинт → можно продолжить с незавершённого этапа.
+    setCompositionResumable(!['idle', 'done'].includes(state.status));
+    if (state.status !== 'idle') setCompositionOpen(true);
     setComposingProject(false);
-    if (!stored) setCompositionOpen(false);
   }
 
-  async function runProjectComposition() {
+  // Гидрация композиции при смене карточки: тянем чекпоинт из БД (переживает обновление
+  // страницы и рестарт сервера). Текущий стрим при этом отменяем.
+  useEffect(() => {
+    const cardId = activeFrameworkCard.id;
+    if (cardId === WHOLE_PROJECT_CARD_ID) return;
+    composeAbortRef.current?.abort();
+    let cancelled = false;
+    fetchCompositionState(project.id, cardId)
+      .then(state => { if (!cancelled) applyCompositionState(cardId, state); })
+      .catch(() => { /* офлайн/первый заход — панель просто не открываем */ });
+    return () => { cancelled = true; };
+  }, [project.id, activeFrameworkCard.id]);
+
+  // Отменить стрим при размонтировании воркспейса.
+  useEffect(() => () => composeAbortRef.current?.abort(), []);
+
+  function onCompositionStage(event: CompositionStageEvent) {
+    const next: StageStatus = event.status === 'running' ? 'running' : event.status;
+    setStageStatus(prev => ({ ...prev, [event.stage]: next }));
+    if (event.stage === 'review' && event.recommendations) setReviewRecs(event.recommendations);
+  }
+
+  // Запустить (fresh=true: «с нуля», сброс чекпоинта) или продолжить (fresh=false) композицию.
+  async function runComposition(fresh: boolean) {
     if (composingProject) return;
-    const stored = readStoredComposition(project.id, activeFrameworkCard.id);
+    const cardId = activeFrameworkCard.id;
     setCompositionOpen(true);
-    setCompositionManifest(stored?.manifest || '');
-    setCompositionText(stored?.composition || '');
-    setCompositionSectionTitle(stored?.title || activeFrameworkCard.title);
+    setCompositionSectionTitle(activeFrameworkCard.title);
     setCompositionError('');
-    if (activeFrameworkCard.id === WHOLE_PROJECT_CARD_ID) {
+    if (cardId === WHOLE_PROJECT_CARD_ID) {
       setCompositionError('Выберите конкретный раздел проекта, чтобы собрать его композицию.');
       return;
     }
+    const fullModel = buildProjectEditModel(project.id);
+    const editableCard = fullModel.editable_cards.find(card => card.card_id === cardId);
+    const contextCard = fullModel.context_cards.find(card => card.card_id === cardId);
+    if (!editableCard && !contextCard) {
+      setCompositionError('Для выбранного раздела пока нет данных для композиции.');
+      return;
+    }
+    const projectModel = {
+      project: {
+        id: project.id,
+        name: project.name,
+        client_name: project.client_name,
+        description: project.description || '',
+      },
+      section: { card_id: cardId, title: activeFrameworkCard.title },
+      cards: {
+        editable_cards: editableCard ? [editableCard] : [],
+        context_cards: contextCard ? [contextCard] : [],
+      },
+    };
+
     setComposingProject(true);
+    setCompositionResumable(false);
     try {
-      const fullModel = buildProjectEditModel(project.id);
-      const editableCard = fullModel.editable_cards.find(card => card.card_id === activeFrameworkCard.id);
-      const contextCard = fullModel.context_cards.find(card => card.card_id === activeFrameworkCard.id);
-      if (!editableCard && !contextCard) {
-        setCompositionError('Для выбранного раздела пока нет данных для композиции.');
-        return;
+      if (fresh) {
+        await resetComposition(project.id, cardId);
+        setStageStatus(emptyStages());
+        setReviewRecs([]);
+        setCompositionManifest('');
+        setCompositionText('');
       }
-      const result = await composeProject(project.id, {
-        project: {
-          id: project.id,
-          name: project.name,
-          client_name: project.client_name,
-          description: project.description || '',
-        },
-        section: {
-          card_id: activeFrameworkCard.id,
-          title: activeFrameworkCard.title,
-        },
-        cards: {
-          editable_cards: editableCard ? [editableCard] : [],
-          context_cards: contextCard ? [contextCard] : [],
+      composeAbortRef.current?.abort();
+      const ctrl = new AbortController();
+      composeAbortRef.current = ctrl;
+      await streamComposition(project.id, cardId, projectModel, {
+        signal: ctrl.signal,
+        onStage: onCompositionStage,
+        onError: msg => setCompositionError(msg),
+        onDone: section => {
+          setCompositionManifest(section.manifest);
+          setCompositionText(section.composition);
+          setCompositionResumable(false);
+          writeStoredComposition(project.id, cardId, {
+            title: activeFrameworkCard.title,
+            manifest: section.manifest,
+            composition: section.composition,
+            savedAt: new Date().toISOString(),
+          });
         },
       });
-      const nextComposition = result.composition || 'В разделе пока нет данных для композиции.';
-      const nextManifest = result.manifest || '';
-      setCompositionManifest(nextManifest);
-      setCompositionText(nextComposition);
-      writeStoredComposition(project.id, activeFrameworkCard.id, {
-        title: activeFrameworkCard.title,
-        manifest: nextManifest,
-        composition: nextComposition,
-        savedAt: new Date().toISOString(),
-      });
-    } catch {
-      setCompositionError('Не удалось собрать композицию раздела. Попробуйте ещё раз.');
+    } catch (e) {
+      // Отмена (смена карточки/уход) — не ошибка; чекпоинт уже в БД, продолжим позже.
+      if (!(e instanceof DOMException && e.name === 'AbortError')) {
+        setCompositionError('Не удалось собрать композицию раздела. Попробуйте ещё раз.');
+        setCompositionResumable(true);
+      }
     } finally {
       setComposingProject(false);
     }
   }
 
+  const hasStageProgress = composingProject || compositionResumable
+    || Object.values(stageStatus).some(s => s !== 'pending');
+
   const compositionSlot = compositionOpen ? (
     <ProjectDisclosure title={`Композиция раздела — ${compositionSectionTitle || activeFrameworkCard.title}`} defaultOpen>
-      {composingProject && (
-        <div className="project-composition-loading">
-          <span className="spinner" />
-          Методолог собирает композицию раздела...
+      {compositionError && <div className="project-card-validator-error">{compositionError}</div>}
+
+      {hasStageProgress && (
+        <ol className="project-composition-steps">
+          {COMPOSITION_STEPS.map(step => {
+            const st = stageStatus[step.key];
+            return (
+              <li key={step.key} className={`project-composition-step is-${st}`}>
+                <span className="project-composition-step-icon">
+                  {st === 'running'
+                    ? <span className="spinner" />
+                    : st === 'done' ? '✓'
+                    : st === 'fallback' ? '⚠'
+                    : st === 'skipped' ? '–'
+                    : '○'}
+                </span>
+                <span className="project-composition-step-title">{step.title}</span>
+                {st === 'fallback' && (
+                  <span className="project-composition-step-note">сбой этапа — взят текст предыдущего</span>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      )}
+
+      {reviewRecs.length > 0 && (
+        <div className="project-composition-recs">
+          <b>Рекомендации рецензента</b>
+          <ul>
+            {reviewRecs.map((rec, i) => <li key={`${i}:${rec.slice(0, 16)}`}>{rec}</li>)}
+          </ul>
         </div>
       )}
-      {compositionError && <div className="project-card-validator-error">{compositionError}</div>}
-      {!composingProject && !compositionError && (compositionManifest || compositionText) && (
+
+      {compositionResumable && !composingProject && (
+        <button type="button" className="project-card-validator-btn" onClick={() => runComposition(false)}>
+          Продолжить сборку
+        </button>
+      )}
+
+      {(compositionManifest || compositionText) && (
         <>
           {compositionManifest && (
             <div className="project-composition-manifest">
@@ -355,7 +458,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
 
   return (
     <div className="project-workspace">
-      <ProjectToolbar project={project} onComposeProject={runProjectComposition} composingProject={composingProject} />
+      <ProjectToolbar project={project} onComposeProject={() => runComposition(true)} composingProject={composingProject} />
       <div className="project-workspace-grid" ref={gridRef} style={{ '--rp-width': `${rightWidth}px` } as React.CSSProperties}>
         <ProjectLeftPanel
           project={project}
