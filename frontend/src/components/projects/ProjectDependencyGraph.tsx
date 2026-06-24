@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background, BaseEdge, Controls, Handle, MarkerType, MiniMap, Position,
   ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
-  type Edge, type EdgeProps, type Node, type NodeProps,
+  type Edge, type EdgeProps, type Node, type NodeProps, type Viewport,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
@@ -255,18 +255,35 @@ function handlesFor(kind: TheoryEdgeKind, source: string): [string, string] {
 export interface GraphOpenFocus { list?: string; itemId?: string }
 interface GraphProps { projectId: number; onOpenCard: (cardId: string, focus?: GraphOpenFocus) => void }
 
+// Состояние графа на время сессии: раскрытые списки, закреплённые узлы/связи и положение
+// вьюпорта. Граф размонтируется при переходе в карточку — кэш позволяет при возврате в
+// «Весь проект» увидеть то, на чём остановились (а не сбрасывать всё в исходное).
+interface GraphViewState { expanded: string[]; pinned: string[]; pinnedEdges: string[]; viewport?: Viewport }
+const graphViewCache = new Map<number, GraphViewState>();
+
 function GraphInner({ projectId, onOpenCard }: GraphProps) {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
-  const [pinned, setPinned] = useState<ReadonlySet<string>>(new Set());
-  const [pinnedEdges, setPinnedEdges] = useState<ReadonlySet<string>>(new Set());
+  const cached = graphViewCache.get(projectId);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(cached?.expanded ?? []));
+  const [pinned, setPinned] = useState<ReadonlySet<string>>(() => new Set(cached?.pinned ?? []));
+  const [pinnedEdges, setPinnedEdges] = useState<ReadonlySet<string>>(() => new Set(cached?.pinnedEdges ?? []));
   const [editNonce, setEditNonce] = useState(0);
   const [hovered, setHovered] = useState<string | null>(null);
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView, getZoom } = useReactFlow();
+  const { fitView, getZoom, setViewport, getViewport } = useReactFlow();
   const didInitialFit = useRef(false);
-  const prevExpanded = useRef<ReadonlySet<string>>(new Set());
+  // Было ли сохранённое положение вьюпорта на момент монтирования — тогда не делаем авто-fitView,
+  // а восстанавливаем сохранённый вид (см. эффект ниже).
+  const hadSavedViewport = useRef(Boolean(cached?.viewport));
+  // Засеяно раскрытыми из кэша — чтобы при восстановлении не сработала подгонка под раскрытый блок
+  // и не перебила сохранённое положение вьюпорта.
+  const prevExpanded = useRef<ReadonlySet<string>>(new Set(cached?.expanded ?? []));
+
+  // Точечно обновляем кэш состояния графа (сливая с уже сохранённым).
+  const patchCache = useCallback((patch: Partial<GraphViewState>) => {
+    graphViewCache.set(projectId, { expanded: [], pinned: [], pinnedEdges: [], ...graphViewCache.get(projectId), ...patch });
+  }, [projectId]);
 
   const toggle = useCallback((id: string) => setExpanded(prev => {
     const next = new Set(prev);
@@ -407,15 +424,31 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     setEdges(rf);
   }, [graph, hovered, pinned, hoveredEdge, pinnedEdges, setEdges]);
 
-  // Первичная подгонка под весь граф — один раз, когда узлы впервые появились.
+  // Сохраняем раскрытия/закрепления в кэш — чтобы восстановить при возврате в «Весь проект».
+  useEffect(() => {
+    patchCache({ expanded: [...expanded], pinned: [...pinned], pinnedEdges: [...pinnedEdges] });
+  }, [expanded, pinned, pinnedEdges, patchCache]);
+
+  // При уходе с экрана (переход в карточку) фиксируем текущее положение вьюпорта — в т.ч. после
+  // программной подгонки (раскрытие блока), которую onMoveEnd не ловит.
+  useEffect(() => {
+    return () => { patchCache({ viewport: getViewport() }); };
+  }, [getViewport, patchCache]);
+
+  // Первичная подгонка под весь граф — один раз, когда узлы впервые появились. Если есть
+  // сохранённое положение вьюпорта (вернулись из карточки) — восстанавливаем его вместо подгонки.
   // Дальше НЕ переподгоняем на каждое изменение числа узлов (добавление «+», pin, удаление),
   // иначе вид отлетает к общему плану и приходится возвращаться вручную.
   useEffect(() => {
     if (didInitialFit.current || nodes.length === 0) return;
     didInitialFit.current = true;
-    const t = window.setTimeout(() => fitView({ duration: 300, padding: 0.14 }), 60);
+    const savedViewport = graphViewCache.get(projectId)?.viewport;
+    const t = window.setTimeout(() => {
+      if (savedViewport) setViewport(savedViewport, { duration: 0 });
+      else fitView({ duration: 300, padding: 0.14 });
+    }, 60);
     return () => window.clearTimeout(t);
-  }, [nodes.length, fitView]);
+  }, [nodes.length, fitView, setViewport, projectId]);
 
   // При раскрытии списка отдаляемся ровно настолько, чтобы стал виден весь список
   // (узел-блок + его элементы), но не дальше текущего масштаба (внутрь не приближаем).
@@ -445,12 +478,13 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
   return (
     <ReactFlow
       nodes={nodes} edges={edges} onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-      nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView fitViewOptions={{ padding: 0.14 }} minZoom={0.15}
+      nodeTypes={nodeTypes} edgeTypes={edgeTypes} fitView={!hadSavedViewport.current} fitViewOptions={{ padding: 0.14 }} minZoom={0.15}
       proOptions={{ hideAttribution: true }} nodesConnectable={false} edgesFocusable={false} elementsSelectable={false}
       onNodeMouseEnter={(_, n) => setHovered(n.id)} onNodeMouseLeave={() => setHovered(null)}
       onEdgeMouseEnter={(_, e) => setHoveredEdge(e.id)} onEdgeMouseLeave={() => setHoveredEdge(null)}
       onEdgeClick={(_, e) => onEdgePin(e.id)}
       onPaneClick={clearPins}
+      onMoveEnd={(_, viewport) => patchCache({ viewport })}
     >
       <Background gap={22} />
       <MiniMap pannable zoomable />
