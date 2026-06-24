@@ -28,7 +28,7 @@ export default function ProjectToolbar({ project, onComposeProject, composingPro
           disabled={!onComposeProject || composingProject}
         >
           {composingProject ? <span className="spinner" /> : <Icon name="sparkle" size={15} />}
-          Композиция проекта
+          Композиция раздела
         </button>
         <Link to={`/clients/${project.client_id}`} className="btn btn-ghost btn-sm">
           <Icon name="users" size={15} />Клиент

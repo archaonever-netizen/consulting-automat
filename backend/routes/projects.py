@@ -149,7 +149,7 @@ async def compose_project(
     current_user=Depends(get_current_user_dep),
     db: AsyncSession = Depends(get_db),
 ):
-    """Read-only композиция проекта из текущих карточек без RAG, оценки и правок."""
+    """Read-only композиция выбранного раздела без RAG, оценки и правок."""
     if not await project_cards.project_exists(db, project_id):
         raise HTTPException(status_code=404, detail="Project not found")
     model = await bots.get_methodolog_model(db)
@@ -157,7 +157,7 @@ async def compose_project(
         result = await project_methodolog.compose_project(data.project_model, model=model)
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return {"composition": result["composition"]}
+    return {"manifest": result["manifest"], "composition": result["composition"]}
 
 
 @router.post(

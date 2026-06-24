@@ -1249,6 +1249,16 @@ a:hover { color: var(--accent-hover); }
 .project-composition-loading {
   display: flex; align-items: center; gap: 8px; color: var(--text-secondary); font-size: 13px; font-weight: 700;
 }
+.project-composition-manifest {
+  max-width: 960px; margin-bottom: 12px; padding: 12px 14px;
+  border: 1px solid var(--accent-weak-2); border-radius: var(--radius-sm); background: var(--accent-weak);
+}
+.project-composition-manifest b {
+  display: block; margin-bottom: 5px; color: var(--accent-ink); font-size: 12px; font-weight: 800;
+}
+.project-composition-manifest p {
+  margin: 0; color: var(--text-primary); font-size: 13.5px; line-height: 1.55; overflow-wrap: anywhere;
+}
 .project-composition-text {
   display: grid; gap: 8px; max-width: 960px; color: var(--text-primary); font-size: 13.5px; line-height: 1.6;
 }

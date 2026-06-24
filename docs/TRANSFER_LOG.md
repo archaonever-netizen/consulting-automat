@@ -1,5 +1,49 @@
 # Журнал переноса изменений
 
+## Композиция активного раздела с манифестом
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-24
+- Цель: уточнить механику композиции так, чтобы ИИ-Методолог собирал не весь проект, а только текущий открытый раздел/карточку.
+
+### Что реализовано
+
+- Кнопка в верхнем toolbar переименована в "Композиция раздела".
+- Frontend больше не отправляет весь `buildProjectEditModel(project.id)` в запрос композиции.
+- Для запроса композиции из полной модели вырезается только активная карточка/раздел (`activeFrameworkCard.id`).
+- Если открыт экран "Весь проект", композиция не запускается: пользователю предлагается выбрать конкретный раздел.
+- Ответ ИИ-Методолога разделён на `manifest` и `composition`.
+- `manifest` выводится сверху всего текста как краткий манифест композированного экрана.
+- В prompt добавлено правило писать ёмко, без лишнего переусложнения, канцелярита и длинных методологических конструкций.
+- `frontend/dist` пересобран после изменения frontend.
+
+### Изменённые файлы
+
+- `backend/services/project_methodolog.py` - prompt композиции переведен на один раздел, добавлен `manifest`.
+- `backend/routes/projects.py` - endpoint возвращает `manifest` вместе с `composition`.
+- `frontend/src/components/projects/ProjectWorkspace.tsx` - payload ограничен активным разделом, добавлен вывод манифеста сверху.
+- `frontend/src/components/projects/ProjectToolbar.tsx` - кнопка переименована в "Композиция раздела".
+- `frontend/src/components/projects/projectReview.ts` - тип ответа композиции дополнен `manifest`.
+- `frontend/src/styles/styles.css` - добавлены стили манифеста.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновленные build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `.\\.venv\\Scripts\\python.exe -m ruff check --select F,E9 backend\\routes\\projects.py backend\\schemas\\projects.py backend\\services\\project_methodolog.py` - успешно.
+- `npm.cmd exec eslint -- src/components/projects/ProjectWorkspace.tsx src/components/projects/ProjectToolbar.tsx src/components/projects/projectReview.ts` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- При открытом "Весь проект" композиция намеренно не собирается, чтобы не возвращаться к общепроектному режиму.
+- Если потребуется отдельная композиция для групп верхнего уровня в левом дереве, нужно будет добавить payload по группе карточек, но не смешивать это с "Весь проект".
+
+---
+
 ## Композиция проекта через ИИ-Методолога
 
 ### Контекст

@@ -56,6 +56,7 @@ export interface ChatResponse {
 }
 
 export interface ProjectCompositionResponse {
+  manifest: string;
   composition: string;
 }
 

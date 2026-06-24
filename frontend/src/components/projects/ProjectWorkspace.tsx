@@ -115,7 +115,9 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   const [focusTarget, setFocusTarget] = useState<CanvasFocusTarget | null>(null);
   const focusNonce = useRef(0);
   const [compositionOpen, setCompositionOpen] = useState(false);
+  const [compositionManifest, setCompositionManifest] = useState('');
   const [compositionText, setCompositionText] = useState('');
+  const [compositionSectionTitle, setCompositionSectionTitle] = useState('');
   const [compositionError, setCompositionError] = useState('');
   const [composingProject, setComposingProject] = useState(false);
 
@@ -217,9 +219,23 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   async function runProjectComposition() {
     if (composingProject) return;
     setCompositionOpen(true);
+    setCompositionManifest('');
+    setCompositionText('');
+    setCompositionSectionTitle(activeFrameworkCard.title);
     setCompositionError('');
+    if (activeFrameworkCard.id === WHOLE_PROJECT_CARD_ID) {
+      setCompositionError('Выберите конкретный раздел проекта, чтобы собрать его композицию.');
+      return;
+    }
     setComposingProject(true);
     try {
+      const fullModel = buildProjectEditModel(project.id);
+      const editableCard = fullModel.editable_cards.find(card => card.card_id === activeFrameworkCard.id);
+      const contextCard = fullModel.context_cards.find(card => card.card_id === activeFrameworkCard.id);
+      if (!editableCard && !contextCard) {
+        setCompositionError('Для выбранного раздела пока нет данных для композиции.');
+        return;
+      }
       const result = await composeProject(project.id, {
         project: {
           id: project.id,
@@ -227,11 +243,19 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           client_name: project.client_name,
           description: project.description || '',
         },
-        cards: buildProjectEditModel(project.id),
+        section: {
+          card_id: activeFrameworkCard.id,
+          title: activeFrameworkCard.title,
+        },
+        cards: {
+          editable_cards: editableCard ? [editableCard] : [],
+          context_cards: contextCard ? [contextCard] : [],
+        },
       });
-      setCompositionText(result.composition || 'В проекте пока нет данных для композиции.');
+      setCompositionManifest(result.manifest || '');
+      setCompositionText(result.composition || 'В разделе пока нет данных для композиции.');
     } catch {
-      setCompositionError('Не удалось собрать композицию проекта. Попробуйте ещё раз.');
+      setCompositionError('Не удалось собрать композицию раздела. Попробуйте ещё раз.');
     } finally {
       setComposingProject(false);
     }
@@ -244,8 +268,8 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
         <section className="project-composition-panel">
           <div className="project-composition-head">
             <div>
-              <p className="eyebrow">Композиция проекта</p>
-              <h2>Собранный текст проекта</h2>
+              <p className="eyebrow">Композиция раздела</p>
+              <h2>{compositionSectionTitle || activeFrameworkCard.title}</h2>
             </div>
             <button
               type="button"
@@ -259,16 +283,26 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           {composingProject && (
             <div className="project-composition-loading">
               <span className="spinner" />
-              Методолог собирает композицию проекта...
+              Методолог собирает композицию раздела...
             </div>
           )}
           {compositionError && <div className="project-card-validator-error">{compositionError}</div>}
-          {!composingProject && !compositionError && compositionText && (
-            <div className="project-composition-text">
-              {compositionLines(compositionText).map((line, index) => (
-                <p key={`${index}:${line.slice(0, 16)}`}>{line}</p>
-              ))}
-            </div>
+          {!composingProject && !compositionError && (compositionManifest || compositionText) && (
+            <>
+              {compositionManifest && (
+                <div className="project-composition-manifest">
+                  <b>Манифест</b>
+                  <p>{compositionManifest}</p>
+                </div>
+              )}
+              {compositionText && (
+                <div className="project-composition-text">
+                  {compositionLines(compositionText).map((line, index) => (
+                    <p key={`${index}:${line.slice(0, 16)}`}>{line}</p>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </section>
       )}
