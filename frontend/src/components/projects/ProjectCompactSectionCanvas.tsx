@@ -7,25 +7,6 @@ interface ProjectCompactSectionCanvasProps {
   cardId: string;
 }
 
-const statusLabel = {
-  empty: 'не заполнен',
-  partial: 'заполнен частично',
-  filled: 'заполнен',
-};
-
-function formatDate(value: string) {
-  if (!value) return '';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '';
-  return new Intl.DateTimeFormat('ru-RU', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
-
 export default function ProjectCompactSectionCanvas({ projectId, cardId }: ProjectCompactSectionCanvasProps) {
   const model = useMemo(() => buildCompactSectionModel(projectId, cardId), [projectId, cardId]);
 
@@ -41,7 +22,6 @@ export default function ProjectCompactSectionCanvas({ projectId, cardId }: Proje
     );
   }
 
-  const updatedAt = formatDate(model.updatedAt);
   const hasContent = model.fields.length > 0 || model.groups.length > 0;
 
   return (
@@ -52,24 +32,13 @@ export default function ProjectCompactSectionCanvas({ projectId, cardId }: Proje
           <h2>{model.title}</h2>
           {model.description && <p>{model.description}</p>}
         </div>
-        <div className="project-compact-status">
-          <span>{statusLabel[model.summary.status]}</span>
-          <b>{model.summary.filledFields}/{model.summary.totalFields || 0}</b>
-          <small>заполненных полей</small>
-        </div>
-      </section>
-
-      <section className="project-compact-meta" aria-label="Состояние раздела">
-        <span>{model.summary.filledItems}/{model.summary.totalItems || 0} элементов с данными</span>
-        <span>только просмотр</span>
-        {updatedAt && <span>обновлено {updatedAt}</span>}
       </section>
 
       {!hasContent ? (
         <section className="project-compact-empty">
           <div className="ei"><Icon name="template" size={22} /></div>
           <b>В разделе пока нет внесенной информации</b>
-          <span>Когда рабочая карточка будет заполнена, здесь появится собранная версия без полей редактирования.</span>
+          <span>Когда в разделе появится информация по проекту, здесь будет собранная версия этого содержания.</span>
         </section>
       ) : (
         <>

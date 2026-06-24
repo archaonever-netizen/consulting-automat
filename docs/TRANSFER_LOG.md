@@ -59,10 +59,10 @@
 - В левой панели проекта у карточек разделов добавлена отдельная кнопка "Компазированный раздел".
 - Добавлен новый read-only canvas `ProjectCompactSectionCanvas`, который показывает:
   - заголовок и описание раздела;
-  - статус заполненности;
   - ключевые поля;
   - группы повторяемых элементов;
   - пустое состояние, если раздел еще не заполнен.
+- С compact-экрана убраны служебные элементы рабочего процесса: счетчики заполненности, дата обновления, отметка "только просмотр" и технический статус.
 - Добавлен адаптер `projectCompactSectionModel`, который строит компактную модель из существующей `buildProjectEditModel(projectId)` и snapshot-readers.
 - Существующие рабочие Canvas-экраны, граф "Весь проект", API, БД, сохранение карточек и Методолог не менялись.
 - `frontend/dist` пересобран после изменения frontend.
@@ -74,7 +74,7 @@
 - `frontend/src/components/projects/ProjectCanvas.tsx` - добавлена отдельная ветка рендера compact-экрана.
 - `frontend/src/components/projects/ProjectCompactSectionCanvas.tsx` - новый read-only экран.
 - `frontend/src/components/projects/projectCompactSectionModel.ts` - новая read-only модель compact-представления.
-- `frontend/src/styles/styles.css` - стили кнопки и compact-экрана.
+- `frontend/src/styles/styles.css` - стили кнопки и содержательного compact-экрана.
 - `frontend/dist/index.html`, `frontend/dist/assets/*` - обновленные build-артефакты.
 - `docs/TRANSFER_LOG.md` - добавлена эта запись.
 

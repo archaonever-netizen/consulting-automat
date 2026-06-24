@@ -1478,24 +1478,6 @@ a:hover { color: var(--accent-hover); }
 .project-compact-hero p:not(.eyebrow) {
   margin: 0; max-width: 760px; color: var(--text-secondary); font-size: 13.5px; line-height: 1.55;
 }
-.project-compact-status {
-  min-width: 170px; display: grid; gap: 3px; padding: 12px 14px; border: 1px solid var(--line);
-  border-radius: var(--radius-md); background: var(--card-bg); text-align: right;
-}
-.project-compact-status span,
-.project-compact-status small {
-  color: var(--text-secondary); font-size: 12px; font-weight: 800;
-}
-.project-compact-status b {
-  color: var(--text-primary); font-family: var(--font-display); font-size: 24px; line-height: 1;
-}
-.project-compact-meta {
-  display: flex; flex-wrap: wrap; gap: 8px;
-}
-.project-compact-meta span {
-  padding: 6px 9px; border: 1px solid var(--line); border-radius: var(--radius-pill);
-  background: var(--card-bg); color: var(--text-secondary); font-size: 12px; font-weight: 800;
-}
 .project-compact-block {
   display: flex; flex-direction: column; gap: 12px; padding: 16px 18px;
   border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--card-bg);
@@ -2148,7 +2130,6 @@ a:hover { color: var(--accent-hover); }
   .project-side { border-right: none; border-bottom: 1px solid var(--line); }
   .project-canvas { min-height: 300px; padding: 16px; }
   .project-compact-hero { flex-direction: column; }
-  .project-compact-status { width: 100%; min-width: 0; text-align: left; }
   .project-compact-fields,
   .project-compact-items { grid-template-columns: 1fr; }
   .project-theory-hero { flex-direction: column; }
