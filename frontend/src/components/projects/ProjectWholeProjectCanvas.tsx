@@ -109,6 +109,10 @@ export default function ProjectWholeProjectCanvas({ projectId, onSelectCard }: P
 
   return (
     <div className="project-theory project-whole-project">
+      <Suspense fallback={<div className="project-graph project-graph-loading"><span className="spinner" /><span>Загрузка графа…</span></div>}>
+        <ProjectDependencyGraph projectId={projectId} onOpenCard={onSelectCard ?? (() => {})} />
+      </Suspense>
+
       <section className="project-theory-hero">
         <div>
           <span>Проекты / Весь проект</span>
@@ -122,10 +126,6 @@ export default function ProjectWholeProjectCanvas({ projectId, onSelectCard }: P
       </section>
 
       <ConnectionsLegend />
-
-      <Suspense fallback={<div className="project-graph project-graph-loading"><span className="spinner" /><span>Загрузка графа…</span></div>}>
-        <ProjectDependencyGraph projectId={projectId} onOpenCard={onSelectCard ?? (() => {})} />
-      </Suspense>
     </div>
   );
 }
