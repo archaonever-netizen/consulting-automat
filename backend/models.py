@@ -207,6 +207,9 @@ class Client(Base):
     documents: Mapped[List['ClientDocument']] = relationship(
         'ClientDocument', back_populates='client', cascade='all, delete-orphan'
     )
+    portal_requests: Mapped[List['PortalRequest']] = relationship(
+        'PortalRequest', back_populates='client', cascade='all, delete-orphan'
+    )
 
 
 class ClientUser(Base):
@@ -273,6 +276,34 @@ class ClientDocument(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     client: Mapped['Client'] = relationship('Client', back_populates='documents')
+
+
+class PortalRequest(Base):
+    """Заявка, оставленная клиентом из портала (экран «Оставить заявку»).
+
+    Клиент описывает вопрос/задачу — наша команда получает её на стороне
+    приложения. Принадлежит клиенту (как и документы); `client_user_id` —
+    автор-сотрудник клиента (None для исторических/системных). Превью «Вид для
+    клиента» заявку не создаёт (read-only контур).
+    """
+    __tablename__ = 'portal_requests'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    client_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey('clients.id', ondelete='CASCADE'), nullable=False, index=True
+    )
+    client_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, ForeignKey('client_users.id', ondelete='SET NULL'), nullable=True
+    )
+    author_name: Mapped[str] = mapped_column(String(200), default='', server_default='', nullable=False)
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    contact: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    # new | in_progress | done — обрабатывается нашей командой.
+    status: Mapped[str] = mapped_column(String(20), default='new', server_default='new', nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    client: Mapped['Client'] = relationship('Client', back_populates='portal_requests')
 
 
 class Project(Base):

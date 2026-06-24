@@ -232,13 +232,21 @@ export type TheoryBlockData = {
 };
 export type TheoryItemData = { kind: 'item'; cardId: string; list: string; itemId: string; label: string; blockTitle: string };
 
+export type TheorySuperGroupData = { kind: 'superGroup'; groupId: string; title: string; startColumn: number; columnCount: number; width?: number; height?: number };
+
 export type TheoryNode =
+  | { id: string; type: 'superGroupNode'; data: TheorySuperGroupData }
   | { id: string; type: 'sectionNode'; data: TheorySectionData }
   | { id: string; type: 'missionNode'; data: TheoryMissionData }
   | { id: string; type: 'blockNode'; data: TheoryBlockData }
   | { id: string; type: 'itemNode'; data: TheoryItemData };
 
 export type TheoryEdgeKind = 'section' | 'sectionLink' | 'origin' | 'ref' | 'containment';
+
+export const SUPER_GROUPS = [
+  { id: 'modeling', title: 'Моделирование', startColumn: 0, columnCount: 5 },
+  { id: 'testing', title: 'Тестирование', startColumn: 5, columnCount: 3 },
+] as const;
 // family — подпись-семейство (по умолчанию на карте), verb — точный глагол (показываем по наведению).
 export interface TheoryEdge { id: string; source: string; target: string; kind: TheoryEdgeKind; label?: string; family?: string; verb?: string; }
 export interface TheoryGraph { nodes: TheoryNode[]; edges: TheoryEdge[]; }
@@ -883,6 +891,14 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     refToItem(source, decision.values.constraints, TARGET_CARD_ID, 'constraints', targetConstraintIdx, 'withinLimit', 'соблюдает');
     refToItem(source, decision.values.preserve, THEORY_CARD_ID, 'preserve', preserveIdx, 'targetLevel', 'сохраняет');
     refToItem(source, decision.values.preserve, TARGET_CARD_ID, 'preserveTargets', targetPreserveIdx, 'targetLevel', 'сохраняет');
+  }
+
+  for (const sg of SUPER_GROUPS) {
+    nodes.push({
+      id: `super-group:${sg.id}`,
+      type: 'superGroupNode',
+      data: { kind: 'superGroup', groupId: sg.id, title: sg.title, startColumn: sg.startColumn, columnCount: sg.columnCount },
+    });
   }
 
   return { nodes, edges };

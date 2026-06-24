@@ -11,6 +11,7 @@ const SECTION_LABEL: Record<string, string> = {
   documents: 'Документы и файлы',
   events: 'События',
   info: 'Информация',
+  request: 'Оставить заявку',
 };
 
 // Иконки в едином стиле дизайн-системы ШЕФ (line, 24×24, stroke). Портал
@@ -26,6 +27,8 @@ const ICON_PATHS: Record<string, string> = {
   logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/>',
   close: '<path d="M18 6 6 18M6 6l12 12"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
+  request: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
 };
 
 function PlIcon({ name, size = 18 }: { name: string; size?: number }) {
@@ -161,7 +164,7 @@ export default function PortalApp() {
           ))}
         </nav>
         <main className="pl-main">
-          <SectionView section={active} data={data} />
+          <SectionView section={active} data={data} isPreview={me.is_preview} />
         </main>
       </div>
 
@@ -173,11 +176,15 @@ export default function PortalApp() {
   );
 }
 
-function SectionView({ section, data }: { section: string; data: PortalData }) {
+function SectionView({ section, data, isPreview }: { section: string; data: PortalData; isPreview: boolean }) {
   const title = SECTION_LABEL[section] || section;
 
   if (section === 'documents') {
     return <DocumentsSection docs={data.documents || []} />;
+  }
+
+  if (section === 'request') {
+    return <RequestSection isPreview={isPreview} />;
   }
 
   if (section === 'project') {
@@ -256,6 +263,88 @@ function DocumentsSection({ docs }: { docs: PortalDocument[] }) {
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function RequestSection({ isPreview }: { isPreview: boolean }) {
+  const [subject, setSubject] = useState('');
+  const [message, setMessage] = useState('');
+  const [contact, setContact] = useState('');
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
+  const [sent, setSent] = useState(false);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setSending(true);
+    try {
+      await portalApi.submitRequest({
+        subject: subject.trim(),
+        message: message.trim(),
+        contact: contact.trim() || undefined,
+      });
+      setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Не удалось отправить заявку');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  if (sent) {
+    return (
+      <div className="pl-card">
+        <h2 className="pl-h2">Оставить заявку</h2>
+        <div className="pl-empty">
+          <span className="pl-empty-ic pl-empty-ic-ok"><PlIcon name="check" size={24} /></span>
+          <b>Заявка отправлена</b>
+          <span>Команда проекта получила вашу заявку и свяжется с вами.</span>
+          <button
+            className="pl-btn pl-btn-soft pl-btn-inline"
+            style={{ marginTop: 16 }}
+            onClick={() => { setSent(false); setSubject(''); setMessage(''); setContact(''); }}
+          >
+            Оставить ещё одну
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const canSubmit = !sending && !isPreview && subject.trim() !== '' && message.trim() !== '';
+
+  return (
+    <div className="pl-card">
+      <h2 className="pl-h2">Оставить заявку</h2>
+      <p className="pl-sub">Опишите вопрос или задачу — команда проекта получит заявку и свяжется с вами.</p>
+      {isPreview && <div className="pl-note">Это предпросмотр: в режиме «Вид для клиента» заявка не отправляется.</div>}
+      {error && <div className="pl-error">{error}</div>}
+      <form onSubmit={submit}>
+        <div className="pl-field">
+          <label htmlFor="pl-subject">Тема</label>
+          <input id="pl-subject" className="pl-input" value={subject} maxLength={200}
+            onChange={e => setSubject(e.target.value)} required disabled={sending || isPreview}
+            placeholder="Коротко о сути" />
+        </div>
+        <div className="pl-field">
+          <label htmlFor="pl-message">Сообщение</label>
+          <textarea id="pl-message" className="pl-input pl-textarea" value={message} maxLength={5000} rows={5}
+            onChange={e => setMessage(e.target.value)} required disabled={sending || isPreview}
+            placeholder="Подробности заявки" />
+        </div>
+        <div className="pl-field">
+          <label htmlFor="pl-contact">Контакт для связи <span className="pl-opt">— необязательно</span></label>
+          <input id="pl-contact" className="pl-input" value={contact} maxLength={255}
+            onChange={e => setContact(e.target.value)} disabled={sending || isPreview}
+            placeholder="Телефон или email, если удобнее другой способ" />
+        </div>
+        <button className="pl-btn pl-btn-primary pl-btn-inline" type="submit" disabled={!canSubmit}>
+          <PlIcon name="request" size={16} />
+          {sending ? 'Отправка…' : 'Отправить заявку'}
+        </button>
+      </form>
     </div>
   );
 }

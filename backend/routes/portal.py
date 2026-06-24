@@ -11,6 +11,7 @@ from collections import defaultdict, deque
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordBearer
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
@@ -18,6 +19,7 @@ from ..schemas.auth import LoginRequest, TokenResponse
 from ..schemas.portal_users import PORTAL_SECTIONS
 from ..services import client_documents as docs_service
 from ..services import portal_auth
+from ..services import portal_requests as requests_service
 from ..services import projects as project_service
 
 router = APIRouter()
@@ -72,6 +74,9 @@ async def portal_me(
     client = await db.get(Client, identity.client_id)
     # Разделы возвращаем в каноничном порядке PORTAL_SECTIONS.
     allowed = [s for s in PORTAL_SECTIONS if identity.can(s)]
+    # «Оставить заявку» — действие, а не раздел-витрина: доступно всем клиентам
+    # независимо от выданных разделов, поэтому добавляем его в конец всегда.
+    allowed.append("request")
     return {
         "full_name": identity.full_name,
         "is_preview": identity.is_preview,
@@ -105,6 +110,63 @@ async def portal_data(
     if identity.can("documents"):
         out["documents"] = await docs_service.list_documents(db, identity.client_id)
     return out
+
+
+class PortalRequestCreate(BaseModel):
+    """Заявка из портала: тема + сообщение, контакт для связи опционален."""
+    subject: str
+    message: str
+    contact: str | None = None
+
+    @field_validator("subject")
+    @classmethod
+    def _subject(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("Укажите тему заявки")
+        return value[:200]
+
+    @field_validator("message")
+    @classmethod
+    def _message(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("Опишите вашу заявку")
+        return value[:5000]
+
+    @field_validator("contact")
+    @classmethod
+    def _contact(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return (value.strip() or None)
+
+
+@router.post("/requests", status_code=status.HTTP_201_CREATED)
+async def portal_create_request(
+    data: PortalRequestCreate,
+    identity: portal_auth.PortalIdentity = Depends(get_identity),
+    db: AsyncSession = Depends(get_db),
+):
+    """Клиент оставляет заявку. Превью «Вид для клиента» — read-only, заявку
+    не создаёт (иначе наш сотрудник засорял бы данные клиента)."""
+    if identity.is_preview:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="В режиме предпросмотра заявку отправить нельзя",
+        )
+    created = await requests_service.create_request(
+        db,
+        identity.client_id,
+        subject=data.subject,
+        message=data.message,
+        contact=data.contact,
+        author_name=identity.full_name,
+        client_user_id=identity.user_id,
+    )
+    if created is None:
+        raise HTTPException(status_code=404, detail="Клиент не найден")
+    return created
 
 
 @router.get("/documents/{doc_id}/download")

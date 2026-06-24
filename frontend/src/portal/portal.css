@@ -127,6 +127,14 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
   transition: border-color .15s, box-shadow .15s;
 }
 .pl-input:focus { border-color: var(--p-accent); box-shadow: 0 0 0 4px var(--p-border-focus); }
+.pl-textarea { min-height: 120px; resize: vertical; line-height: 1.55; }
+.pl-opt { color: var(--p-ink-3); font-weight: 500; }
+
+/* Информационная плашка (например, предупреждение про предпросмотр) */
+.pl-note {
+  background: var(--p-accent-weak); color: var(--p-accent-ink);
+  border-radius: var(--p-r-md); padding: 10px 13px; font-size: 13px; margin-bottom: 16px;
+}
 
 /* ── Кнопки ── */
 .pl-btn {
@@ -147,6 +155,9 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 
 .pl-btn-soft { background: var(--p-accent-weak); color: var(--p-accent-ink); }
 .pl-btn-soft:hover:not(:disabled) { background: var(--p-accent-weak-2); transform: translateY(-1px); }
+
+/* В формах кнопка не на всю ширину (в отличие от экрана входа). */
+.pl-btn-inline { width: auto; }
 
 .pl-error {
   background: var(--p-danger-weak); color: #b42318; border: 1px solid #f6c9c4;
@@ -209,6 +220,7 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
   background: var(--p-surface-2); display: grid; place-items: center; color: var(--p-ink-4);
 }
 .pl-empty-ic svg { width: 24px; height: 24px; }
+.pl-empty-ic-ok { background: var(--p-green-weak); color: var(--p-green); }
 .pl-empty b { display: block; color: var(--p-ink-2); margin-bottom: 6px; font-size: 16px; font-weight: 700; }
 .pl-empty span { font-size: 13.5px; max-width: 340px; line-height: 1.55; }
 

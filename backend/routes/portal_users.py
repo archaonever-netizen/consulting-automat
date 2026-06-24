@@ -13,6 +13,7 @@ from ..routes.auth import get_current_user_dep
 from ..schemas.portal_users import PortalUserCreate, PortalUserUpdate
 from ..services import client_documents as docs_service
 from ..services import portal_auth
+from ..services import portal_requests as requests_service
 from ..services import portal_users as svc
 from ..services.portal_users import EmailExists
 
@@ -133,6 +134,18 @@ async def delete_document(
     success = await docs_service.delete_document(db, client_id, doc_id)
     if not success:
         raise HTTPException(status_code=404, detail="Документ не найден")
+
+
+# ─────────────────────────── Заявки из портала ───────────────────────────────
+
+@router.get("/{client_id}/portal-requests")
+async def list_portal_requests(
+    client_id: int,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Заявки, оставленные клиентом из портала (employee-side, для нашей команды)."""
+    return await requests_service.list_requests(db, client_id)
 
 
 # ───────────────────────── «Вид для клиента» (preview) ───────────────────────

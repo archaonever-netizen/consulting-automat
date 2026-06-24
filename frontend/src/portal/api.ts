@@ -38,6 +38,12 @@ export interface PortalData {
   documents?: PortalDocument[];
 }
 
+export interface PortalRequestInput {
+  subject: string;
+  message: string;
+  contact?: string;
+}
+
 export class PortalError extends Error {
   status: number;
   constructor(status: number, message: string) {
@@ -90,6 +96,14 @@ export const portalApi = {
 
   async data(): Promise<PortalData> {
     return (await request('/api/portal/data')).json();
+  },
+
+  async submitRequest(input: PortalRequestInput): Promise<void> {
+    await request('/api/portal/requests', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
   },
 
   // Скачивание идёт через fetch с Authorization, затем blob → клик по ссылке
