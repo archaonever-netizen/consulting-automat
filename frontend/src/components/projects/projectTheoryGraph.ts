@@ -232,7 +232,7 @@ export type TheoryBlockData = {
 };
 export type TheoryItemData = { kind: 'item'; cardId: string; list: string; itemId: string; label: string; blockTitle: string };
 
-export type TheorySuperGroupData = { kind: 'superGroup'; groupId: string; title: string; startColumn: number; columnCount: number; width?: number; height?: number };
+export type TheorySuperGroupData = { kind: 'superGroup'; groupId: string; title: string; startColumn: number; columnCount: number; color: string; width?: number; height?: number };
 
 export type TheoryNode =
   | { id: string; type: 'superGroupNode'; data: TheorySuperGroupData }
@@ -244,8 +244,8 @@ export type TheoryNode =
 export type TheoryEdgeKind = 'section' | 'sectionLink' | 'origin' | 'ref' | 'containment';
 
 export const SUPER_GROUPS = [
-  { id: 'modeling', title: 'Моделирование', startColumn: 0, columnCount: 5 },
-  { id: 'testing', title: 'Тестирование', startColumn: 5, columnCount: 3 },
+  { id: 'modeling', title: 'Моделирование', startColumn: 0, columnCount: 5, color: '#2563EB' },
+  { id: 'testing', title: 'Тестирование', startColumn: 5, columnCount: 3, color: '#D97706' },
 ] as const;
 // family — подпись-семейство (по умолчанию на карте), verb — точный глагол (показываем по наведению).
 export interface TheoryEdge { id: string; source: string; target: string; kind: TheoryEdgeKind; label?: string; family?: string; verb?: string; }
@@ -897,7 +897,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
     nodes.push({
       id: `super-group:${sg.id}`,
       type: 'superGroupNode',
-      data: { kind: 'superGroup', groupId: sg.id, title: sg.title, startColumn: sg.startColumn, columnCount: sg.columnCount },
+      data: { kind: 'superGroup', groupId: sg.id, title: sg.title, startColumn: sg.startColumn, columnCount: sg.columnCount, color: sg.color },
     });
   }
 

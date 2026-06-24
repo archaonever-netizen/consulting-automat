@@ -167,7 +167,7 @@ function ItemNode({ id, data }: NodeProps) {
 function SuperGroupNode({ data }: NodeProps) {
   const d = data as unknown as TheorySuperGroupData;
   return (
-    <div className="pg-super-group" style={{ width: d.width, height: d.height }}>
+    <div className="pg-super-group" style={{ width: d.width, height: d.height, '--sg-color': d.color } as React.CSSProperties}>
       <span className="pg-super-group-title">{d.title}</span>
     </div>
   );
@@ -176,7 +176,8 @@ function SuperGroupNode({ data }: NodeProps) {
 const nodeTypes = { superGroupNode: SuperGroupNode, sectionNode: SectionNode, missionNode: MissionNode, blockNode: BlockNode, itemNode: ItemNode };
 
 // ============ Раскладка: вертикальное дерево с динамическими ярусами ============
-const SG_PAD_X = 24, SG_PAD_TOP = 50, SG_PAD_BOTTOM = 36;
+const SG_PAD_X = 20, SG_PAD_Y = 14;
+const SECTION_NODE_W = 300, SECTION_NODE_H = 72;
 
 function layout(model: TheoryNode[]): Node[] {
   const itemsByBlock = new Map<string, Extract<TheoryNode, { type: 'itemNode' }>[]>();
@@ -201,11 +202,9 @@ function layout(model: TheoryNode[]): Node[] {
   }
 
   const out: Node[] = [];
-  const maxYByColumn = new Map<number, number>();
   const cardIds = [...new Set([...SECTION_ORDER, ...sections.keys(), ...roots.keys(), ...blocksByCard.keys()])];
   for (const cardId of cardIds) {
     const offset = offsetOfCard(cardId);
-    const column = columnOfCard(cardId);
     const section = sections.get(cardId);
     const root = roots.get(cardId);
     const blocks = (blocksByCard.get(cardId) ?? []).sort((a, b) => a.data.index - b.data.index);
@@ -224,19 +223,14 @@ function layout(model: TheoryNode[]): Node[] {
       });
       y += bandH + ROW_GAP;
     }
-    maxYByColumn.set(column, y);
   }
 
   for (const sg of superGroups) {
     const { startColumn, columnCount } = sg.data;
-    let maxY = BLOCKS_TOP + BLOCK_H;
-    for (let col = startColumn; col < startColumn + columnCount; col++) {
-      maxY = Math.max(maxY, maxYByColumn.get(col) ?? (BLOCKS_TOP + BLOCK_H));
-    }
-    const x = startColumn * SECTION_COLUMN_W - SG_PAD_X;
-    const y = SECTION_TOP - SG_PAD_TOP;
-    const width = columnCount * SECTION_COLUMN_W + SG_PAD_X;
-    const height = maxY - y + SG_PAD_BOTTOM;
+    const x = startColumn * SECTION_COLUMN_W + BLOCK_X - SG_PAD_X;
+    const y = SECTION_TOP - SG_PAD_Y;
+    const width = (columnCount - 1) * SECTION_COLUMN_W + SECTION_NODE_W + 2 * SG_PAD_X;
+    const height = SECTION_NODE_H + 2 * SG_PAD_Y;
     out.push({
       id: sg.id, type: 'superGroupNode',
       position: { x, y },

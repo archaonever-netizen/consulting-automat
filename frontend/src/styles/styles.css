@@ -2097,18 +2097,18 @@ a:hover { color: var(--accent-hover); }
 }
 .pg-mini:hover { filter: brightness(.96); }
 
-/* Супер-группа (фоновая обвязка колонок «Моделирование» / «Тестирование») */
+/* Супер-группа (рамка над карточками-разделами «Моделирование» / «Тестирование») */
 .react-flow__node-superGroupNode { pointer-events: none !important; }
 .pg-super-group {
-  box-sizing: border-box; border-radius: 18px;
-  background: color-mix(in srgb, var(--accent) 4%, transparent);
-  border: 1.5px dashed color-mix(in srgb, var(--accent) 18%, transparent);
+  position: relative; box-sizing: border-box; border-radius: 14px;
+  background: color-mix(in srgb, var(--sg-color) 5%, transparent);
+  border: 1.5px dashed color-mix(in srgb, var(--sg-color) 28%, transparent);
   pointer-events: none;
 }
 .pg-super-group-title {
-  position: absolute; top: 14px; left: 24px;
-  font-size: 13px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase;
-  color: color-mix(in srgb, var(--accent) 50%, var(--text-secondary));
+  position: absolute; bottom: calc(100% + 4px); left: 8px;
+  font-size: 11px; font-weight: 900; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--sg-color); opacity: .7;
 }
 
 /* Узел-раздел (верхний слой: ссылка на экран) */
