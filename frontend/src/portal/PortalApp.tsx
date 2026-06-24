@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   portalApi, getToken, setToken, clearToken, PortalError,
-  type PortalMe, type PortalData, type PortalDocument, type PortalProject,
+  type PortalMe, type PortalData, type PortalDocument, type PortalProject, type PortalProjectField,
 } from './api';
 
 const SECTION_LABEL: Record<string, string> = {
@@ -251,10 +251,7 @@ function ProjectSection({ projects }: { projects: PortalProject[] }) {
                       {section.fields.length > 0 && (
                         <dl className="pl-project-fields">
                           {section.fields.map(field => (
-                            <div key={`${section.id}:field:${field.label}`}>
-                              <dt>{field.label}</dt>
-                              <dd>{field.value}</dd>
-                            </div>
+                            <ProjectField key={`${section.id}:field:${field.label}`} field={field} />
                           ))}
                         </dl>
                       )}
@@ -267,10 +264,7 @@ function ProjectSection({ projects }: { projects: PortalProject[] }) {
                                 <h5>{item.title}</h5>
                                 <dl className="pl-project-fields">
                                   {item.fields.map(field => (
-                                    <div key={`${section.id}:${item.title}:${field.label}`}>
-                                      <dt>{field.label}</dt>
-                                      <dd>{field.value}</dd>
-                                    </div>
+                                    <ProjectField key={`${section.id}:${item.title}:${field.label}`} field={field} />
                                   ))}
                                 </dl>
                               </article>
@@ -286,6 +280,61 @@ function ProjectSection({ projects }: { projects: PortalProject[] }) {
           </article>
         );
       })}
+    </div>
+  );
+}
+
+function textParts(value: string): { kind: 'list' | 'paragraphs'; items: string[] } {
+  const normalized = value.replace(/\r/g, '').trim();
+  if (!normalized) return { kind: 'paragraphs', items: [] };
+
+  const lines = normalized.split(/\n+/).map(line => line.trim()).filter(Boolean);
+  if (lines.length > 1) return { kind: 'paragraphs', items: lines };
+
+  const semicolonParts = normalized.split(/\s*;\s*/).map(part => part.trim()).filter(Boolean);
+  if (semicolonParts.length > 1) return { kind: 'list', items: semicolonParts };
+
+  if (normalized.length > 220) {
+    const sentences = normalized.split(/(?<=[.!?])\s+(?=[А-ЯA-ZЁ0-9])/).map(part => part.trim()).filter(Boolean);
+    if (sentences.length > 1) return { kind: 'paragraphs', items: sentences };
+  }
+
+  return { kind: 'paragraphs', items: [normalized] };
+}
+
+function EmphasizedText({ text }: { text: string }) {
+  const cleaned = text.replace(/^[-•]\s*/, '').trim();
+  const match = cleaned.match(/^([^:]{2,64}):\s+(.+)$/);
+  if (!match || /^https?:\/\//i.test(match[1])) return <>{cleaned}</>;
+  return <><strong>{match[1]}:</strong> {match[2]}</>;
+}
+
+function FormattedValue({ value }: { value: string }) {
+  const parts = textParts(value);
+  if (parts.items.length === 0) return null;
+  if (parts.kind === 'list') {
+    return (
+      <ul className="pl-project-value-list">
+        {parts.items.map((item, index) => (
+          <li key={`${index}:${item.slice(0, 20)}`}><EmphasizedText text={item} /></li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <div className="pl-project-value-text">
+      {parts.items.map((part, index) => (
+        <p key={`${index}:${part.slice(0, 20)}`}><EmphasizedText text={part} /></p>
+      ))}
+    </div>
+  );
+}
+
+function ProjectField({ field }: { field: PortalProjectField }) {
+  return (
+    <div className="pl-project-field-row">
+      <dt>{field.label}</dt>
+      <dd><FormattedValue value={field.value} /></dd>
     </div>
   );
 }

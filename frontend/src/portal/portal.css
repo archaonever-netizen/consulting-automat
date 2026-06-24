@@ -278,15 +278,26 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 .pl-project-fields {
   display: grid; gap: 8px; margin: 0;
 }
-.pl-project-fields div {
+.pl-project-fields > .pl-project-field-row {
   display: grid; grid-template-columns: minmax(120px, .42fr) 1fr; gap: 12px;
   padding: 9px 0; border-bottom: 1px solid var(--p-border);
 }
-.pl-project-fields div:last-child { border-bottom: none; }
+.pl-project-fields > .pl-project-field-row:last-child { border-bottom: none; }
 .pl-project-fields dt { color: var(--p-ink-3); font-size: 12px; font-weight: 650; }
 .pl-project-fields dd {
-  margin: 0; color: var(--p-ink); font-size: 13.5px; line-height: 1.55;
-  white-space: pre-wrap; overflow-wrap: anywhere;
+  margin: 0; color: var(--p-ink); font-size: 13.5px; line-height: 1.55; overflow-wrap: anywhere;
+}
+.pl-project-value-text { display: grid; gap: 7px; }
+.pl-project-value-text p { margin: 0; color: var(--p-ink); line-height: 1.58; }
+.pl-project-value-list {
+  margin: 0; padding-left: 18px; display: grid; gap: 6px;
+}
+.pl-project-value-list li {
+  color: var(--p-ink); line-height: 1.55; padding-left: 2px;
+}
+.pl-project-value-text strong,
+.pl-project-value-list strong {
+  font-weight: 800; color: var(--p-ink);
 }
 .pl-project-group { margin-top: 16px; }
 .pl-project-group h4 {
@@ -335,5 +346,5 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
   .pl-user span { display: none; }
   .pl-proj-head { display: block; }
   .pl-proj .meta { white-space: normal; padding-top: 0; margin-bottom: 12px; }
-  .pl-project-fields div { grid-template-columns: 1fr; gap: 3px; }
+  .pl-project-fields > .pl-project-field-row { grid-template-columns: 1fr; gap: 3px; }
 }

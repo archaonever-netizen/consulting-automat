@@ -16,24 +16,28 @@
 - Внутренние данные не отдаются: `form`, raw `content_json`, validation, чат методолога, черновики, рекомендации рецензента, стадии сборки и AI-манифесты.
 - В портале раздел `Проект` показывает проекты и свёрнутые клиентские разделы с ключевыми полями, группами и элементами.
 - Внутри разделов отображаются только понятные русские подписи, суть и логика элементов; неизвестные технические ключи отбрасываются.
+- Убрано клиентское поле `Выход раздела`: оно служебное и не объясняет клиенту суть работы.
+- Текст внутри карточек получил клиентскую разметку: переносы длинных фрагментов, списки из однотипных элементов, жирные смысловые префиксы и визуальное разделение полей.
 - `frontend/dist` пересобран после изменения portal-бандла.
 
 ### Изменённые файлы
 
 - `backend/routes/portal.py` - портал использует клиентскую выборку проектов.
 - `backend/services/projects.py` - добавлена сборка публичных compact-разделов Workspace для портала.
-- `backend/tests/test_projects_service.py` - добавлен тест на фильтрацию compact-разделов и игнорирование `__composition__`.
+- `backend/tests/test_projects_service.py` - добавлен тест на фильтрацию compact-разделов, игнорирование `__composition__` и скрытие `output`.
 - `frontend/src/portal/api.ts` - расширен контракт проекта в портале.
-- `frontend/src/portal/PortalApp.tsx` - добавлен read-only экран композиций в разделе `Проект`.
-- `frontend/src/portal/portal.css` - добавлены стили свёрнутых клиентских разделов.
+- `frontend/src/portal/PortalApp.tsx` - добавлен read-only экран композиций в разделе `Проект` и форматирование текстовых значений.
+- `frontend/src/portal/portal.css` - добавлены стили свёрнутых клиентских разделов, полей, списков и структурных карточек.
 - `frontend/dist/portal.html`, `frontend/dist/assets/portal-*` - обновленные build-артефакты.
 - `docs/TRANSFER_LOG.md` - добавлена эта запись.
 
 ### Проверки
 
 - `.\\.venv\\Scripts\\python.exe -m pytest backend\\tests\\test_projects_service.py` - успешно.
+- `.\\.venv\\Scripts\\python.exe -m ruff check --select F,E9 backend\\services\\projects.py backend\\tests\\test_projects_service.py` - успешно.
 - `npm.cmd exec eslint src\\portal\\PortalApp.tsx src\\portal\\api.ts` в `frontend` - успешно.
 - `npm.cmd run build` в `frontend` - успешно.
+- `rg -n "localhost:8000|127\\.0\\.0\\.1:8000" frontend\\dist -S` - совпадений нет.
 
 ### Риски и следующие шаги
 

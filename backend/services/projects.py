@@ -48,7 +48,6 @@ _PUBLIC_LABELS = {
     "managementSystems": "Системы управления",
     "noActionConsequence": "Если ничего не менять",
     "expectedState": "Ожидаемое состояние",
-    "output": "Выход раздела",
 }
 
 _GROUP_TITLES = {

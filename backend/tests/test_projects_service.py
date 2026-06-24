@@ -94,7 +94,12 @@ def test_portal_projects_include_workspace_compact_sections_only():
                         "sectionId": "hypotheses",
                         "title": "Гипотезы",
                         "items": [
-                            {"id": "h1", "label": "Сократить согласования", "summary": "Один владелец решения снизит задержку."},
+                            {
+                                "id": "h1",
+                                "label": "Сократить согласования",
+                                "summary": "Один владелец решения снизит задержку.",
+                                "output": "Служебный выход раздела не нужен клиенту.",
+                            },
                         ],
                         "completedChecks": 1,
                         "totalChecks": 3,
@@ -134,6 +139,8 @@ def test_portal_projects_include_workspace_compact_sections_only():
                     "fields": [{"label": "Суть", "value": "Один владелец решения снизит задержку."}],
                 }],
             }]
+            assert "Выход раздела" not in str(projects[0]["sections"])
+            assert "Служебный выход раздела" not in str(projects[0]["sections"])
             assert all("body" not in section and "summary" not in section for section in projects[0]["sections"])
         finally:
             await db.close()
