@@ -18,6 +18,15 @@ export interface PortalProject {
   name: string;
   description: string | null;
   updated_at_fmt: string;
+  sections?: PortalProjectSection[];
+}
+
+export interface PortalProjectSection {
+  id: string;
+  title: string;
+  summary: string;
+  body: string;
+  updated_at?: string | null;
 }
 
 export interface PortalDocument {

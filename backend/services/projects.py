@@ -2,8 +2,26 @@ from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload
 
-from ..models import Client, Project
+from ..models import Client, Project, ProjectCardState
 from ..schemas.projects import ProjectCreate, ProjectUpdate
+
+_COMPOSITION_PREFIX = "__composition__:"
+
+_PORTAL_SECTION_META: dict[str, tuple[int, str]] = {
+    "project-theory": (1, "Теория проекта"),
+    "diagnosis": (2, "Диагноз"),
+    "strategic-choice": (3, "Стратегический выбор"),
+    "target-state": (4, "Целевое состояние"),
+    "strategy-map": (5, "Стратегическая карта"),
+    "hypotheses": (6, "Гипотезы"),
+    "experiments": (7, "Проверки"),
+    "decisions": (8, "Решения"),
+    "okr-kpi": (9, "OKR / KPI"),
+    "initiatives": (10, "Инициативы"),
+    "business-processes": (11, "Бизнес-процессы"),
+    "tasks": (12, "Задачи"),
+    "facts-learning": (13, "Факты и обучение"),
+}
 
 
 def _format_date(value) -> str:
@@ -30,6 +48,56 @@ async def list_projects(db: AsyncSession, client_id: int | None = None) -> list[
         stmt = stmt.where(Project.client_id == client_id)
     result = await db.execute(stmt)
     return [_project_to_dict(project) for project in result.scalars().all()]
+
+
+def _public_composition(row: ProjectCardState) -> dict | None:
+    content = row.content_json if isinstance(row.content_json, dict) else {}
+    if content.get("status") != "done":
+        return None
+    final = content.get("final")
+    if not isinstance(final, dict):
+        return None
+
+    card_id = row.card_id[len(_COMPOSITION_PREFIX):]
+    order, title = _PORTAL_SECTION_META.get(card_id, (999, card_id.replace("-", " ").title()))
+    summary = str(final.get("manifest") or "").strip()
+    body = str(final.get("composition") or "").strip()
+    if not summary and not body:
+        return None
+    return {
+        "id": card_id,
+        "title": title,
+        "order": order,
+        "summary": summary,
+        "body": body,
+        "updated_at": content.get("updated_at") or (row.updated_at.isoformat() if row.updated_at else None),
+    }
+
+
+async def list_portal_projects(db: AsyncSession, client_id: int) -> list[dict]:
+    """Client-facing project payload: only public metadata and finished section compositions."""
+    projects = await list_projects(db, client_id=client_id)
+    if not projects:
+        return []
+
+    project_ids = [project["id"] for project in projects]
+    rows = (await db.scalars(
+        select(ProjectCardState).where(
+            ProjectCardState.project_id.in_(project_ids),
+            ProjectCardState.card_id.like(f"{_COMPOSITION_PREFIX}%"),
+        )
+    )).all()
+
+    sections_by_project: dict[int, list[dict]] = {project_id: [] for project_id in project_ids}
+    for row in rows:
+        section = _public_composition(row)
+        if section is not None:
+            sections_by_project.setdefault(row.project_id, []).append(section)
+
+    for project in projects:
+        sections = sections_by_project.get(project["id"], [])
+        project["sections"] = sorted(sections, key=lambda item: (item["order"], item["title"]))
+    return projects
 
 
 async def get_project(db: AsyncSession, project_id: int) -> dict | None:

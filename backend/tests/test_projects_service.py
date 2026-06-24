@@ -3,7 +3,7 @@ import asyncio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from backend.core.database import Base
-from backend.models import Client, Project  # noqa: F401
+from backend.models import Client, Project, ProjectCardState  # noqa: F401
 from backend.schemas.projects import ProjectCreate
 from backend.services import projects as project_service
 
@@ -57,6 +57,61 @@ def test_create_project_and_list_by_client():
             assert projects[0]["name"] == "Operating model"
             assert projects[0]["client_id"] == client.id
             assert projects[0]["client_name"] == "Acme"
+        finally:
+            await db.close()
+            await engine.dispose()
+
+    asyncio.run(run())
+
+
+def test_portal_projects_include_only_finished_public_compositions():
+    async def run():
+        engine, db, client = await _setup()
+        try:
+            created = await project_service.create_project(
+                db,
+                ProjectCreate(client_id=client.id, name="Operating model"),
+            )
+            assert created is not None
+            db.add_all([
+                ProjectCardState(
+                    project_id=created.id,
+                    card_id="__composition__:diagnosis",
+                    content_json={
+                        "status": "done",
+                        "stage_no": 4,
+                        "draft": {"manifest": "internal draft", "composition": "draft"},
+                        "recommendations": {"verdict": "revise", "recommendations": ["hidden"]},
+                        "final": {
+                            "manifest": "Главное ограничение найдено.",
+                            "composition": "Проблема связана с разрывом между планом и фактом.",
+                        },
+                    },
+                ),
+                ProjectCardState(
+                    project_id=created.id,
+                    card_id="__composition__:hypotheses",
+                    content_json={
+                        "status": "reviewing",
+                        "structured": {"manifest": "hidden", "composition": "hidden"},
+                    },
+                ),
+            ])
+            await db.commit()
+
+            projects = await project_service.list_portal_projects(db, client_id=client.id)
+
+            assert len(projects) == 1
+            assert len(projects[0]["sections"]) == 1
+            section = projects[0]["sections"][0]
+            assert section["updated_at"] is not None
+            assert {k: section[k] for k in ("id", "title", "order", "summary", "body")} == {
+                "id": "diagnosis",
+                "title": "Диагноз",
+                "order": 2,
+                "summary": "Главное ограничение найдено.",
+                "body": "Проблема связана с разрывом между планом и фактом.",
+            }
         finally:
             await db.close()
             await engine.dispose()

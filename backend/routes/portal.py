@@ -98,7 +98,7 @@ async def portal_data(
     """
     out: dict = {}
     if identity.can("project"):
-        out["project"] = await project_service.list_projects(db, client_id=identity.client_id)
+        out["project"] = await project_service.list_portal_projects(db, client_id=identity.client_id)
     if identity.can("stages"):
         out["stages"] = []
     if identity.can("status"):

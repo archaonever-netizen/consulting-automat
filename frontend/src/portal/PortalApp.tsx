@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   portalApi, getToken, setToken, clearToken, PortalError,
-  type PortalMe, type PortalData, type PortalDocument,
+  type PortalMe, type PortalData, type PortalDocument, type PortalProject,
 } from './api';
 
 const SECTION_LABEL: Record<string, string> = {
@@ -29,6 +29,7 @@ const ICON_PATHS: Record<string, string> = {
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>',
   request: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  chevron: '<path d="m6 9 6 6 6-6"/>',
 };
 
 function PlIcon({ name, size = 18 }: { name: string; size?: number }) {
@@ -99,11 +100,14 @@ export default function PortalApp() {
       const qs = params.toString();
       window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
     }
-    if (getToken()) {
-      loadAll();
-    } else {
-      setPhase('login');
-    }
+    const timer = window.setTimeout(() => {
+      if (getToken()) {
+        void loadAll();
+      } else {
+        setPhase('login');
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [loadAll]);
 
   function logout() {
@@ -192,17 +196,11 @@ function SectionView({ section, data, isPreview }: { section: string; data: Port
     return (
       <div className="pl-card">
         <h2 className="pl-h2">{title}</h2>
-        <p className="pl-sub">Проекты по вашей компании.</p>
+        <p className="pl-sub">Собранная логика и ключевые выводы по проектам вашей компании.</p>
         {projects.length === 0 ? (
           <Empty icon="project" title="Проектов пока нет" text="Здесь появятся проекты по мере их запуска." />
         ) : (
-          projects.map(p => (
-            <div key={p.id} className="pl-proj">
-              <h3>{p.name}</h3>
-              {p.description && <p>{p.description}</p>}
-              <div className="meta">Обновлено: {p.updated_at_fmt}</div>
-            </div>
-          ))
+          <ProjectSection projects={projects} />
         )}
       </div>
     );
@@ -219,6 +217,52 @@ function SectionView({ section, data, isPreview }: { section: string; data: Port
     <div className="pl-card">
       <h2 className="pl-h2">{title}</h2>
       <Empty icon={section} title="Раздел в подготовке" text={placeholders[section] || 'Раздел скоро наполнится.'} />
+    </div>
+  );
+}
+
+function textLines(text: string): string[] {
+  return text.split(/\n+/).map(line => line.trim()).filter(Boolean);
+}
+
+function ProjectSection({ projects }: { projects: PortalProject[] }) {
+  return (
+    <div className="pl-project-list">
+      {projects.map(project => {
+        const sections = project.sections || [];
+        return (
+          <article key={project.id} className="pl-proj">
+            <div className="pl-proj-head">
+              <div>
+                <h3>{project.name}</h3>
+                {project.description && <p>{project.description}</p>}
+              </div>
+              <div className="meta">Обновлено: {project.updated_at_fmt}</div>
+            </div>
+
+            {sections.length === 0 ? (
+              <div className="pl-project-empty">Готовые разделы проекта появятся здесь после сборки.</div>
+            ) : (
+              <div className="pl-project-sections">
+                {sections.map(section => (
+                  <details key={section.id} className="pl-project-section">
+                    <summary>
+                      <span>{section.title}</span>
+                      <PlIcon name="chevron" size={16} />
+                    </summary>
+                    <div className="pl-project-section-body">
+                      {section.summary && <p className="pl-project-lead">{section.summary}</p>}
+                      {textLines(section.body).map((line, index) => (
+                        <p key={`${section.id}:${index}:${line.slice(0, 12)}`}>{line}</p>
+                      ))}
+                    </div>
+                  </details>
+                ))}
+              </div>
+            )}
+          </article>
+        );
+      })}
     </div>
   );
 }
@@ -364,10 +408,6 @@ function LoginScreen({ onSuccess, initialError }: { onSuccess: () => void; initi
   const [password, setPassword] = useState('');
   const [error, setError] = useState(initialError || '');
   const [loading, setLoading] = useState(false);
-
-  // initialError может появиться при просроченном токене — показываем один раз.
-  const initial = useMemo(() => initialError || '', [initialError]);
-  useEffect(() => { if (initial) setError(initial); }, [initial]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
