@@ -1410,10 +1410,32 @@ a:hover { color: var(--accent-hover); }
 }
 .project-tree-item:hover { background: var(--surface-2); color: var(--text-primary); }
 .project-tree-item.active { background: var(--accent-weak); color: var(--accent-ink); }
-.project-framework-block {
-  margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line);
+
+/* Структурные секции дерева — сворачиваемые группы карточек фреймворка */
+.project-section-groups {
+  margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 2px;
 }
-.project-framework-list { display: flex; flex-direction: column; gap: 2px; }
+.project-section-group { display: flex; flex-direction: column; }
+.project-section-head {
+  width: 100%; display: flex; align-items: center; gap: 8px; padding: 10px 11px;
+  border: 1px solid transparent; background: transparent; color: var(--text-primary);
+  border-radius: var(--radius-sm); font: inherit; font-size: 12px; font-weight: 800;
+  letter-spacing: .04em; text-transform: uppercase; text-align: left; cursor: pointer;
+  transition: var(--transition);
+}
+.project-section-head:hover { background: var(--surface-2); }
+.project-section-head > span { flex: 1; min-width: 0; }
+.project-section-chevron { flex-shrink: 0; color: var(--ink-3); transition: transform .15s ease; }
+.project-section-chevron.open { transform: rotate(90deg); }
+.project-section-cards {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 1px 0 4px 13px; padding-left: 10px; border-left: 1px solid var(--line);
+}
+.project-tree-subitem { font-weight: 600; font-size: 13px; padding: 8px 11px; }
+.project-section-empty {
+  padding: 7px 11px; color: var(--ink-3); font-size: 12px; font-style: italic;
+}
 .project-panel-note {
   margin-top: 14px; padding: 12px; border-radius: var(--radius-md); background: var(--surface-2);
   color: var(--text-secondary); font-size: 12.5px; line-height: 1.5;

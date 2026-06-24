@@ -14,49 +14,79 @@ export interface ProjectSection {
   id: string;
   label: string;
   icon: string;
-  description: string;
+  // id карточек фреймворка (PROJECT_FRAMEWORK_CARDS), сгруппированных под этой секцией.
+  cardIds: string[];
 }
 
+// Структурные секции левой панели. Группируют карточки фреймворка (id карточек неизменны —
+// они используются графом, валидатором и применителем правок). «Весь проект» вынесен из секций
+// отдельным пунктом сверху, поэтому здесь его нет.
 const PROJECT_SECTIONS: ProjectSection[] = [
   {
-    id: 'goals',
-    label: 'Цели проекта',
+    id: 'goal',
+    label: 'Цель проекта',
     icon: 'check',
-    description: 'Здесь появятся ключевые цели, критерии успеха и ориентиры команды по проекту.',
+    cardIds: ['project-theory'],
   },
   {
     id: 'concept',
     label: 'Концепция проекта',
     icon: 'sparkle',
-    description: 'Здесь появятся гипотезы, видение решения, ограничения и ценность проекта.',
+    cardIds: ['diagnosis', 'strategic-choice', 'target-state', 'strategy-map'],
   },
   {
     id: 'design',
     label: 'Проектирование',
     icon: 'template',
-    description: 'Здесь появятся схемы, архитектурные решения и артефакты проектирования.',
+    cardIds: [],
   },
   {
     id: 'programming',
     label: 'Программирование',
     icon: 'bolt',
-    description: 'Здесь появятся задачи разработки, технические заметки и ссылки на реализацию.',
+    cardIds: ['hypotheses', 'experiments', 'decisions', 'okr-kpi'],
   },
   {
     id: 'progress',
     label: 'Ход проекта',
     icon: 'trendUp',
-    description: 'Здесь появятся статусы, события, риски и ближайшие шаги по проекту.',
+    cardIds: ['initiatives', 'business-processes', 'tasks', 'facts-learning'],
   },
 ];
+
+// Карточка-обзор «Весь проект» — отдельный пункт над структурными секциями.
+const WHOLE_PROJECT_CARD_ID = 'whole-project';
+
+const SECTION_BY_CARD_ID = new Map<string, string>(
+  PROJECT_SECTIONS.flatMap(section => section.cardIds.map(cardId => [cardId, section.id])),
+);
+
+const ALL_SECTION_IDS = PROJECT_SECTIONS.map(section => section.id);
+const COLLAPSED_STORAGE_KEY = 'project-sections-collapsed';
+
+function readCollapsedSections(): Set<string> {
+  try {
+    const raw = localStorage.getItem(COLLAPSED_STORAGE_KEY);
+    if (!raw) return new Set();
+    const ids = JSON.parse(raw);
+    return Array.isArray(ids) ? new Set(ids.filter((id: unknown): id is string => typeof id === 'string')) : new Set();
+  } catch {
+    return new Set();
+  }
+}
 
 interface ProjectWorkspaceProps {
   project: Project;
 }
 
 export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
-  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
   const [activeCardId, setActiveCardId] = useState(PROJECT_FRAMEWORK_CARDS[0].id);
+  // Раскрытые структурные секции дерева (сворачиваемые группы). По умолчанию раскрыты все,
+  // кроме явно свёрнутых ранее (запоминаем в localStorage).
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(() => {
+    const collapsed = readCollapsedSections();
+    return new Set(ALL_SECTION_IDS.filter(id => !collapsed.has(id)));
+  });
   // Гидрация из БD должна завершиться ДО монтирования канвасов, иначе они
   // инициализируют состояние из пустого localStorage и затрут серверные данные.
   const [hydrated, setHydrated] = useState(false);
@@ -78,6 +108,20 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   useEffect(() => {
     localStorage.setItem('project-rp-width', String(rightWidth));
   }, [rightWidth]);
+
+  useEffect(() => {
+    const collapsed = ALL_SECTION_IDS.filter(id => !expandedSections.has(id));
+    localStorage.setItem(COLLAPSED_STORAGE_KEY, JSON.stringify(collapsed));
+  }, [expandedSections]);
+
+  function toggleSection(sectionId: string) {
+    setExpandedSections(prev => {
+      const next = new Set(prev);
+      if (next.has(sectionId)) next.delete(sectionId);
+      else next.add(sectionId);
+      return next;
+    });
+  }
 
   function startResize(e: React.MouseEvent) {
     e.preventDefault();
@@ -118,30 +162,22 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       window.clearTimeout(resetTimer);
     };
   }, [project.id]);
-  const activeSection = activeSectionId
-    ? PROJECT_SECTIONS.find(section => section.id === activeSectionId) || null
-    : null;
   const activeFrameworkCard = PROJECT_FRAMEWORK_CARDS.find(card => card.id === activeCardId) || PROJECT_FRAMEWORK_CARDS[0];
-  const canvasView = activeSection
-    ? {
-        icon: activeSection.icon,
-        title: activeSection.label,
-        description: activeSection.description,
-      }
-    : {
-        icon: 'template',
-        title: activeFrameworkCard.title,
-        description: activeFrameworkCard.description,
-        frameworkCardId: activeFrameworkCard.id,
-      };
-
-  function selectSection(sectionId: string) {
-    setActiveSectionId(sectionId);
-  }
+  const canvasView = {
+    icon: 'template',
+    title: activeFrameworkCard.title,
+    description: activeFrameworkCard.description,
+    frameworkCardId: activeFrameworkCard.id,
+  };
 
   function selectFrameworkCard(cardId: string, focus?: { list?: string; itemId?: string }) {
     setActiveCardId(cardId);
-    setActiveSectionId(null);
+    // Раскрываем секцию выбранной карточки, чтобы она была видна в дереве
+    // (например, при переходе из узла графа «Весь проект»).
+    const sectionId = SECTION_BY_CARD_ID.get(cardId);
+    if (sectionId) {
+      setExpandedSections(prev => (prev.has(sectionId) ? prev : new Set(prev).add(sectionId)));
+    }
     setFocusTarget(focus ? { cardId, list: focus.list, itemId: focus.itemId, nonce: ++focusNonce.current } : null);
   }
 
@@ -152,11 +188,12 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
         <ProjectLeftPanel
           project={project}
           sections={PROJECT_SECTIONS}
-          activeSectionId={activeSectionId}
-          onSelectSection={selectSection}
+          wholeProjectCardId={WHOLE_PROJECT_CARD_ID}
           frameworkCards={PROJECT_FRAMEWORK_CARDS}
-          activeCardId={activeSection ? null : activeFrameworkCard.id}
+          activeCardId={activeFrameworkCard.id}
           onSelectFrameworkCard={selectFrameworkCard}
+          expandedSections={expandedSections}
+          onToggleSection={toggleSection}
         />
         {hydrated ? (
           <ProjectCanvas
@@ -181,7 +218,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
         />
         <ProjectRightPanel
           projectId={project.id}
-          focusCardId={activeSection ? null : activeFrameworkCard.id}
+          focusCardId={activeFrameworkCard.id}
           onProjectMutated={() => setReloadNonce(n => n + 1)}
         />
       </div>
