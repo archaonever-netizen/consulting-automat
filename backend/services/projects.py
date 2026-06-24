@@ -5,22 +5,79 @@ from sqlalchemy.orm import joinedload
 from ..models import Client, Project, ProjectCardState
 from ..schemas.projects import ProjectCreate, ProjectUpdate
 
-_COMPOSITION_PREFIX = "__composition__:"
+_PORTAL_SECTION_META: dict[str, tuple[int, str, str]] = {
+    "project-theory": (1, "Теория проекта", "Смысл проекта, ценность, результат и ограничения."),
+    "diagnosis": (2, "Диагноз", "Проблема, факты и вывод о главном ограничении."),
+    "strategic-choice": (3, "Стратегический выбор", "Где играем, как выигрываем и от чего отказываемся."),
+    "target-state": (4, "Целевое состояние", "Как должна выглядеть система после успешного завершения проекта."),
+    "strategy-map": (5, "Стратегическая карта", "Причинно-следственная логика достижения результата."),
+    "hypotheses": (6, "Гипотезы", "Ключевые предположения, от которых зависит успех проекта."),
+    "experiments": (7, "Проверки", "Эксперименты и способы проверки гипотез."),
+    "decisions": (8, "Решения", "Управленческие решения по результатам проверок и фактов."),
+    "okr-kpi": (9, "OKR / KPI", "Измеримые цели и показатели движения к результату."),
+    "initiatives": (10, "Инициативы", "Крупные действия, реализующие стратегический выбор."),
+    "business-processes": (11, "Бизнес-процессы", "Процессы, которые должны стабильно воспроизводить результат."),
+    "tasks": (12, "Задачи", "Конкретные действия, исполнители, сроки и статусы."),
+    "facts-learning": (13, "Факты и обучение", "Фактические данные, обратная связь и выводы."),
+}
 
-_PORTAL_SECTION_META: dict[str, tuple[int, str]] = {
-    "project-theory": (1, "Теория проекта"),
-    "diagnosis": (2, "Диагноз"),
-    "strategic-choice": (3, "Стратегический выбор"),
-    "target-state": (4, "Целевое состояние"),
-    "strategy-map": (5, "Стратегическая карта"),
-    "hypotheses": (6, "Гипотезы"),
-    "experiments": (7, "Проверки"),
-    "decisions": (8, "Решения"),
-    "okr-kpi": (9, "OKR / KPI"),
-    "initiatives": (10, "Инициативы"),
-    "business-processes": (11, "Бизнес-процессы"),
-    "tasks": (12, "Задачи"),
-    "facts-learning": (13, "Факты и обучение"),
+_PUBLIC_LABELS = {
+    "rawRequest": "Запрос",
+    "requestType": "Тип запроса",
+    "requestContext": "Контекст",
+    "areas": "Зоны проекта",
+    "keyChallenge": "Ключевой вызов",
+    "obstacleType": "Тип препятствия",
+    "limitingFactor": "Ограничивающий фактор",
+    "scale": "Масштаб",
+    "strategicConclusion": "Вывод",
+    "exclusions": "Что исключено",
+    "finalStatement": "Итог",
+    "strategicQuestion": "Стратегический вопрос",
+    "winningAspiration": "Целевой выигрыш",
+    "winType": "Тип победы",
+    "whereClient": "Клиент",
+    "whereGeography": "География",
+    "whereProduct": "Продукт",
+    "whereProcess": "Процесс",
+    "whereIncluded": "Включено",
+    "whereExcluded": "Исключено",
+    "howToWin": "Как выигрываем",
+    "howValue": "Ценность",
+    "howAdvantage": "Преимущество",
+    "managementSystems": "Системы управления",
+    "noActionConsequence": "Если ничего не менять",
+    "expectedState": "Ожидаемое состояние",
+    "output": "Выход раздела",
+}
+
+_GROUP_TITLES = {
+    "blocks": "Логика проекта",
+    "items": "Содержание раздела",
+    "gaps": "Разрывы",
+    "symptoms": "Симптомы",
+    "facts": "Факты",
+    "alternatives": "Альтернативные объяснения",
+    "consequences": "Последствия",
+    "verifications": "Проверки",
+    "capabilities": "Способности",
+    "tradeOffs": "Компромиссы",
+    "actions": "Действия",
+    "hypotheses": "Гипотезы",
+    "results": "Результаты",
+    "stakeholderValues": "Ценность для участников",
+    "keyResults": "Ключевые результаты",
+    "processes": "Процессы",
+    "managementSystemsTargets": "Системы управления",
+    "capabilityTargets": "Способности",
+    "constraintTargets": "Ограничения",
+    "qualityTargets": "Качество",
+    "preserveTargets": "Что важно сохранить",
+    "objectives": "Цели",
+}
+
+_SKIP_KEYS = {
+    "id", "projectId", "sectionId", "updatedAt", "form", "status", "completedChecks", "totalChecks",
 }
 
 
@@ -50,32 +107,116 @@ async def list_projects(db: AsyncSession, client_id: int | None = None) -> list[
     return [_project_to_dict(project) for project in result.scalars().all()]
 
 
-def _public_composition(row: ProjectCardState) -> dict | None:
-    content = row.content_json if isinstance(row.content_json, dict) else {}
-    if content.get("status") != "done":
+def _clean(value) -> str:
+    if isinstance(value, list):
+        return "; ".join(filter(None, (_clean(item) for item in value)))
+    if isinstance(value, (int, float)):
+        return str(value)
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _field(label: str, value) -> dict | None:
+    cleaned = _clean(value)
+    if not cleaned:
         return None
-    final = content.get("final")
-    if not isinstance(final, dict):
+    return {"label": label, "value": cleaned}
+
+
+def _item_title(item: dict, fallback: str) -> str:
+    for key in ("title", "label", "name", "__cardName", "criterion", "objective", "indicator", "description"):
+        value = _clean(item.get(key))
+        if value:
+            return value
+    return fallback
+
+
+def _item_fields(item: dict) -> list[dict]:
+    fields: list[dict] = []
+    summary = _field("Суть", item.get("summary"))
+    if summary:
+        fields.append(summary)
+    for key, value in item.items():
+        if key in _SKIP_KEYS or key in {"title", "label", "summary", "name", "__cardName"}:
+            continue
+        label = _PUBLIC_LABELS.get(key)
+        if not label:
+            continue
+        field = _field(label, value)
+        if field:
+            fields.append(field)
+    return fields
+
+
+def _group_from_items(title: str, items: list) -> dict | None:
+    public_items = []
+    for index, item in enumerate(items, start=1):
+        if not isinstance(item, dict):
+            continue
+        fields = _item_fields(item)
+        if fields:
+            public_items.append({
+                "title": _item_title(item, f"Элемент {index}"),
+                "fields": fields,
+            })
+    if not public_items:
+        return None
+    return {"title": title, "items": public_items}
+
+
+def _public_compact_section(row: ProjectCardState) -> dict | None:
+    content = row.content_json if isinstance(row.content_json, dict) else {}
+    meta = _PORTAL_SECTION_META.get(row.card_id)
+    if not meta:
+        return None
+    order, title, description = meta
+
+    fields: list[dict] = []
+    groups: list[dict] = []
+
+    for key, value in content.items():
+        if key in _SKIP_KEYS:
+            continue
+        if isinstance(value, list):
+            group = _group_from_items(_GROUP_TITLES.get(key, key), value)
+            if group:
+                groups.append(group)
+        elif isinstance(value, dict):
+            # Lossless editor state lives in `form`; other dicts are usually scalar containers.
+            for child_key, child_value in value.items():
+                label = _PUBLIC_LABELS.get(child_key)
+                if not label:
+                    continue
+                field = _field(label, child_value)
+                if field:
+                    fields.append(field)
+        else:
+            label = _PUBLIC_LABELS.get(key)
+            if not label:
+                continue
+            field = _field(label, value)
+            if field:
+                fields.append(field)
+
+    if not fields and not groups:
         return None
 
-    card_id = row.card_id[len(_COMPOSITION_PREFIX):]
-    order, title = _PORTAL_SECTION_META.get(card_id, (999, card_id.replace("-", " ").title()))
-    summary = str(final.get("manifest") or "").strip()
-    body = str(final.get("composition") or "").strip()
-    if not summary and not body:
-        return None
     return {
-        "id": card_id,
+        "id": row.card_id,
         "title": title,
+        "description": description,
         "order": order,
-        "summary": summary,
-        "body": body,
-        "updated_at": content.get("updated_at") or (row.updated_at.isoformat() if row.updated_at else None),
+        "fields": fields,
+        "groups": groups,
+        "updated_at": (
+            content.get("updated_at")
+            or content.get("updatedAt")
+            or (row.updated_at.isoformat() if row.updated_at else None)
+        ),
     }
 
 
 async def list_portal_projects(db: AsyncSession, client_id: int) -> list[dict]:
-    """Client-facing project payload: only public metadata and finished section compositions."""
+    """Client-facing project payload: public compact screens from the project workspace."""
     projects = await list_projects(db, client_id=client_id)
     if not projects:
         return []
@@ -84,13 +225,13 @@ async def list_portal_projects(db: AsyncSession, client_id: int) -> list[dict]:
     rows = (await db.scalars(
         select(ProjectCardState).where(
             ProjectCardState.project_id.in_(project_ids),
-            ProjectCardState.card_id.like(f"{_COMPOSITION_PREFIX}%"),
+            ProjectCardState.card_id.in_(list(_PORTAL_SECTION_META)),
         )
     )).all()
 
     sections_by_project: dict[int, list[dict]] = {project_id: [] for project_id in project_ids}
     for row in rows:
-        section = _public_composition(row)
+        section = _public_compact_section(row)
         if section is not None:
             sections_by_project.setdefault(row.project_id, []).append(section)
 

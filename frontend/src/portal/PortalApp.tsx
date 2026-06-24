@@ -221,10 +221,6 @@ function SectionView({ section, data, isPreview }: { section: string; data: Port
   );
 }
 
-function textLines(text: string): string[] {
-  return text.split(/\n+/).map(line => line.trim()).filter(Boolean);
-}
-
 function ProjectSection({ projects }: { projects: PortalProject[] }) {
   return (
     <div className="pl-project-list">
@@ -251,9 +247,36 @@ function ProjectSection({ projects }: { projects: PortalProject[] }) {
                       <PlIcon name="chevron" size={16} />
                     </summary>
                     <div className="pl-project-section-body">
-                      {section.summary && <p className="pl-project-lead">{section.summary}</p>}
-                      {textLines(section.body).map((line, index) => (
-                        <p key={`${section.id}:${index}:${line.slice(0, 12)}`}>{line}</p>
+                      {section.description && <p className="pl-project-section-desc">{section.description}</p>}
+                      {section.fields.length > 0 && (
+                        <dl className="pl-project-fields">
+                          {section.fields.map(field => (
+                            <div key={`${section.id}:field:${field.label}`}>
+                              <dt>{field.label}</dt>
+                              <dd>{field.value}</dd>
+                            </div>
+                          ))}
+                        </dl>
+                      )}
+                      {section.groups.map(group => (
+                        <section className="pl-project-group" key={`${section.id}:group:${group.title}`}>
+                          <h4>{group.title}</h4>
+                          <div className="pl-project-items">
+                            {group.items.map(item => (
+                              <article className="pl-project-item" key={`${section.id}:${group.title}:${item.title}`}>
+                                <h5>{item.title}</h5>
+                                <dl className="pl-project-fields">
+                                  {item.fields.map(field => (
+                                    <div key={`${section.id}:${item.title}:${field.label}`}>
+                                      <dt>{field.label}</dt>
+                                      <dd>{field.value}</dd>
+                                    </div>
+                                  ))}
+                                </dl>
+                              </article>
+                            ))}
+                          </div>
+                        </section>
                       ))}
                     </div>
                   </details>

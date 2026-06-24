@@ -24,9 +24,25 @@ export interface PortalProject {
 export interface PortalProjectSection {
   id: string;
   title: string;
-  summary: string;
-  body: string;
+  description: string;
+  fields: PortalProjectField[];
+  groups: PortalProjectGroup[];
   updated_at?: string | null;
+}
+
+export interface PortalProjectField {
+  label: string;
+  value: string;
+}
+
+export interface PortalProjectGroup {
+  title: string;
+  items: PortalProjectItem[];
+}
+
+export interface PortalProjectItem {
+  title: string;
+  fields: PortalProjectField[];
 }
 
 export interface PortalDocument {

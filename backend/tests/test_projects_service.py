@@ -64,7 +64,7 @@ def test_create_project_and_list_by_client():
     asyncio.run(run())
 
 
-def test_portal_projects_include_only_finished_public_compositions():
+def test_portal_projects_include_workspace_compact_sections_only():
     async def run():
         engine, db, client = await _setup()
         try:
@@ -76,24 +76,36 @@ def test_portal_projects_include_only_finished_public_compositions():
             db.add_all([
                 ProjectCardState(
                     project_id=created.id,
-                    card_id="__composition__:diagnosis",
+                    card_id="diagnosis",
                     content_json={
-                        "status": "done",
-                        "stage_no": 4,
-                        "draft": {"manifest": "internal draft", "composition": "draft"},
-                        "recommendations": {"verdict": "revise", "recommendations": ["hidden"]},
-                        "final": {
-                            "manifest": "Главное ограничение найдено.",
-                            "composition": "Проблема связана с разрывом между планом и фактом.",
-                        },
+                        "projectId": created.id,
+                        "updatedAt": "2026-06-24T10:00:00",
+                        "keyChallenge": "Скорость принятия решений ниже требуемой.",
+                        "form": {"internal": "hidden"},
+                        "facts": [
+                            {"id": "f1", "label": "Цикл согласования", "summary": "Средний цикл занимает 14 дней.", "status": "ready"},
+                        ],
                     },
                 ),
                 ProjectCardState(
                     project_id=created.id,
-                    card_id="__composition__:hypotheses",
+                    card_id="hypotheses",
                     content_json={
-                        "status": "reviewing",
-                        "structured": {"manifest": "hidden", "composition": "hidden"},
+                        "sectionId": "hypotheses",
+                        "title": "Гипотезы",
+                        "items": [
+                            {"id": "h1", "label": "Сократить согласования", "summary": "Один владелец решения снизит задержку."},
+                        ],
+                        "completedChecks": 1,
+                        "totalChecks": 3,
+                    },
+                ),
+                ProjectCardState(
+                    project_id=created.id,
+                    card_id="__composition__:project-theory",
+                    content_json={
+                        "status": "done",
+                        "final": {"manifest": "Не показываем AI-манифест", "composition": "Не тот экран"},
                     },
                 ),
             ])
@@ -102,16 +114,27 @@ def test_portal_projects_include_only_finished_public_compositions():
             projects = await project_service.list_portal_projects(db, client_id=client.id)
 
             assert len(projects) == 1
-            assert len(projects[0]["sections"]) == 1
-            section = projects[0]["sections"][0]
-            assert section["updated_at"] is not None
-            assert {k: section[k] for k in ("id", "title", "order", "summary", "body")} == {
-                "id": "diagnosis",
-                "title": "Диагноз",
-                "order": 2,
-                "summary": "Главное ограничение найдено.",
-                "body": "Проблема связана с разрывом между планом и фактом.",
-            }
+            assert [section["id"] for section in projects[0]["sections"]] == ["diagnosis", "hypotheses"]
+            assert all(section["updated_at"] is not None for section in projects[0]["sections"])
+            diagnosis, hypotheses = projects[0]["sections"]
+            assert diagnosis["fields"] == [
+                {"label": "Ключевой вызов", "value": "Скорость принятия решений ниже требуемой."},
+            ]
+            assert diagnosis["groups"] == [{
+                "title": "Факты",
+                "items": [{
+                    "title": "Цикл согласования",
+                    "fields": [{"label": "Суть", "value": "Средний цикл занимает 14 дней."}],
+                }],
+            }]
+            assert hypotheses["groups"] == [{
+                "title": "Содержание раздела",
+                "items": [{
+                    "title": "Сократить согласования",
+                    "fields": [{"label": "Суть", "value": "Один владелец решения снизит задержку."}],
+                }],
+            }]
+            assert all("body" not in section and "summary" not in section for section in projects[0]["sections"])
         finally:
             await db.close()
             await engine.dispose()

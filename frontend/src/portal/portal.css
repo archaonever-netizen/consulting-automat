@@ -274,9 +274,33 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
   line-height: 1.68; white-space: pre-wrap; overflow-wrap: anywhere;
 }
 .pl-project-section-body p:last-child { margin-bottom: 0; }
-.pl-project-section-body .pl-project-lead {
-  color: var(--p-ink); font-weight: 650; background: var(--p-surface-2);
-  border-radius: var(--p-r-sm); padding: 10px 12px; margin-bottom: 12px;
+.pl-project-section-desc { color: var(--p-ink-3); }
+.pl-project-fields {
+  display: grid; gap: 8px; margin: 0;
+}
+.pl-project-fields div {
+  display: grid; grid-template-columns: minmax(120px, .42fr) 1fr; gap: 12px;
+  padding: 9px 0; border-bottom: 1px solid var(--p-border);
+}
+.pl-project-fields div:last-child { border-bottom: none; }
+.pl-project-fields dt { color: var(--p-ink-3); font-size: 12px; font-weight: 650; }
+.pl-project-fields dd {
+  margin: 0; color: var(--p-ink); font-size: 13.5px; line-height: 1.55;
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.pl-project-group { margin-top: 16px; }
+.pl-project-group h4 {
+  margin: 0 0 9px; font-family: var(--p-display); font-size: 14px;
+  font-weight: 800; letter-spacing: 0;
+}
+.pl-project-items { display: grid; gap: 10px; }
+.pl-project-item {
+  border: 1px solid var(--p-border); border-radius: var(--p-r-sm);
+  background: var(--p-surface-2); padding: 12px;
+}
+.pl-project-item h5 {
+  margin: 0 0 8px; font-family: var(--p-display); font-size: 13.5px;
+  font-weight: 800; letter-spacing: 0;
 }
 
 /* ── Пилюли статусов (на будущее, единый язык с дизайн-системой) ── */
@@ -309,4 +333,7 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
   .pl-topbar { padding: 12px 16px; }
   .pl-topbar-right { gap: 10px; }
   .pl-user span { display: none; }
+  .pl-proj-head { display: block; }
+  .pl-proj .meta { white-space: normal; padding-top: 0; margin-bottom: 12px; }
+  .pl-project-fields div { grid-template-columns: 1fr; gap: 3px; }
 }
