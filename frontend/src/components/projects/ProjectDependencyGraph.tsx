@@ -22,20 +22,20 @@ import {
 import { applyProjectEdit } from './projectEditApplier';
 import type { Proposal } from './projectReview';
 
-// — Геометрия (ширины узлов совпадают с CSS: mission 300 / block 200 / item 168) —
+// — Геометрия (ширины узлов совпадают с CSS: mission 300 / block 200 / item 240) —
 const BLOCK_X = 96, BLOCK_W = 200, BLOCK_H = 74;
 const MISSION_W = 300, MISSION_H = 124;
 const SECTION_TOP = 0, SECTION_H = 60;               // верхний слой: карточка-раздел
 const MISSION_TOP = SECTION_TOP + SECTION_H + 56;    // Миссия — под карточкой-разделом
 const BLOCKS_TOP = MISSION_TOP + MISSION_H + 64;
 const COL_CENTER_X = BLOCK_X + MISSION_W / 2;        // ось столбца раздел↔миссия (для прямой связи)
-const ITEM_W = 200, ITEM_H = 86, ITEM_GAP = 14;
+const ITEM_W = 240, ITEM_H = 100, ITEM_GAP = 14;
 const ITEM_X = BLOCK_X + BLOCK_W + 150;      // столбец элементов справа от блоков
 const TRUNK_X = 60;                          // ствол структурного дерева (слева)
 const CHILD_RAIL_X = BLOCK_X + BLOCK_W + 64; // рейка блок→элементы (между блоком и элементами)
 const ROW_GAP = 30;
 const LANE_X0 = ITEM_X + ITEM_W + 44, LANE_STEP = 30; // «дорожки» смысловых связей справа
-const SECTION_COLUMN_W = 720;
+const SECTION_COLUMN_W = 800;
 const ACCENT = '#2563EB', MUTED = '#94a3b8';
 
 const SECTION_ORDER = [THEORY_CARD_ID, DIAGNOSIS_CARD_ID, STRATEGY_CARD_ID, TARGET_CARD_ID, STRATEGY_MAP_CARD_ID, HYPOTHESES_CARD_ID, EXPERIMENTS_CARD_ID, DECISIONS_CARD_ID];

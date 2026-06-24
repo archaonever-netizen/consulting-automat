@@ -2162,7 +2162,7 @@ a:hover { color: var(--accent-hover); }
 
 /* Узел-элемент */
 .pg-item {
-  position: relative; width: 200px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px;
+  position: relative; width: 240px; height: 100px; box-sizing: border-box; display: flex; flex-direction: column; gap: 2px;
   padding: 8px 11px; border: 1px solid var(--line); border-radius: var(--radius-sm);
   background: var(--card-bg); box-shadow: var(--sh-sm); cursor: pointer; transition: var(--transition);
 }
