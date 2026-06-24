@@ -21,6 +21,7 @@ export interface ProjectCanvasView {
 interface ProjectCanvasProps {
   projectId: number;
   view: ProjectCanvasView;
+  compositionSlot?: ReactNode;
   // Меняется после применённой Методологом правки — форсирует перечтение снапшота канвасом.
   reloadNonce?: number;
   // Открыть каркасную карточку по id (граф зависимостей на «Весь проект» → клик по узлу).
@@ -59,13 +60,21 @@ function renderCanvasBody(
   return null;
 }
 
-export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSelectFrameworkCard, focusTarget }: ProjectCanvasProps) {
+export default function ProjectCanvas({
+  projectId,
+  view,
+  compositionSlot,
+  reloadNonce = 0,
+  onSelectFrameworkCard,
+  focusTarget,
+}: ProjectCanvasProps) {
   const cardId = view.frameworkCardId;
   const focusRef = useCanvasFocus<HTMLElement>(focusTarget);
 
   if (cardId && view.mode === 'compact') {
     return (
       <section className="project-canvas project-canvas-work">
+        {compositionSlot}
         <ProjectCompactSectionCanvas key={`${projectId}-${cardId}:${reloadNonce}`} projectId={projectId} cardId={cardId} />
       </section>
     );
@@ -78,6 +87,7 @@ export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSele
     const isGraph = cardId === 'whole-project';
     return (
       <section className={`project-canvas project-canvas-work${isGraph ? ' project-canvas-graph' : ''}`} ref={focusRef}>
+        {compositionSlot}
         {body}
       </section>
     );
@@ -85,6 +95,7 @@ export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSele
 
   return (
     <section className="project-canvas">
+      {compositionSlot}
       <div className="project-canvas-empty">
         <div className="ei"><Icon name={view.icon} size={24} /></div>
         <b>{view.title}</b>

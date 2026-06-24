@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Project } from '../../types/projects';
-import Icon from '../Icon';
 import ProjectCanvas from './ProjectCanvas';
+import ProjectDisclosure from './ProjectDisclosure';
 import { seedFrameworkSectionSnapshots } from './ProjectFrameworkSectionCanvas';
 import ProjectLeftPanel from './ProjectLeftPanel';
 import { seedOkrSnapshot } from './ProjectOkrCanvas';
@@ -261,51 +261,38 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
     }
   }
 
+  const compositionSlot = compositionOpen ? (
+    <ProjectDisclosure title={`Композиция раздела — ${compositionSectionTitle || activeFrameworkCard.title}`} defaultOpen>
+      {composingProject && (
+        <div className="project-composition-loading">
+          <span className="spinner" />
+          Методолог собирает композицию раздела...
+        </div>
+      )}
+      {compositionError && <div className="project-card-validator-error">{compositionError}</div>}
+      {!composingProject && !compositionError && (compositionManifest || compositionText) && (
+        <>
+          {compositionManifest && (
+            <div className="project-composition-manifest">
+              <b>Манифест</b>
+              <p>{compositionManifest}</p>
+            </div>
+          )}
+          {compositionText && (
+            <div className="project-composition-text">
+              {compositionLines(compositionText).map((line, index) => (
+                <p key={`${index}:${line.slice(0, 16)}`}>{line}</p>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </ProjectDisclosure>
+  ) : null;
+
   return (
     <div className="project-workspace">
       <ProjectToolbar project={project} onComposeProject={runProjectComposition} composingProject={composingProject} />
-      {compositionOpen && (
-        <section className="project-composition-panel">
-          <div className="project-composition-head">
-            <div>
-              <p className="eyebrow">Композиция раздела</p>
-              <h2>{compositionSectionTitle || activeFrameworkCard.title}</h2>
-            </div>
-            <button
-              type="button"
-              className="project-composition-close"
-              onClick={() => setCompositionOpen(false)}
-              aria-label="Закрыть композицию"
-            >
-              <Icon name="close" size={16} />
-            </button>
-          </div>
-          {composingProject && (
-            <div className="project-composition-loading">
-              <span className="spinner" />
-              Методолог собирает композицию раздела...
-            </div>
-          )}
-          {compositionError && <div className="project-card-validator-error">{compositionError}</div>}
-          {!composingProject && !compositionError && (compositionManifest || compositionText) && (
-            <>
-              {compositionManifest && (
-                <div className="project-composition-manifest">
-                  <b>Манифест</b>
-                  <p>{compositionManifest}</p>
-                </div>
-              )}
-              {compositionText && (
-                <div className="project-composition-text">
-                  {compositionLines(compositionText).map((line, index) => (
-                    <p key={`${index}:${line.slice(0, 16)}`}>{line}</p>
-                  ))}
-                </div>
-              )}
-            </>
-          )}
-        </section>
-      )}
       <div className="project-workspace-grid" ref={gridRef} style={{ '--rp-width': `${rightWidth}px` } as React.CSSProperties}>
         <ProjectLeftPanel
           project={project}
@@ -323,6 +310,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           <ProjectCanvas
             projectId={project.id}
             view={canvasView}
+            compositionSlot={compositionSlot}
             reloadNonce={reloadNonce}
             onSelectFrameworkCard={selectFrameworkCard}
             focusTarget={activeView.mode === 'edit' ? focusTarget : null}

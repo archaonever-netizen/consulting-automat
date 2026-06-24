@@ -1,5 +1,45 @@
 # Журнал переноса изменений
 
+## Композиция раздела внутри Workspace
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-24
+- Цель: перенести результат композиции из отдельной верхней панели в рабочую область Workspace как сворачиваемый блок по аналогии с "Контекст" в рабочих экранах проекта.
+
+### Что реализовано
+
+- Композиция больше не рендерится отдельной полосой между toolbar и сеткой Workspace.
+- В `ProjectCanvas` добавлен optional `compositionSlot`, который отображается внутри центральной рабочей области.
+- В `ProjectWorkspace` результат композиции теперь собирается как `ProjectDisclosure` с заголовком "Композиция раздела — ...".
+- Блок композиции можно свернуть/развернуть так же, как блоки "Контекст" в рабочих экранах проекта.
+- Содержимое композиции сохранено: состояние загрузки, ошибка, манифест сверху и основной текст ниже.
+- Старые стили отдельной панели (`project-composition-panel/head/close`) удалены.
+- `frontend/dist` пересобран после изменения frontend.
+
+### Изменённые файлы
+
+- `frontend/src/components/projects/ProjectCanvas.tsx` - добавлен slot для композиции внутри canvas.
+- `frontend/src/components/projects/ProjectWorkspace.tsx` - композиция перенесена в `ProjectDisclosure`.
+- `frontend/src/styles/styles.css` - удалены стили старой верхней панели.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновленные build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `.\\.venv\\Scripts\\python.exe -m ruff check --select F,E9 backend\\routes\\projects.py backend\\schemas\\projects.py backend\\services\\project_methodolog.py` - успешно.
+- `npm.cmd exec eslint -- src/components/projects/ProjectCanvas.tsx src/components/projects/ProjectWorkspace.tsx src/components/projects/ProjectToolbar.tsx src/components/projects/projectReview.ts` в `frontend` - успешно.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- На экране "Весь проект" композиция по-прежнему не собирается, но сообщение об этом теперь появляется внутри центральной области.
+- Если потребуется сохранять открытость/закрытость композиции между разделами, можно добавить отдельный ключ localStorage.
+
+---
+
 ## Композиция активного раздела с манифестом
 
 ### Контекст
