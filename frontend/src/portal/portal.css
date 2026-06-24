@@ -299,32 +299,37 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 .pl-project-value-list strong {
   font-weight: 800; color: var(--p-ink);
 }
-.pl-project-group { margin-top: 16px; }
-.pl-project-group h4 {
-  margin: 0 0 9px; font-family: var(--p-display); font-size: 14px;
+.pl-project-group {
+  margin-top: 12px; border: 1px solid var(--p-border);
+  border-radius: var(--p-r-md); background: #fff; overflow: hidden;
+}
+.pl-project-group > summary {
+  min-height: 44px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 11px 14px; list-style: none; cursor: pointer;
+  color: var(--p-ink); font-family: var(--p-display); font-size: 14px;
   font-weight: 800; letter-spacing: 0;
+}
+.pl-project-group > summary::-webkit-details-marker { display: none; }
+.pl-project-group > summary svg {
+  color: var(--p-ink-3); flex: 0 0 auto; transition: transform .15s, color .15s;
+}
+.pl-project-group[open] > summary {
+  color: var(--p-accent-ink); border-bottom: 1px solid var(--p-border);
+}
+.pl-project-group[open] > summary svg { transform: rotate(180deg); color: var(--p-accent); }
+.pl-project-group-body {
+  padding: 12px; background: var(--p-surface-2);
 }
 .pl-project-items { display: grid; gap: 7px; }
 .pl-project-item {
   border: 1px solid var(--p-border); border-radius: var(--p-r-sm);
-  background: var(--p-surface-2); overflow: hidden;
+  background: #fff; padding: 12px;
 }
-.pl-project-item summary {
-  min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 10px 12px; list-style: none; cursor: pointer;
-  color: var(--p-ink); font-family: var(--p-display); font-size: 13.5px;
+.pl-project-item h5 {
+  margin: 0 0 8px; font-family: var(--p-display); font-size: 13.5px;
   font-weight: 800; letter-spacing: 0;
 }
-.pl-project-item summary::-webkit-details-marker { display: none; }
-.pl-project-item summary svg {
-  color: var(--p-ink-3); flex: 0 0 auto; transition: transform .15s, color .15s;
-}
-.pl-project-item[open] summary {
-  color: var(--p-accent-ink); border-bottom: 1px solid var(--p-border);
-}
-.pl-project-item[open] summary svg { transform: rotate(180deg); color: var(--p-accent); }
-.pl-project-item-body { padding: 8px 12px 11px; background: #fff; }
-.pl-project-item-body .pl-project-fields > .pl-project-field-row {
+.pl-project-item .pl-project-fields > .pl-project-field-row {
   grid-template-columns: minmax(110px, .34fr) 1fr; padding: 7px 0;
 }
 

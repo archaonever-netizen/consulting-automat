@@ -256,26 +256,26 @@ function ProjectSection({ projects }: { projects: PortalProject[] }) {
                         </dl>
                       )}
                       {section.groups.map(group => (
-                        <section className="pl-project-group" key={`${section.id}:group:${group.title}`}>
-                          <h4>{group.title}</h4>
-                          <div className="pl-project-items">
-                            {group.items.map(item => (
-                              <details className="pl-project-item" key={`${section.id}:${group.title}:${item.title}`}>
-                                <summary>
-                                  <span>{item.title}</span>
-                                  <PlIcon name="chevron" size={15} />
-                                </summary>
-                                <div className="pl-project-item-body">
+                        <details className="pl-project-group" key={`${section.id}:group:${group.title}`}>
+                          <summary>
+                            <span>{group.title}</span>
+                            <PlIcon name="chevron" size={15} />
+                          </summary>
+                          <div className="pl-project-group-body">
+                            <div className="pl-project-items">
+                              {group.items.map(item => (
+                                <article className="pl-project-item" key={`${section.id}:${group.title}:${item.title}`}>
+                                  <h5>{item.title}</h5>
                                   <dl className="pl-project-fields">
                                     {item.fields.map(field => (
                                       <ProjectField key={`${section.id}:${item.title}:${field.label}`} field={field} />
                                     ))}
                                   </dl>
-                                </div>
-                              </details>
-                            ))}
+                                </article>
+                              ))}
+                            </div>
                           </div>
-                        </section>
+                        </details>
                       ))}
                     </div>
                   </details>
