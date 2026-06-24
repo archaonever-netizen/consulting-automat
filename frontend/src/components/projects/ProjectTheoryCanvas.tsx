@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import ProjectDisclosure from './ProjectDisclosure';
 import { focusKey } from './projectCanvasFocus';
 import { PROJECT_THEORY_BLOCKS, readProjectTheorySnapshot, writeProjectTheorySnapshot, type ProjectTheoryBlockSnapshot, type ProjectTheorySnapshotItem } from './projectTheorySnapshot';
 
@@ -4110,12 +4111,8 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
         </div>
       </ProjectTheorySection>
 
-      <section className="project-theory-validation">
-        <div>
-          <div className="project-panel-title">Проверка теории проекта</div>
-          <h3>Готовность модели</h3>
-          <p>Экран считается заполненным только когда каждый блок можно проверить фактом, цифрой, ролью или источником данных.</p>
-        </div>
+      <ProjectDisclosure title="Проверка готовности">
+        <p className="project-disclosure-dependency">Экран считается заполненным только когда каждый блок можно проверить фактом, цифрой, ролью или источником данных.</p>
         <div className="project-theory-validation-grid">
           {validationChecks.map(check => (
             <label className="project-theory-validation-item" key={check}>
@@ -4132,7 +4129,7 @@ export default function ProjectTheoryCanvas({ projectId }: ProjectTheoryCanvasPr
             ))}
           </select>
         </label>
-      </section>
+      </ProjectDisclosure>
     </div>
   );
 }

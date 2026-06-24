@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import ProjectDisclosure from './ProjectDisclosure';
 import { readProjectFrameworkSectionSnapshot, writeProjectFrameworkSectionSnapshot, type ProjectFrameworkSectionSnapshot } from './projectFrameworkSectionSnapshot';
 import { getFallbackProjectTargetStateSnapshot, readProjectTargetStateSnapshot, type ProjectTargetStateSnapshot } from './projectTargetStateSnapshot';
 import { getFallbackProjectTheorySnapshot, readProjectTheorySnapshot } from './projectTheorySnapshot';
@@ -184,15 +185,14 @@ function TextField({
   );
 }
 
-function Section({ number, title, note, children }: { number: string; title: string; note: string; children: ReactNode }) {
+function Section({ title, note, children }: { title: string; note?: string; children: ReactNode }) {
   return (
     <section className="project-theory-section">
       <div className="project-theory-section-head">
         <div>
-          <span>{number}</span>
           <h3>{title}</h3>
+          {note && <p>{note}</p>}
         </div>
-        <p>{note}</p>
       </div>
       {children}
     </section>
@@ -237,8 +237,9 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
         <span className="project-readiness-pill">Готовность {completedChecks}/{validationChecks.length}</span>
       </section>
 
-      <Section number="0" title="Связь с предыдущими разделами" note="Целевое состояние / Стратегическая карта / Решения / Инициативы → OKR / KPI">
-        <div className="project-strategy-sources">
+      <ProjectDisclosure title="Контекст — откуда берутся данные">
+        <p className="project-disclosure-dependency">Целевое состояние / Стратегическая карта / Решения / Инициативы → OKR / KPI</p>
+        <div className="project-strategy-source-grid">
           <div className="project-strategy-source-card">
             <span>Целевое состояние</span>
             <strong>{target.objective || target.finalStatement || 'Сначала заполните Целевое состояние'}</strong>
@@ -250,9 +251,9 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
             <em>KR и KPI должны иметь источник контроля.</em>
           </div>
         </div>
-      </Section>
+      </ProjectDisclosure>
 
-      <Section number="1" title="Objective" note="Повторяемая карточка: цель — качественное направление, а не метрика. Внутри — вложенные Key Results и KPI.">
+      <Section title="Objective">
         <div className="project-theory-repeater">
           {objectives.map((objective, index) => (
             <DraftCard
@@ -358,8 +359,8 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
         </div>
       </Section>
 
-      <Section number="2" title="Методологическая проверка" note="Objective — направление, KR измеримы и отслеживаются, KPI связан со стратегией.">
-        <div className="project-theory-validation-list">
+      <ProjectDisclosure title="Проверка готовности" count={`${completedChecks} из ${validationChecks.length}`}>
+        <div className="project-theory-validation-grid">
           {validationChecks.map(([label, value]) => (
             <label className="project-theory-validation-item" key={label}>
               <input type="checkbox" checked={value} readOnly />
@@ -367,7 +368,7 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
             </label>
           ))}
         </div>
-      </Section>
+      </ProjectDisclosure>
     </div>
   );
 }

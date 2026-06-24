@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import ProjectDisclosure from './ProjectDisclosure';
 import { focusKey } from './projectCanvasFocus';
 import { readProjectDiagnosisSnapshot, writeProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import {
@@ -531,7 +532,8 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
         </label>
       </section>
 
-      <DiagnosisSection number="0" title="Связь с экраном Теория проекта" note="Диагноз проверяет, что мешает каждому блоку Теории проекта быть правдой в текущей реальности.">
+      <ProjectDisclosure title="Контекст — связь с Теорией проекта">
+        <p className="project-disclosure-dependency">Диагноз проверяет, что мешает каждому блоку Теории проекта быть правдой в текущей реальности.</p>
         <div className="project-diagnosis-relations">
           {theoryRelations.map(relation => (
             <div className="project-diagnosis-relation" key={relation.id}>
@@ -549,7 +551,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
             </div>
           ))}
         </div>
-      </DiagnosisSection>
+      </ProjectDisclosure>
 
       <DiagnosisSection number="1-3" title="Сырой запрос клиента" note="Сначала фиксируется исходный запрос без интерпретации, затем определяется его тип и контекст возникновения.">
         <div className="project-theory-grid two">
@@ -759,12 +761,8 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
         </div>
       </DiagnosisSection>
 
-      <section className="project-theory-validation">
-        <div>
-          <div className="project-panel-title">Методологическая проверка диагноза</div>
-          <h3>{autoStatus}</h3>
-          <p>Диагноз считается валидным, когда сырой запрос связан с Теорией проекта, симптомы отделены от проблемы, а ключевой вызов подтверждается фактами.</p>
-        </div>
+      <ProjectDisclosure title="Проверка готовности" count={`${completedChecks} из ${validationChecks.length}`}>
+        <p className="project-disclosure-dependency">Диагноз считается валидным, когда сырой запрос связан с Теорией проекта, симптомы отделены от проблемы, а ключевой вызов подтверждается фактами.</p>
         <div className="project-theory-validation-grid">
           {validationChecks.map(([label, value]) => (
             <label className="project-theory-validation-item" key={label}>
@@ -777,7 +775,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
           <span>18. Итоговый статус проверки</span>
           <input className="form-input" value={autoStatus} readOnly />
         </label>
-      </section>
+      </ProjectDisclosure>
     </div>
   );
 }

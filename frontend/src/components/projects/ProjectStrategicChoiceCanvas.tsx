@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import ProjectDisclosure from './ProjectDisclosure';
 import { focusKey } from './projectCanvasFocus';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectStrategicChoiceSnapshot, writeProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
@@ -524,7 +525,8 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         </label>
       </section>
 
-      <StrategicSection number="0-1" title="Связи с Диагнозом и Теорией проекта" note="Стратегический выбор должен отвечать диагнозу и не отрываться от миссии, результатов, ограничений и сохраняемого ядра.">
+      <ProjectDisclosure title="Контекст — связи с Диагнозом и Теорией проекта">
+        <p className="project-disclosure-dependency">Стратегический выбор должен отвечать диагнозу и не отрываться от миссии, результатов, ограничений и сохраняемого ядра.</p>
         <div className="project-strategy-source-grid">
           <div className="project-strategy-source-card">
             <b>Диагноз</b>
@@ -555,7 +557,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
             ))}
           </div>
         </div>
-      </StrategicSection>
+      </ProjectDisclosure>
 
       <StrategicSection number="2-3" title="Стратегический вопрос и выигрыш" note="Формулируем, какой подход выбираем, чтобы преодолеть препятствие из Диагноза и достичь результата из Теории проекта.">
         <div className="project-theory-grid two">
@@ -800,12 +802,8 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         </div>
       </StrategicSection>
 
-      <section className="project-theory-validation">
-        <div>
-          <div className="project-panel-title">18. Методологическая проверка</div>
-          <h3>{autoStatus}</h3>
-          <p>Выбор валиден, когда отвечает диагнозу, связан с теорией проекта, указывает where/how to win, capabilities, systems, trade-offs и согласованные действия.</p>
-        </div>
+      <ProjectDisclosure title="Проверка готовности" count={`${completedChecks} из ${validationChecks.length}`}>
+        <p className="project-disclosure-dependency">Выбор валиден, когда отвечает диагнозу, связан с теорией проекта, указывает where/how to win, capabilities, systems, trade-offs и согласованные действия.</p>
         <div className="project-theory-validation-grid">
           {validationChecks.map(([label, value]) => (
             <label className="project-theory-validation-item" key={label}>
@@ -818,7 +816,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
           <span>Итоговый статус</span>
           <input className="form-input" value={autoStatus} readOnly />
         </label>
-      </section>
+      </ProjectDisclosure>
     </div>
   );
 }

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import ProjectDisclosure from './ProjectDisclosure';
 import { focusKey } from './projectCanvasFocus';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { getFallbackProjectStrategicChoiceSnapshot, readProjectStrategicChoiceSnapshot } from './projectStrategicChoiceSnapshot';
@@ -533,7 +534,8 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         </label>
       </section>
 
-      <TargetSection number="0" title="Связи с предыдущими экранами" note="Целевое состояние не придумывается заново: оно уточняет будущую систему после выбранной стратегии.">
+      <ProjectDisclosure title="Контекст — связи с предыдущими экранами">
+        <p className="project-disclosure-dependency">Целевое состояние не придумывается заново: оно уточняет будущую систему после выбранной стратегии.</p>
         <div className="project-strategy-source-grid">
           <div className="project-strategy-source-card">
             <b>Теория проекта</b>
@@ -571,7 +573,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
             <em>{strategy.guidingPolicy || 'Не указана'}</em>
           </div>
         </div>
-      </TargetSection>
+      </ProjectDisclosure>
 
       <TargetSection number="1-4" title="Формулировка, тип, where to play и how to win" note="Фиксируем общую будущую правду о системе, ее тип и стратегическую позицию.">
         <div className="project-theory-grid two">
@@ -860,12 +862,8 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         </div>
       </TargetSection>
 
-      <section className="project-theory-validation">
-        <div>
-          <div className="project-panel-title">17. Методологическая проверка</div>
-          <h3>{autoStatus}</h3>
-          <p>Целевое состояние валидно, когда связано со стратегией и диагнозом, измеримо, учитывает capabilities, systems, качество, ограничения и сохраняемое ядро.</p>
-        </div>
+      <ProjectDisclosure title="Проверка готовности" count={`${completedChecks} из ${validationChecks.length}`}>
+        <p className="project-disclosure-dependency">Целевое состояние валидно, когда связано со стратегией и диагнозом, измеримо, учитывает capabilities, systems, качество, ограничения и сохраняемое ядро.</p>
         <div className="project-theory-validation-grid">
           {validationChecks.map(([label, value]) => (
             <label className="project-theory-validation-item" key={label}>
@@ -878,7 +876,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           <span>Итоговый статус</span>
           <input className="form-input" value={autoStatus} readOnly />
         </label>
-      </section>
+      </ProjectDisclosure>
     </div>
   );
 }

@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import DraftCard from './DraftCard';
 import Icon from '../Icon';
+import ProjectDisclosure from './ProjectDisclosure';
 import { getFallbackProjectDiagnosisSnapshot, readProjectDiagnosisSnapshot } from './projectDiagnosisSnapshot';
 import { readProjectFrameworkSectionSnapshot, writeProjectFrameworkSectionSnapshot, type ProjectFrameworkSectionSnapshot } from './projectFrameworkSectionSnapshot';
 import { focusKey } from './projectCanvasFocus';
@@ -619,25 +620,19 @@ export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: P
         <span className="project-readiness-pill">Готовность {completedChecks}/{validationChecks.length}</span>
       </section>
 
-      <details className="project-disclosure">
-        <summary>
-          <Icon name="chevron" size={14} className="project-disclosure-chevron" />
-          <span>Контекст — откуда берутся данные</span>
-        </summary>
-        <div className="project-disclosure-body">
-          <p className="project-disclosure-dependency">{config.dependency}</p>
-          <p className="project-disclosure-dependency">{config.lead}</p>
-          <div className="project-strategy-source-grid">
-            {config.sourceCards(sources).map(card => (
-              <div className="project-strategy-source-card" key={card.title}>
-                <span>{card.title}</span>
-                <strong>{card.value}</strong>
-                <em>{card.note}</em>
-              </div>
-            ))}
-          </div>
+      <ProjectDisclosure title="Контекст — откуда берутся данные">
+        <p className="project-disclosure-dependency">{config.dependency}</p>
+        <p className="project-disclosure-dependency">{config.lead}</p>
+        <div className="project-strategy-source-grid">
+          {config.sourceCards(sources).map(card => (
+            <div className="project-strategy-source-card" key={card.title}>
+              <span>{card.title}</span>
+              <strong>{card.value}</strong>
+              <em>{card.note}</em>
+            </div>
+          ))}
         </div>
-      </details>
+      </ProjectDisclosure>
 
       <Section title={config.cardName}>
         <div className="project-theory-repeater">
@@ -684,23 +679,16 @@ export default function ProjectFrameworkSectionCanvas({ projectId, screenId }: P
         </div>
       </Section>
 
-      <details className="project-disclosure">
-        <summary>
-          <Icon name="chevron" size={14} className="project-disclosure-chevron" />
-          <span>Проверка готовности</span>
-          <span className="project-disclosure-count">{completedChecks} из {validationChecks.length}</span>
-        </summary>
-        <div className="project-disclosure-body">
-          <div className="project-theory-validation-grid">
-            {validationChecks.map(([label, value]) => (
-              <label className="project-theory-validation-item" key={label}>
-                <input type="checkbox" checked={hasText(String(value))} readOnly />
-                <span>{label}</span>
-              </label>
-            ))}
-          </div>
+      <ProjectDisclosure title="Проверка готовности" count={`${completedChecks} из ${validationChecks.length}`}>
+        <div className="project-theory-validation-grid">
+          {validationChecks.map(([label, value]) => (
+            <label className="project-theory-validation-item" key={label}>
+              <input type="checkbox" checked={hasText(String(value))} readOnly />
+              <span>{label}</span>
+            </label>
+          ))}
         </div>
-      </details>
+      </ProjectDisclosure>
     </div>
   );
 }
