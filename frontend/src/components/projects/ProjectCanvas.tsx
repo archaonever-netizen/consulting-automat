@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react';
 import Icon from '../Icon';
-import ProjectCardValidator from './ProjectCardValidator';
 import { useCanvasFocus, type CanvasFocusTarget } from './projectCanvasFocus';
 import ProjectDiagnosisCanvas from './ProjectDiagnosisCanvas';
 import ProjectFrameworkSectionCanvas from './ProjectFrameworkSectionCanvas';
@@ -67,7 +66,6 @@ export default function ProjectCanvas({ projectId, view, reloadNonce = 0, onSele
     return (
       <section className="project-canvas project-canvas-work" ref={focusRef}>
         {body}
-        <ProjectCardValidator projectId={projectId} cardId={cardId} cardTitle={view.title} />
       </section>
     );
   }

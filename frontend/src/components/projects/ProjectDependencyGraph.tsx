@@ -7,7 +7,7 @@
 //   • смысловые ref-связи идут справа по отдельным «дорожкам» (lanes) — вертикальные участки разных
 //     связей не ложатся друг на друга; показываются по наведению на узел.
 // Инлайн: «+» в блоке (добавить элемент), «×» на элементе (удалить) — через applyProjectEdit (автоперсист).
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Background, BaseEdge, Controls, Handle, MarkerType, MiniMap, Position,
   ReactFlow, ReactFlowProvider, useEdgesState, useNodesState, useReactFlow,
@@ -264,7 +264,9 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
   const [hoveredEdge, setHoveredEdge] = useState<string | null>(null);
   const [nodes, setNodes, onNodesChange] = useNodesState<Node>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
-  const { fitView } = useReactFlow();
+  const { fitView, getZoom } = useReactFlow();
+  const didInitialFit = useRef(false);
+  const prevExpanded = useRef<ReadonlySet<string>>(new Set());
 
   const toggle = useCallback((id: string) => setExpanded(prev => {
     const next = new Set(prev);
@@ -405,10 +407,40 @@ function GraphInner({ projectId, onOpenCard }: GraphProps) {
     setEdges(rf);
   }, [graph, hovered, pinned, hoveredEdge, pinnedEdges, setEdges]);
 
+  // Первичная подгонка под весь граф — один раз, когда узлы впервые появились.
+  // Дальше НЕ переподгоняем на каждое изменение числа узлов (добавление «+», pin, удаление),
+  // иначе вид отлетает к общему плану и приходится возвращаться вручную.
   useEffect(() => {
+    if (didInitialFit.current || nodes.length === 0) return;
+    didInitialFit.current = true;
     const t = window.setTimeout(() => fitView({ duration: 300, padding: 0.14 }), 60);
     return () => window.clearTimeout(t);
   }, [nodes.length, fitView]);
+
+  // При раскрытии списка отдаляемся ровно настолько, чтобы стал виден весь список
+  // (узел-блок + его элементы), но не дальше текущего масштаба (внутрь не приближаем).
+  useEffect(() => {
+    const prev = prevExpanded.current;
+    prevExpanded.current = expanded;
+    let addedKey: string | undefined;
+    for (const key of expanded) if (!prev.has(key)) { addedKey = key; break; }
+    if (!addedKey) return;
+    const block = graph.nodes.find(
+      (n): n is Extract<TheoryNode, { type: 'blockNode' }> => n.type === 'blockNode' && n.data.expandKey === addedKey,
+    );
+    if (!block) return;
+    const { cardId, list } = block.data;
+    const ids = [
+      block.id,
+      ...graph.nodes
+        .filter((n): n is Extract<TheoryNode, { type: 'itemNode' }> => n.type === 'itemNode' && n.data.cardId === cardId && n.data.list === list)
+        .map(n => n.id),
+    ];
+    const t = window.setTimeout(() => {
+      fitView({ nodes: ids.map(id => ({ id })), padding: 0.3, duration: 400, maxZoom: Math.max(getZoom(), 0.1) });
+    }, 90);
+    return () => window.clearTimeout(t);
+  }, [expanded, graph, fitView, getZoom]);
 
   return (
     <ReactFlow

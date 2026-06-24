@@ -2042,6 +2042,17 @@ a:hover { color: var(--accent-hover); }
   border: 1px solid var(--line); border-radius: var(--radius-lg);
   background: var(--surface-2); box-shadow: var(--sh-sm); overflow: hidden;
 }
+/* Экран «Весь проект»: граф занимает всю рабочую область — во всю ширину между
+   боковыми панелями и на всю высоту, без центрирующих отступов и внешнего скролла. */
+.project-canvas-work:has(.project-whole-project) {
+  padding: 0; place-items: stretch; overflow: auto;
+}
+.project-canvas-work .project-whole-project {
+  width: 100%; max-width: none; height: 100%; margin: 0; padding: 12px; gap: 12px;
+}
+.project-whole-project .project-graph {
+  flex: 1 1 auto; height: auto; min-height: 0; max-height: none;
+}
 .project-graph-loading {
   display: flex; align-items: center; justify-content: center; gap: 10px;
   color: var(--text-secondary); font-size: 13.5px; font-weight: 700;
