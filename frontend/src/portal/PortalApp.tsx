@@ -260,14 +260,19 @@ function ProjectSection({ projects }: { projects: PortalProject[] }) {
                           <h4>{group.title}</h4>
                           <div className="pl-project-items">
                             {group.items.map(item => (
-                              <article className="pl-project-item" key={`${section.id}:${group.title}:${item.title}`}>
-                                <h5>{item.title}</h5>
-                                <dl className="pl-project-fields">
-                                  {item.fields.map(field => (
-                                    <ProjectField key={`${section.id}:${item.title}:${field.label}`} field={field} />
-                                  ))}
-                                </dl>
-                              </article>
+                              <details className="pl-project-item" key={`${section.id}:${group.title}:${item.title}`}>
+                                <summary>
+                                  <span>{item.title}</span>
+                                  <PlIcon name="chevron" size={15} />
+                                </summary>
+                                <div className="pl-project-item-body">
+                                  <dl className="pl-project-fields">
+                                    {item.fields.map(field => (
+                                      <ProjectField key={`${section.id}:${item.title}:${field.label}`} field={field} />
+                                    ))}
+                                  </dl>
+                                </div>
+                              </details>
                             ))}
                           </div>
                         </section>
