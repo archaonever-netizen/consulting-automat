@@ -76,6 +76,25 @@ def test_portal_projects_include_workspace_compact_sections_only():
             db.add_all([
                 ProjectCardState(
                     project_id=created.id,
+                    card_id="project-theory",
+                    content_json={
+                        "projectId": created.id,
+                        "updatedAt": "2026-06-24T09:00:00",
+                        "blocks": [
+                            {
+                                "id": "stakeholder",
+                                "title": "Клиент / выгодоприобретатель",
+                                "expectedState": "Роли заказчика, пользователя и выгодоприобретателя разделены.",
+                                "items": [
+                                    {"id": "s1", "label": "Заказчик", "summary": "Принимает решение и согласует бюджет."},
+                                    {"id": "s2", "label": "Пользователь", "summary": "Работает с результатом ежедневно; сообщает о барьерах."},
+                                ],
+                            },
+                        ],
+                    },
+                ),
+                ProjectCardState(
+                    project_id=created.id,
                     card_id="diagnosis",
                     content_json={
                         "projectId": created.id,
@@ -119,9 +138,20 @@ def test_portal_projects_include_workspace_compact_sections_only():
             projects = await project_service.list_portal_projects(db, client_id=client.id)
 
             assert len(projects) == 1
-            assert [section["id"] for section in projects[0]["sections"]] == ["diagnosis", "hypotheses"]
+            assert [section["id"] for section in projects[0]["sections"]] == ["project-theory", "diagnosis", "hypotheses"]
             assert all(section["updated_at"] is not None for section in projects[0]["sections"])
-            diagnosis, hypotheses = projects[0]["sections"]
+            theory, diagnosis, hypotheses = projects[0]["sections"]
+            assert theory["groups"] == [{
+                "title": "Логика проекта",
+                "items": [{
+                    "title": "Клиент / выгодоприобретатель",
+                    "fields": [
+                        {"label": "Ожидаемое состояние", "value": "Роли заказчика, пользователя и выгодоприобретателя разделены."},
+                        {"label": "Заказчик", "value": "Принимает решение и согласует бюджет."},
+                        {"label": "Пользователь", "value": "Работает с результатом ежедневно; сообщает о барьерах."},
+                    ],
+                }],
+            }]
             assert diagnosis["fields"] == [
                 {"label": "Ключевой вызов", "value": "Скорость принятия решений ниже требуемой."},
             ]

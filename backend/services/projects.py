@@ -129,6 +129,28 @@ def _item_title(item: dict, fallback: str) -> str:
     return fallback
 
 
+def _nested_item_fields(items: list) -> list[dict]:
+    fields: list[dict] = []
+    for index, nested in enumerate(items, start=1):
+        if not isinstance(nested, dict):
+            continue
+        label = _item_title(nested, f"Характеристика {index}")
+        value = _clean(nested.get("summary"))
+        if not value:
+            values = []
+            for key, raw in nested.items():
+                if key in _SKIP_KEYS or key in {"title", "label", "summary", "name", "__cardName"}:
+                    continue
+                cleaned = _clean(raw)
+                if cleaned:
+                    values.append(cleaned)
+            value = "; ".join(values)
+        field = _field(label, value)
+        if field:
+            fields.append(field)
+    return fields
+
+
 def _item_fields(item: dict) -> list[dict]:
     fields: list[dict] = []
     summary = _field("Суть", item.get("summary"))
@@ -143,6 +165,9 @@ def _item_fields(item: dict) -> list[dict]:
         field = _field(label, value)
         if field:
             fields.append(field)
+    nested_items = item.get("items")
+    if isinstance(nested_items, list):
+        fields.extend(_nested_item_fields(nested_items))
     return fields
 
 
