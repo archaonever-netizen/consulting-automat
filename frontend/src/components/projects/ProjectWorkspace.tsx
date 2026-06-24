@@ -86,6 +86,46 @@ function compositionLines(text: string): string[] {
     .filter(Boolean);
 }
 
+interface StoredProjectComposition {
+  title: string;
+  manifest: string;
+  composition: string;
+  savedAt: string;
+}
+
+const COMPOSITION_STORAGE_PREFIX = 'project-section-composition';
+
+function compositionStorageKey(projectId: number, cardId: string): string {
+  return `${COMPOSITION_STORAGE_PREFIX}:${projectId}:${cardId}`;
+}
+
+function readStoredComposition(projectId: number, cardId: string): StoredProjectComposition | null {
+  try {
+    const raw = localStorage.getItem(compositionStorageKey(projectId, cardId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredProjectComposition>;
+    const composition = typeof parsed.composition === 'string' ? parsed.composition : '';
+    const manifest = typeof parsed.manifest === 'string' ? parsed.manifest : '';
+    if (!composition && !manifest) return null;
+    return {
+      title: typeof parsed.title === 'string' ? parsed.title : '',
+      manifest,
+      composition,
+      savedAt: typeof parsed.savedAt === 'string' ? parsed.savedAt : '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredComposition(projectId: number, cardId: string, value: StoredProjectComposition) {
+  try {
+    localStorage.setItem(compositionStorageKey(projectId, cardId), JSON.stringify(value));
+  } catch {
+    // localStorage can be unavailable or full; composition still remains visible in current state.
+  }
+}
+
 interface ProjectWorkspaceProps {
   project: Project;
 }
@@ -208,20 +248,35 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
     // (например, при переходе из узла графа «Весь проект»).
     revealFrameworkCard(cardId);
     setFocusTarget(focus ? { cardId, list: focus.list, itemId: focus.itemId, nonce: ++focusNonce.current } : null);
+    syncCompositionForCard(cardId);
   }
 
   function selectCompactCard(cardId: string) {
     setActiveView({ mode: 'compact', cardId });
     revealFrameworkCard(cardId);
     setFocusTarget(null);
+    syncCompositionForCard(cardId);
+  }
+
+  function syncCompositionForCard(cardId: string) {
+    if (!compositionOpen) return;
+    const card = PROJECT_FRAMEWORK_CARDS.find(item => item.id === cardId);
+    const stored = readStoredComposition(project.id, cardId);
+    setCompositionSectionTitle(stored?.title || card?.title || '');
+    setCompositionManifest(stored?.manifest || '');
+    setCompositionText(stored?.composition || '');
+    setCompositionError('');
+    setComposingProject(false);
+    if (!stored) setCompositionOpen(false);
   }
 
   async function runProjectComposition() {
     if (composingProject) return;
+    const stored = readStoredComposition(project.id, activeFrameworkCard.id);
     setCompositionOpen(true);
-    setCompositionManifest('');
-    setCompositionText('');
-    setCompositionSectionTitle(activeFrameworkCard.title);
+    setCompositionManifest(stored?.manifest || '');
+    setCompositionText(stored?.composition || '');
+    setCompositionSectionTitle(stored?.title || activeFrameworkCard.title);
     setCompositionError('');
     if (activeFrameworkCard.id === WHOLE_PROJECT_CARD_ID) {
       setCompositionError('Выберите конкретный раздел проекта, чтобы собрать его композицию.');
@@ -252,8 +307,16 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           context_cards: contextCard ? [contextCard] : [],
         },
       });
-      setCompositionManifest(result.manifest || '');
-      setCompositionText(result.composition || 'В разделе пока нет данных для композиции.');
+      const nextComposition = result.composition || 'В разделе пока нет данных для композиции.';
+      const nextManifest = result.manifest || '';
+      setCompositionManifest(nextManifest);
+      setCompositionText(nextComposition);
+      writeStoredComposition(project.id, activeFrameworkCard.id, {
+        title: activeFrameworkCard.title,
+        manifest: nextManifest,
+        composition: nextComposition,
+        savedAt: new Date().toISOString(),
+      });
     } catch {
       setCompositionError('Не удалось собрать композицию раздела. Попробуйте ещё раз.');
     } finally {
