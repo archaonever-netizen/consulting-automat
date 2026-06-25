@@ -509,34 +509,27 @@ _SECTION_EMPTY_MSG = "В этом разделе пока нет данных д
 
 
 def _has_section_content(project_model: dict | None) -> bool:
-    """Есть ли в разделе хоть что-то для пересказа (непустые поля/элементы/контекст).
+    """Есть ли в разделе хоть что-то для пересказа.
 
+    Источник — компактный пересказ экрана (project_model['compact']): он содержит
+    ТОЛЬКО заполненные поля и элементы, поэтому любое значение = реальное содержание.
     Защита от галлюцинации: на пустом разделе модели склонны выдумывать шаблон
-    документа («ожидаемая структура для наполнения»). Если содержимого нет —
-    конвейер вообще не запускаем, а отдаём честное «данных пока нет».
+    документа — если содержимого нет, конвейер не запускаем.
     """
     if not isinstance(project_model, dict):
         return False
-    cards = project_model.get("cards")
-    cards = cards if isinstance(cards, dict) else {}
-    for card in cards.get("editable_cards") or []:
-        if not isinstance(card, dict):
-            continue
-        for fld in card.get("fields") or []:
+    if str(project_model.get("context_text") or "").strip():
+        return True
+    compact = project_model.get("compact")
+    if isinstance(compact, dict):
+        for fld in compact.get("fields") or []:
             if isinstance(fld, dict) and str(fld.get("value") or "").strip():
                 return True
-        for lst in card.get("lists") or []:
-            for item in (lst.get("items") or []):
-                if not isinstance(item, dict):
-                    continue
-                vals = item.get("values")
-                if isinstance(vals, dict) and any(str(v or "").strip() for v in vals.values()):
-                    return True
-                if str(item.get("label") or "").strip():
-                    return True  # сам факт наличия элемента — уже содержание
-    for card in cards.get("context_cards") or []:
-        if isinstance(card, dict) and str(card.get("text") or "").strip():
-            return True
+        for group in compact.get("groups") or []:
+            for item in (group.get("items") or []):
+                for fld in (item.get("fields") or []) if isinstance(item, dict) else []:
+                    if isinstance(fld, dict) and str(fld.get("value") or "").strip():
+                        return True
     return False
 
 
@@ -624,12 +617,14 @@ def _run_collect(project_model: dict | None) -> dict:
         return {"manifest": "", "composition": "В разделе пока нет данных для композиции."}
     payload = json.dumps(project_model, ensure_ascii=False)
     user = (
-        "PROJECT_MODEL:\n"
+        "PROJECT_MODEL — компактный пересказ выбранного экрана: в поле compact даны "
+        "ТОЛЬКО реально заполненные поля и элементы (label/value, сгруппированы), плюс, "
+        "если есть, context_text. Пустых полей и заглушек здесь нет.\n"
         f"{payload[:70000]}\n\n"
-        "Собери композицию одного выбранного раздела строго из этих данных. "
-        "Сначала дай короткий манифест всего композированного экрана, затем "
-        "основной текст раздела. Отрази все непустые поля и элементы. Пиши "
-        "ёмко, без лишнего переусложнения. Не добавляй ничего от себя."
+        "Собери композицию этого раздела строго из приведённых данных. Сначала дай "
+        "короткий манифест экрана, затем связный текст. Отрази ВСЕ поля и элементы из "
+        "compact/context_text. Пиши ёмко, человеческим языком. Не добавляй ничего от себя "
+        "и не выдумывай структуру."
     )
     raw, usage = _chat_json(COMPOSE_COLLECT_MODEL, COMPOSITION_SYSTEM_PROMPT, user, max_tokens=6000)
     logger.info("compose stage=collect usage=%s", usage)

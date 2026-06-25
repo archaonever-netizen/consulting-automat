@@ -10,6 +10,7 @@ import ProjectToolbar from './ProjectToolbar';
 import { hydrateProjectCards } from './projectCardSync';
 import type { CanvasFocusTarget } from './projectCanvasFocus';
 import { buildProjectEditModel } from './projectEditModel';
+import { buildCompactSectionModel } from './projectCompactSectionModel';
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
 import {
   fetchCompositionState,
@@ -329,10 +330,14 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       setCompositionError('Выберите конкретный раздел проекта, чтобы собрать его композицию.');
       return;
     }
-    const fullModel = buildProjectEditModel(project.id);
-    const editableCard = fullModel.editable_cards.find(card => card.card_id === cardId);
-    const contextCard = fullModel.context_cards.find(card => card.card_id === cardId);
-    if (!editableCard && !contextCard) {
+    // Источник — компактный пересказ экрана (только заполненные поля/элементы, без
+    // плейсхолдеров и без массивов options). Это чинит сложные экраны вроде «Теории»
+    // и резко экономит токены. Для неередактируемых карточек берём текст-контекст.
+    const compact = buildCompactSectionModel(project.id, cardId);
+    const contextCard = buildProjectEditModel(project.id).context_cards.find(card => card.card_id === cardId);
+    const hasCompact = !!compact && (compact.fields.length > 0 || compact.groups.length > 0);
+    const contextText = contextCard?.text?.trim() ?? '';
+    if (!hasCompact && !contextText) {
       setCompositionError('Для выбранного раздела пока нет данных для композиции.');
       return;
     }
@@ -344,10 +349,8 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
         description: project.description || '',
       },
       section: { card_id: cardId, title: activeFrameworkCard.title },
-      cards: {
-        editable_cards: editableCard ? [editableCard] : [],
-        context_cards: contextCard ? [contextCard] : [],
-      },
+      compact: hasCompact ? compact : null,
+      context_text: contextText,
     };
 
     setComposingProject(true);
