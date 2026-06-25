@@ -119,44 +119,73 @@ function renderInline(text: string): ReactNode[] {
   return text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
 }
 
-// Лёгкий markdown-рендер композиции: заголовки (##/###), маркированные списки (- • *),
-// **жирный** и абзацы — чтобы текст читался структурно, а не сплошным полотном.
-function CompositionBody({ text }: { text: string }) {
-  const blocks: ReactNode[] = [];
-  let bullets: string[] = [];
-  let key = 0;
-  const flush = () => {
-    if (bullets.length) {
-      const items = bullets;
-      blocks.push(
-        <ul className="project-composition-list" key={`ul-${key++}`}>
-          {items.map((it, i) => <li key={i}>{renderInline(it)}</li>)}
-        </ul>,
-      );
-      bullets = [];
-    }
-  };
+// Разбор композиции в 3 уровня: блок (group) → элемент (element) → поля (field).
+// Цель — убрать «ИИ-вид» markdown (---, точки, **) и показать вложенность отступами.
+type CompositionNode =
+  | { kind: 'group'; text: string }
+  | { kind: 'element'; text: string }
+  | { kind: 'field'; label: string; value: string }
+  | { kind: 'para'; text: string };
+
+const stripStars = (s: string) => s.replace(/\*\*/g, '').trim();
+
+function parseComposition(text: string): CompositionNode[] {
+  const nodes: CompositionNode[] = [];
   for (const raw of text.split('\n')) {
-    const line = raw.trim();
-    if (!line) { flush(); continue; }
-    const heading = /^(#{1,3})\s+(.*)$/.exec(line);
-    const bullet = /^[-•*]\s+(.*)$/.exec(line);
+    let line = raw.trim();
+    if (!line) continue;
+    if (/^[-*_=]{3,}$/.test(line)) continue;                       // горизонтальная линия → выкидываем
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
-      flush();
-      blocks.push(
-        <p className={`project-composition-h project-composition-h${heading[1].length}`} key={`h-${key++}`}>
-          {renderInline(heading[2])}
-        </p>,
-      );
+      nodes.push({ kind: heading[1].length >= 3 ? 'element' : 'group', text: stripStars(heading[2]) });
+      continue;
+    }
+    const bullet = /^(?:[-•*]|\d+[.)])\s+(.*)$/.exec(line);          // маркер/нумерация — снимаем
+    if (bullet) line = bullet[1].trim();
+    // Поле: «**Метка:** значение», «**Метка** : значение» или «Метка: значение» (короткая метка).
+    const field =
+      /^\*\*\s*([^*]+?)\s*:\s*\*\*\s*(.+)$/.exec(line) ||
+      /^\*\*\s*([^*]+?)\s*\*\*\s*:\s*(.+)$/.exec(line) ||
+      /^([^:*][^:]{0,40}):\s+(.+)$/.exec(line);
+    const boldOnly = /^\*\*(.+?)\*\*$/.exec(line);
+    if (field) {
+      nodes.push({ kind: 'field', label: stripStars(field[1]), value: stripStars(field[2]) });
+    } else if (boldOnly) {
+      nodes.push({ kind: 'element', text: boldOnly[1].trim() });
     } else if (bullet) {
-      bullets.push(bullet[1]);
+      nodes.push({ kind: 'element', text: stripStars(line) });       // пункт без «метка: значение» — это элемент
     } else {
-      flush();
-      blocks.push(<p key={`p-${key++}`}>{renderInline(line)}</p>);
+      nodes.push({ kind: 'para', text: line });
     }
   }
-  flush();
-  return <>{blocks}</>;
+  // Обычная строка прямо над полем — это на самом деле имя элемента (родитель).
+  for (let i = 0; i < nodes.length - 1; i++) {
+    if (nodes[i].kind === 'para' && nodes[i + 1].kind === 'field') {
+      nodes[i] = { kind: 'element', text: (nodes[i] as { text: string }).text };
+    }
+  }
+  return nodes;
+}
+
+function CompositionBody({ text }: { text: string }) {
+  const nodes = parseComposition(text);
+  return (
+    <>
+      {nodes.map((n, i) => {
+        if (n.kind === 'group') return <p key={i} className="pc-group">{n.text}</p>;
+        if (n.kind === 'element') return <p key={i} className="pc-element">{renderInline(n.text)}</p>;
+        if (n.kind === 'field') {
+          return (
+            <p key={i} className="pc-field">
+              <span className="pc-field-label">{n.label}:</span>{' '}
+              <span className="pc-field-value">{renderInline(n.value)}</span>
+            </p>
+          );
+        }
+        return <p key={i} className="pc-para">{renderInline(n.text)}</p>;
+      })}
+    </>
+  );
 }
 
 interface StoredProjectComposition {
