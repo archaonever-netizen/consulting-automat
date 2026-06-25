@@ -515,7 +515,13 @@ function DocumentsSection({ docs }: { docs: PortalDocument[] }) {
               <span className="pl-item-ic"><PlIcon name="documents" size={19} /></span>
               <div className="pl-item-main">
                 <b>{d.title}</b>
-                <span>{d.original_filename} · {humanSize(d.size_bytes)} · {d.created_at_fmt}</span>
+                <span>
+                  {d.source_type === 'yandex_disk' ? 'Яндекс Диск' : d.original_filename}
+                  {' · '}
+                  {d.source_type === 'yandex_disk' ? d.source_label : humanSize(d.size_bytes)}
+                  {' · '}
+                  {d.created_at_fmt}
+                </span>
               </div>
               <button className="pl-btn pl-btn-soft" disabled={busyId === d.id} onClick={() => download(d)}>
                 <PlIcon name="download" size={15} />

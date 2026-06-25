@@ -8,6 +8,8 @@ interface ClientDocument {
   id: number;
   title: string;
   original_filename: string;
+  source_type: 'local' | 'yandex_disk';
+  source_label: string;
   content_type: string;
   size_bytes: number;
   created_at_fmt: string;
@@ -32,6 +34,10 @@ export default function ClientDocuments({ clientId }: { clientId: number }) {
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [addingYandex, setAddingYandex] = useState(false);
+  const [showYandexForm, setShowYandexForm] = useState(false);
+  const [yandexTitle, setYandexTitle] = useState('');
+  const [yandexUrl, setYandexUrl] = useState('');
   const [error, setError] = useState('');
 
   const { data: docs = [], isLoading } = useQuery<ClientDocument[]>({
@@ -58,6 +64,26 @@ export default function ClientDocuments({ clientId }: { clientId: number }) {
     }
   }
 
+  async function addYandexDocument(e: React.FormEvent) {
+    e.preventDefault();
+    setError('');
+    setAddingYandex(true);
+    try {
+      await api.post(`/api/clients/${clientId}/documents/yandex-disk`, {
+        title: yandexTitle.trim(),
+        url: yandexUrl.trim(),
+      });
+      setYandexTitle('');
+      setYandexUrl('');
+      setShowYandexForm(false);
+      await queryClient.invalidateQueries({ queryKey: ['client-documents', clientId] });
+    } catch (e) {
+      setError(apiError(e, 'Не удалось добавить ссылку Яндекс Диска'));
+    } finally {
+      setAddingYandex(false);
+    }
+  }
+
   async function remove(doc: ClientDocument) {
     if (!window.confirm(`Удалить документ «${doc.title}»?`)) return;
     try {
@@ -70,17 +96,41 @@ export default function ClientDocuments({ clientId }: { clientId: number }) {
 
   return (
     <div style={{ marginTop: 22 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, gap: 12, flexWrap: 'wrap' }}>
         <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 700 }}>Документы для клиента</h3>
-        <button className="btn btn-primary btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
-          <Icon name="plus" size={15} />{uploading ? 'Загрузка…' : 'Загрузить файл'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-ghost btn-sm" disabled={addingYandex} onClick={() => setShowYandexForm(v => !v)}>
+            <Icon name="paperclip" size={15} />Яндекс Диск
+          </button>
+          <button className="btn btn-primary btn-sm" disabled={uploading} onClick={() => fileRef.current?.click()}>
+            <Icon name="plus" size={15} />{uploading ? 'Загрузка…' : 'Загрузить файл'}
+          </button>
+        </div>
         <input ref={fileRef} type="file" style={{ display: 'none' }}
           onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); }} />
       </div>
       <p style={{ margin: '0 0 20px', color: 'var(--ink-4)', fontSize: 13, maxWidth: 680 }}>
-        Файлы, доступные клиенту в портале (раздел «Документы и файлы»). Максимальный размер — 25 МБ.
+        Файлы и публичные ссылки Яндекс Диска, доступные клиенту в портале (раздел «Документы и файлы»). Клиент может только скачать документ.
       </p>
+
+      {showYandexForm && (
+        <form onSubmit={addYandexDocument} style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10, alignItems: 'end', margin: '0 0 18px' }}>
+          <label className="form-group" style={{ margin: 0 }}>
+            <span className="form-label">Название</span>
+            <input className="form-input" value={yandexTitle} maxLength={255}
+              onChange={e => setYandexTitle(e.target.value)} disabled={addingYandex} required />
+          </label>
+          <label className="form-group" style={{ margin: 0 }}>
+            <span className="form-label">Ссылка Яндекс Диска</span>
+            <input className="form-input" type="url" value={yandexUrl}
+              placeholder="https://disk.yandex.ru/..."
+              onChange={e => setYandexUrl(e.target.value)} disabled={addingYandex} required />
+          </label>
+          <button className="btn btn-primary btn-sm" type="submit" style={{ justifySelf: 'start' }} disabled={addingYandex || !yandexTitle.trim() || !yandexUrl.trim()}>
+            <Icon name="plus" size={15} />{addingYandex ? 'Добавление…' : 'Добавить'}
+          </button>
+        </form>
+      )}
 
       {error && <p className="modal-text" style={{ color: 'var(--danger)' }}>{error}</p>}
 
@@ -90,7 +140,7 @@ export default function ClientDocuments({ clientId }: { clientId: number }) {
         <div className="empty-tab">
           <div className="ei"><Icon name="doc" size={24} /></div>
           <b>Документы не загружены</b>
-          <span>Загрузите файлы (отчёты, презентации) — клиент увидит и скачает их в портале.</span>
+          <span>Загрузите файл или добавьте ссылку Яндекс Диска — клиент увидит документ в портале и сможет скачать его.</span>
           <button className="btn btn-primary btn-sm" style={{ marginTop: 16 }} disabled={uploading} onClick={() => fileRef.current?.click()}>
             <Icon name="plus" size={15} />Загрузить файл
           </button>
@@ -100,9 +150,11 @@ export default function ClientDocuments({ clientId }: { clientId: number }) {
           {docs.map((d, i) => (
             <div key={d.id} className={`brief-card rise d${Math.min(i + 1, 6)}`}>
               <h4 style={{ wordBreak: 'break-word' }}>{d.title}</h4>
-              <p style={{ wordBreak: 'break-all' }}>{d.original_filename}</p>
+              <p style={{ wordBreak: 'break-all' }}>{d.source_type === 'yandex_disk' ? 'Яндекс Диск' : d.original_filename}</p>
               <div className="bf-foot" style={{ marginTop: 12 }}>
-                <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>{humanSize(d.size_bytes)} · {d.created_at_fmt}</span>
+                <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>
+                  {d.source_type === 'yandex_disk' ? d.source_label : humanSize(d.size_bytes)} · {d.created_at_fmt}
+                </span>
                 <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => remove(d)}>
                   <Icon name="trash" size={14} />
                 </button>

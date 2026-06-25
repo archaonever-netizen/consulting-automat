@@ -6,6 +6,7 @@
 для кнопки «Вид для клиента». Монтируется под префиксом /api/clients.
 """
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from pydantic import BaseModel, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..core.database import get_db
@@ -29,6 +30,27 @@ _CLIENT_NOT_FOUND = HTTPException(status_code=404, detail="Client not found")
 _USER_NOT_FOUND = HTTPException(status_code=404, detail="Portal user not found")
 
 
+class YandexDiskDocumentCreate(BaseModel):
+    title: str
+    url: str
+
+    @field_validator("title")
+    @classmethod
+    def clean_title(cls, value: str) -> str:
+        value = (value or "").strip()
+        if not value:
+            raise ValueError("Укажите название документа")
+        return value[:255]
+
+    @field_validator("url")
+    @classmethod
+    def clean_url(cls, value: str) -> str:
+        try:
+            return docs_service.normalize_yandex_disk_url(value)
+        except ValueError as exc:
+            raise ValueError(str(exc)) from exc
+
+
 @router.get("/{client_id}/portal-users")
 async def list_portal_users(
     client_id: int,
@@ -50,7 +72,7 @@ async def create_portal_user(
             db, client_id, data, created_by_id=current_user.id
         )
     except EmailExists:
-        raise _EMAIL_TAKEN
+        raise _EMAIL_TAKEN from None
     if user is None:
         raise _CLIENT_NOT_FOUND
     return user
@@ -67,7 +89,7 @@ async def update_portal_user(
     try:
         user = await svc.update_portal_user(db, client_id, user_id, data)
     except EmailExists:
-        raise _EMAIL_TAKEN
+        raise _EMAIL_TAKEN from None
     if user is None:
         raise _USER_NOT_FOUND
     return user
@@ -117,6 +139,25 @@ async def upload_document(
         original_filename=file.filename or "file",
         data=data,
         content_type=file.content_type or "application/octet-stream",
+        uploaded_by_id=current_user.id,
+    )
+    if doc is None:
+        raise _CLIENT_NOT_FOUND
+    return doc
+
+
+@router.post("/{client_id}/documents/yandex-disk", status_code=status.HTTP_201_CREATED)
+async def add_yandex_disk_document(
+    client_id: int,
+    data: YandexDiskDocumentCreate,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    doc = await docs_service.create_yandex_disk_document(
+        db,
+        client_id,
+        title=data.title,
+        url=data.url,
         uploaded_by_id=current_user.id,
     )
     if doc is None:

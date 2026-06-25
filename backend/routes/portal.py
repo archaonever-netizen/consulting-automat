@@ -98,7 +98,9 @@ async def portal_data(
     """
     out: dict = {}
     if identity.can("project"):
-        out["project"] = await project_service.list_portal_projects(db, client_id=identity.client_id)
+        out["project"] = await project_service.list_portal_projects(
+            db, client_id=identity.client_id
+        )
     if identity.can("stages"):
         out["stages"] = []
     if identity.can("status"):
@@ -180,14 +182,28 @@ async def portal_download(
     doc = await docs_service.get_document(db, identity.client_id, doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Документ не найден")
-    data = docs_service.read_bytes(doc)
-    if data is None:
-        raise HTTPException(status_code=404, detail="Файл недоступен")
+    if (doc.source_type or docs_service.SOURCE_LOCAL) == docs_service.SOURCE_YANDEX_DISK:
+        try:
+            payload = await docs_service.download_yandex_disk_document(doc)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except Exception as exc:
+            detail = f"Не удалось скачать файл из Яндекс Диска: {exc}"
+            raise HTTPException(status_code=502, detail=detail) from exc
+        data = payload.data
+        content_type = payload.content_type
+        filename = payload.filename
+    else:
+        data = docs_service.read_bytes(doc)
+        if data is None:
+            raise HTTPException(status_code=404, detail="Файл недоступен")
+        content_type = doc.content_type or "application/octet-stream"
+        filename = doc.original_filename
     # RFC 5987: имя файла с не-ASCII символами.
     from urllib.parse import quote
-    disposition = f"attachment; filename*=UTF-8''{quote(doc.original_filename)}"
+    disposition = f"attachment; filename*=UTF-8''{quote(filename)}"
     return Response(
         content=data,
-        media_type=doc.content_type or "application/octet-stream",
+        media_type=content_type,
         headers={"Content-Disposition": disposition},
     )

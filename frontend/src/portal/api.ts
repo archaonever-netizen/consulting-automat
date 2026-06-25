@@ -57,6 +57,8 @@ export interface PortalDocument {
   id: number;
   title: string;
   original_filename: string;
+  source_type: 'local' | 'yandex_disk';
+  source_label: string;
   content_type: string;
   size_bytes: number;
   created_at_fmt: string;

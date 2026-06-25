@@ -49,6 +49,57 @@
 
 ---
 
+## Документы клиента из Яндекс Диска
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-25
+- Цель: дать сотруднику возможность добавить в карточке клиента документ по публичной ссылке Яндекс Диска, а клиенту в портале оставить только действие скачивания.
+
+### Что реализовано
+
+- `client_documents` расширены типом источника:
+  - `local` - прежняя загрузка файла в локальное хранилище;
+  - `yandex_disk` - публичная ссылка Яндекс Диска.
+- Для существующей lab-БД добавлена idempotent startup-проверка колонок `source_type` и `external_url`.
+- Добавлен employee-side endpoint:
+  - `POST /api/clients/{client_id}/documents/yandex-disk`.
+- В карточке клиента во вкладке документов добавлена форма вставки ссылки Яндекс Диска: название + публичная ссылка.
+- В клиентском портале документы из Яндекс Диска отображаются в том же разделе `Документы и файлы`.
+- Скачивание для клиента идёт через `GET /api/portal/documents/{doc_id}/download`:
+  - портал не даёт клиенту редактировать документ;
+  - backend получает временный download-href через публичный API Яндекс Диска и отдаёт файл клиенту как attachment.
+- Удаление документа корректно работает для обоих источников: локальный файл удаляется с диска, ссылка Яндекс Диска удаляется только из БД.
+
+### Изменённые файлы
+
+- `backend/main.py` - startup-ALTER для существующей lab-БД.
+- `backend/services/client_documents.py` - создание, валидация и скачивание документов Яндекс Диска.
+- `backend/routes/portal_users.py` - endpoint добавления ссылки Яндекс Диска.
+- `backend/routes/portal.py` - скачивание локальных и Яндекс-документов через портал.
+- `backend/tests/test_client_documents_service.py` - тесты создания и валидации Яндекс-ссылки.
+- `frontend/src/components/clients/ClientDocuments.tsx` - UI добавления ссылки в карточке клиента.
+- `frontend/src/portal/api.ts`, `frontend/src/portal/PortalApp.tsx` - типы и отображение документов Яндекс Диска в портале.
+- `frontend/dist/index.html`, `frontend/dist/portal.html`, `frontend/dist/assets/*` - обновлены build-артефакты после `npm.cmd run build`.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `.\.venv\Scripts\python.exe -m pytest backend\tests\test_client_documents_service.py` - успешно, 2 теста пройдены.
+- `.\.venv\Scripts\python.exe -m ruff check backend\services\client_documents.py backend\routes\portal.py backend\routes\portal_users.py backend\tests\test_client_documents_service.py` - успешно.
+- `.\.venv\Scripts\python.exe -m ruff check --ignore E501 backend\main.py` - успешно; полный E501-check для `main.py` пока цепляет существующие длинные строки вне этого изменения.
+- `npm.cmd run build` в `frontend` - успешно.
+
+### Риски и следующие шаги
+
+- Live-скачивание с реальной публичной ссылкой Яндекс Диска не проверялось: нужна доступная публичная ссылка и сетевой доступ backend-а к `cloud-api.yandex.net`.
+- Для production-переноса нужна полноценная миграция БД вместо startup `ALTER TABLE`.
+- Ссылка должна быть публичной `https://disk.yandex.ru/...` или `https://yadi.sk/...`; приватные ссылки будут возвращать ошибку скачивания.
+
+---
+
 ## Сохранение композиции раздела
 
 ### Контекст

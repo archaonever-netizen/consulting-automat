@@ -127,6 +127,24 @@ def _ensure_task_columns(conn):
         conn.execute(text("ALTER TABLE user_tasks ADD COLUMN preparation_notes TEXT"))
 
 
+def _ensure_client_document_columns(conn):
+    """Idempotently add external document source columns for existing lab DBs."""
+    from sqlalchemy import inspect, text
+
+    inspector = inspect(conn)
+    tables = set(inspector.get_table_names())
+    if 'client_documents' not in tables:
+        return
+    cols = {c['name'] for c in inspector.get_columns('client_documents')}
+    if 'source_type' not in cols:
+        conn.execute(text(
+            "ALTER TABLE client_documents ADD COLUMN source_type VARCHAR(40) "
+            "DEFAULT 'local' NOT NULL"
+        ))
+    if 'external_url' not in cols:
+        conn.execute(text("ALTER TABLE client_documents ADD COLUMN external_url TEXT"))
+
+
 def _ensure_subchat_columns(conn):
     """Idempotently add Telegram chat columns for existing local DBs."""
     from sqlalchemy import inspect, text
@@ -231,6 +249,7 @@ async def lifespan(app: FastAPI):
             await conn.run_sync(_ensure_client_columns)
             await conn.run_sync(_ensure_company_columns)
             await conn.run_sync(_ensure_task_columns)
+            await conn.run_sync(_ensure_client_document_columns)
             await conn.run_sync(_ensure_subchat_columns)
             await conn.run_sync(_ensure_knowledge_rag_columns)
             await conn.run_sync(_ensure_yandex_tracker_columns)

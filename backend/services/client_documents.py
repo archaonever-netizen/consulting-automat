@@ -11,7 +11,10 @@ from __future__ import annotations
 import os
 import re
 import uuid
+from dataclasses import dataclass
+from urllib.parse import urlparse
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,6 +26,22 @@ _BASE_DIR = os.path.normpath(
 )
 
 _SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+SOURCE_LOCAL = "local"
+SOURCE_YANDEX_DISK = "yandex_disk"
+_YANDEX_DOWNLOAD_URL = "https://cloud-api.yandex.net/v1/disk/public/resources/download"
+_YANDEX_HOSTS = {
+    "disk.yandex.ru",
+    "disk.yandex.com",
+    "yadi.sk",
+    "yandex.ru",
+}
+
+
+@dataclass(frozen=True)
+class DownloadPayload:
+    data: bytes
+    content_type: str
+    filename: str
 
 
 def _safe_name(name: str) -> str:
@@ -40,16 +59,32 @@ def _abs_path(stored_path: str) -> str:
 
 
 def _to_dict(d: ClientDocument) -> dict:
+    source_type = d.source_type or SOURCE_LOCAL
     return {
         "id": d.id,
         "client_id": d.client_id,
         "title": d.title,
         "original_filename": d.original_filename,
+        "source_type": source_type,
+        "source_label": "Яндекс Диск" if source_type == SOURCE_YANDEX_DISK else "Файл",
         "content_type": d.content_type,
         "size_bytes": d.size_bytes,
         "created_at": d.created_at,
         "created_at_fmt": d.created_at.strftime("%d.%m.%Y") if d.created_at else "—",
     }
+
+
+def normalize_yandex_disk_url(url: str) -> str:
+    value = (url or "").strip()
+    if len(value) > 2000:
+        raise ValueError("Ссылка слишком длинная")
+    parsed = urlparse(value)
+    host = parsed.netloc.lower()
+    if parsed.scheme != "https" or host not in _YANDEX_HOSTS:
+        raise ValueError("Укажите публичную https-ссылку Яндекс Диска")
+    if not parsed.path or parsed.path == "/":
+        raise ValueError("Ссылка Яндекс Диска должна вести на документ")
+    return value
 
 
 async def list_documents(db: AsyncSession, client_id: int) -> list[dict]:
@@ -96,6 +131,38 @@ async def create_document(
     return _to_dict(doc)
 
 
+async def create_yandex_disk_document(
+    db: AsyncSession,
+    client_id: int,
+    *,
+    title: str,
+    url: str,
+    original_filename: str | None = None,
+    uploaded_by_id: int | None = None,
+) -> dict | None:
+    client = await db.get(Client, client_id)
+    if client is None:
+        return None
+    normalized_url = normalize_yandex_disk_url(url)
+    clean_title = (title or original_filename or "Документ из Яндекс Диска").strip()
+    clean_filename = (original_filename or clean_title).strip()[:255] or "yandex-disk-document"
+    doc = ClientDocument(
+        client_id=client_id,
+        title=clean_title[:255],
+        original_filename=clean_filename,
+        stored_path="",
+        source_type=SOURCE_YANDEX_DISK,
+        external_url=normalized_url,
+        content_type="application/octet-stream",
+        size_bytes=0,
+        uploaded_by_id=uploaded_by_id,
+    )
+    db.add(doc)
+    await db.commit()
+    await db.refresh(doc)
+    return _to_dict(doc)
+
+
 async def get_document(db: AsyncSession, client_id: int, doc_id: int) -> ClientDocument | None:
     result = await db.execute(
         select(ClientDocument).where(
@@ -117,16 +184,44 @@ def read_bytes(doc: ClientDocument) -> bytes | None:
         return fh.read()
 
 
+async def download_yandex_disk_document(doc: ClientDocument) -> DownloadPayload:
+    if (doc.source_type or SOURCE_LOCAL) != SOURCE_YANDEX_DISK or not doc.external_url:
+        raise ValueError("Документ не является ссылкой Яндекс Диска")
+
+    timeout = httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0)
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        meta = await client.get(_YANDEX_DOWNLOAD_URL, params={"public_key": doc.external_url})
+        if meta.status_code == 404:
+            raise FileNotFoundError(
+                "Яндекс Диск не нашёл документ. Проверьте, что ссылка публичная."
+            )
+        meta.raise_for_status()
+        href = meta.json().get("href")
+        if not isinstance(href, str) or not href:
+            raise ValueError("Яндекс Диск не вернул ссылку скачивания")
+
+        response = await client.get(href)
+        if response.status_code == 404:
+            raise FileNotFoundError("Файл на Яндекс Диске недоступен")
+        response.raise_for_status()
+        return DownloadPayload(
+            data=response.content,
+            content_type=response.headers.get("content-type") or "application/octet-stream",
+            filename=doc.original_filename or doc.title or "document",
+        )
+
+
 async def delete_document(db: AsyncSession, client_id: int, doc_id: int) -> bool:
     doc = await get_document(db, client_id, doc_id)
     if doc is None:
         return False
-    try:
-        path = _abs_path(doc.stored_path)
-        if os.path.isfile(path):
-            os.remove(path)
-    except (ValueError, OSError):
-        pass  # файла нет — всё равно убираем строку
+    if (doc.source_type or SOURCE_LOCAL) == SOURCE_LOCAL:
+        try:
+            path = _abs_path(doc.stored_path)
+            if os.path.isfile(path):
+                os.remove(path)
+        except (ValueError, OSError):
+            pass  # файла нет — всё равно убираем строку
     await db.delete(doc)
     await db.commit()
     return True
