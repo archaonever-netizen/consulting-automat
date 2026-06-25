@@ -135,9 +135,11 @@ function parseComposition(text: string): CompositionNode[] {
     let line = raw.trim();
     if (!line) continue;
     if (/^[-*_=]{3,}$/.test(line)) continue;                       // горизонтальная линия → выкидываем
+    // Любой markdown-заголовок в этой композиции = название блока (исходник отдаёт их
+    // как «### Title»). Элементы приходят буллетами/жирным, а не заголовками.
     const heading = /^(#{1,6})\s+(.*)$/.exec(line);
     if (heading) {
-      nodes.push({ kind: heading[1].length >= 3 ? 'element' : 'group', text: stripStars(heading[2]) });
+      nodes.push({ kind: 'group', text: stripStars(heading[2]) });
       continue;
     }
     const bullet = /^(?:[-•*]|\d+[.)])\s+(.*)$/.exec(line);          // маркер/нумерация — снимаем
