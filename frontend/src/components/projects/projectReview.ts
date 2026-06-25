@@ -148,6 +148,18 @@ export interface CompositionBlockEvent {
   error?: string;
 }
 
+// Этап полной сборки (review/finalize) — сильная модель на весь раздел целиком.
+export type CompositionStageStatus = 'running' | 'done' | 'skipped' | 'fallback';
+
+export interface CompositionStageEvent {
+  type: 'stage';
+  stage: 'collect' | 'structure' | 'review' | 'finalize';
+  stage_no?: number;
+  model?: string;
+  status: CompositionStageStatus;
+  error?: string;
+}
+
 // Блок исходных данных экрана для отправки на сборку.
 export interface CompositionBlockInput {
   id: string;
@@ -173,6 +185,7 @@ export interface CompositionState {
 
 type CompositionEvent =
   | CompositionBlockEvent
+  | CompositionStageEvent
   | { type: 'done'; manifest?: string; composition?: string }
   | { type: 'error'; error?: string };
 
@@ -187,6 +200,7 @@ export async function resetComposition(projectId: number, cardId: string): Promi
 
 interface CompositionStreamHandlers {
   onBlock?: (event: CompositionBlockEvent) => void;
+  onStage?: (event: CompositionStageEvent) => void;
   onDone?: (section: CompositionSection) => void;
   onError?: (message: string) => void;
   signal?: AbortSignal;
@@ -201,6 +215,7 @@ export async function streamComposition(
   cardId: string,
   projectModel: unknown,
   handlers: CompositionStreamHandlers,
+  mode: 'incremental' | 'full' = 'incremental',
 ): Promise<void> {
   const token = localStorage.getItem('access_token');
   const response = await fetch(`${API_BASE}/api/projects/${projectId}/composition/stream`, {
@@ -209,7 +224,7 @@ export async function streamComposition(
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ project_model: projectModel, card_id: cardId }),
+    body: JSON.stringify({ project_model: projectModel, card_id: cardId, mode }),
     signal: handlers.signal,
   });
   if (!response.ok || !response.body) throw new Error(`HTTP ${response.status}`);
@@ -234,6 +249,7 @@ export async function streamComposition(
           continue; // неполный фрагмент
         }
         if (parsed.type === 'block') handlers.onBlock?.(parsed);
+        else if (parsed.type === 'stage') handlers.onStage?.(parsed);
         else if (parsed.type === 'done') handlers.onDone?.({ manifest: parsed.manifest ?? '', composition: parsed.composition ?? '' });
         else if (parsed.type === 'error') handlers.onError?.(parsed.error ?? 'Ошибка композиции');
       }

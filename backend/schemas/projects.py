@@ -81,6 +81,8 @@ class ProjectCompositionRequest(BaseModel):
     project_model: Optional[dict] = None
     # id карточки-раздела: ключ чекпоинта композиции (нужен для SSE-стрима и гидрации).
     card_id: Optional[str] = None
+    # Режим SSE-сборки: 'incremental' (только изменённые блоки) | 'full' (вся, + Opus review→finalize).
+    mode: Optional[str] = "incremental"
 
 
 class ProjectChatMessage(BaseModel):

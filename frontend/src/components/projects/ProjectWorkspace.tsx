@@ -34,11 +34,12 @@ import {
   type CompositionBlockEvent,
   type CompositionBlockInput,
   type CompositionBlockStatus,
+  type CompositionStageEvent,
   type CompositionState,
 } from './projectReview';
 
 // Шаг прогресса композиции по одному блоку (для степпера).
-interface BlockStep { id: string; title: string; status: CompositionBlockStatus }
+interface BlockStep { id: string; title: string; status: CompositionBlockStatus | 'skipped' }
 
 // Разбить исходный текст экрана на блоки по строкам-заголовкам «### …»/«## …».
 // id блока = его заголовок (стабилен между сборками) → правка одного блока меняет только его.
@@ -413,9 +414,25 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
     });
   }
 
-  // Собрать композицию. Пересобираются только ИЗМЕНЁННЫЕ блоки (кэш по хешу на бэкенде):
-  // неизменные блоки берутся из БД как есть, поэтому при точечной правке текст не «плывёт».
-  async function runComposition() {
+  // Шаги полной сборки (review/finalize сильной моделью) — показываем тем же степпером.
+  function onCompositionStage(event: CompositionStageEvent) {
+    const titles: Record<string, string> = { review: 'Проверка (Opus)', finalize: 'Финальные правки' };
+    setBlockSteps(prev => {
+      const id = `stage:${event.stage}`;
+      const step: BlockStep = { id, title: titles[event.stage] ?? event.stage, status: event.status };
+      const idx = prev.findIndex(b => b.id === id);
+      if (idx === -1) return [...prev, step];
+      const next = [...prev];
+      next[idx] = step;
+      return next;
+    });
+  }
+
+  // Два инструмента сборки:
+  //  • mode='full' («Композиция раздела») — полная сборка всех блоков + проход Opus (review→finalize);
+  //  • mode='incremental' («Обновить изменённое») — пересобираются ТОЛЬКО изменённые блоки
+  //    (кэш по хешу на бэкенде), без Opus — дёшево, текст не «плывёт».
+  async function runComposition(mode: 'incremental' | 'full' = 'full') {
     if (composingProject) return;
     const cardId = activeFrameworkCard.id;
     setCompositionOpen(true);
@@ -458,6 +475,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       await streamComposition(project.id, cardId, projectModel, {
         signal: ctrl.signal,
         onBlock: onCompositionBlock,
+        onStage: onCompositionStage,
         onError: msg => setCompositionError(msg),
         onDone: section => {
           setCompositionManifest(section.manifest);
@@ -469,7 +487,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
             savedAt: new Date().toISOString(),
           });
         },
-      });
+      }, mode);
     } catch (e) {
       // Отмена (смена карточки/уход) — не ошибка; готовые блоки уже в БД.
       if (!(e instanceof DOMException && e.name === 'AbortError')) {
@@ -495,11 +513,15 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
                   ? <span className="spinner" />
                   : step.status === 'cached' ? '↺'
                   : step.status === 'fallback' ? '⚠'
+                  : step.status === 'skipped' ? '–'
                   : '✓'}
               </span>
               <span className="project-composition-step-title">{step.title || 'Основное'}</span>
               {step.status === 'cached' && (
                 <span className="project-composition-step-note">без изменений</span>
+              )}
+              {step.status === 'skipped' && (
+                <span className="project-composition-step-note">правок не требуется</span>
               )}
               {step.status === 'fallback' && (
                 <span className="project-composition-step-note">сбой — взят прежний текст</span>
@@ -529,7 +551,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
 
   return (
     <div className="project-workspace">
-      <ProjectToolbar project={project} onComposeProject={() => runComposition()} composingProject={composingProject} />
+      <ProjectToolbar project={project} onComposeProject={() => runComposition('full')} onComposeIncremental={() => runComposition('incremental')} composingProject={composingProject} />
       <div className="project-workspace-grid" ref={gridRef} style={{ '--rp-width': `${rightWidth}px` } as React.CSSProperties}>
         <ProjectLeftPanel
           project={project}

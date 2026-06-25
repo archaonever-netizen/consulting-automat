@@ -211,7 +211,9 @@ async def stream_composition(
     if not card_id:
         raise HTTPException(status_code=422, detail="card_id is required")
     return StreamingResponse(
-        project_methodolog.compose_stream(db, project_id, card_id, data.project_model),
+        project_methodolog.compose_stream(
+            db, project_id, card_id, data.project_model, mode=(data.mode or "incremental"),
+        ),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

@@ -4,11 +4,12 @@ import type { Project } from '../../types/projects';
 
 interface ProjectToolbarProps {
   project: Project;
-  onComposeProject?: () => void;
+  onComposeProject?: () => void;        // полная сборка (с Opus)
+  onComposeIncremental?: () => void;    // пересборка только изменённого
   composingProject?: boolean;
 }
 
-export default function ProjectToolbar({ project, onComposeProject, composingProject = false }: ProjectToolbarProps) {
+export default function ProjectToolbar({ project, onComposeProject, onComposeIncremental, composingProject = false }: ProjectToolbarProps) {
   return (
     <div className="project-toolbar">
       <div className="project-toolbar-main">
@@ -22,10 +23,21 @@ export default function ProjectToolbar({ project, onComposeProject, composingPro
       </div>
       <div className="project-toolbar-actions">
         <button
+          className="btn btn-soft btn-sm"
+          type="button"
+          onClick={onComposeIncremental}
+          disabled={!onComposeIncremental || composingProject}
+          title="Пересобрать только изменённые блоки (быстро, без Opus)"
+        >
+          <Icon name="sparkle" size={15} />
+          Обновить изменённое
+        </button>
+        <button
           className="btn btn-primary btn-sm"
           type="button"
           onClick={onComposeProject}
           disabled={!onComposeProject || composingProject}
+          title="Полная сборка раздела: deepseek → sonnet → Opus → sonnet"
         >
           {composingProject ? <span className="spinner" /> : <Icon name="sparkle" size={15} />}
           Композиция раздела

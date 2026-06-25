@@ -807,8 +807,16 @@ async def compose_stream(
     project_id: int,
     card_id: str,
     project_model: dict | None,
+    mode: str = "incremental",
 ) -> AsyncGenerator[str, None]:
-    """SSE-композиция ПО БЛОКАМ с кэшем по хешу и поблочным сохранением в БД.
+    """SSE-композиция раздела по блокам. Два режима под две кнопки UI:
+
+    • mode='incremental' (по умолчанию) — «Обновить изменённое»: пересобираем ТОЛЬКО
+      блоки, чьи данные изменились (кэш по хешу). Дёшево, текст стабилен. Без Opus.
+    • mode='full' — «Композиция раздела» (полная сборка): принудительно пересобираем
+      ВСЕ блоки (deepseek→sonnet), затем один проход сильной модели на весь раздел —
+      review (Opus) → finalize (sonnet). Блок-кэш при этом остаётся валидным, поэтому
+      последующее «Обновить изменённое» снова работает инкрементально.
 
     Для каждого блока: если хеш его исходных данных совпал с сохранённым — берём готовый
     текст из кэша (без вызова модели, status='cached'); иначе пересобираем только этот блок.
@@ -840,7 +848,8 @@ async def compose_stream(
             h = _block_hash(text)
             prev = cache.get(bid)
             # Хеш совпал → блок не менялся: берём готовый текст из кэша.
-            if isinstance(prev, dict) and prev.get("hash") == h and str(prev.get("composition") or "").strip():
+            # В режиме full (полная сборка) кэш игнорируем — пересобираем каждый блок.
+            if mode != "full" and isinstance(prev, dict) and prev.get("hash") == h and str(prev.get("composition") or "").strip():
                 new_cache[bid] = {"hash": h, "title": title, "composition": prev["composition"]}
                 yield _sse({"type": "block", "id": bid, "title": title, "status": "cached"})
                 continue
@@ -870,6 +879,32 @@ async def compose_stream(
                 manifest = await asyncio.to_thread(_run_manifest, composition)
             except Exception as exc:  # noqa: BLE001
                 logger.warning("compose manifest failed: %s", exc)
+
+        # Полная сборка: «второе мнение» сильной модели на весь собранный раздел.
+        # Opus даёт ёмкие правки по ИЗЛОЖЕНИЮ → sonnet их вносит (только если есть что вносить).
+        if mode == "full":
+            structured = {"manifest": manifest, "composition": composition}
+            yield _sse(_stage_event("review", "running"))
+            try:
+                review = await asyncio.to_thread(_run_review, structured)
+                yield _sse(_stage_event("review", "done", recommendations=review["recommendations"]))
+            except Exception as exc:  # noqa: BLE001 — провал ревью не валит сборку
+                logger.warning("compose full review failed: %s", exc)
+                review = {"verdict": "ok", "recommendations": []}
+                yield _sse(_stage_event("review", "fallback", error=str(exc)[:160]))
+            if review["verdict"] == "revise" and review["recommendations"]:
+                yield _sse(_stage_event("finalize", "running"))
+                try:
+                    polished = await asyncio.to_thread(_run_finalize, structured, review["recommendations"])
+                    manifest = polished.get("manifest") or manifest
+                    composition = polished.get("composition") or composition
+                    yield _sse(_stage_event("finalize", "done"))
+                except Exception as exc:  # noqa: BLE001 — оставляем до-финальный текст
+                    logger.warning("compose full finalize failed: %s", exc)
+                    yield _sse(_stage_event("finalize", "fallback", error=str(exc)[:160]))
+            else:
+                yield _sse(_stage_event("finalize", "skipped"))
+
         final = {"manifest": manifest, "composition": composition}
         await project_cards.save_composition_stage(
             db, project_id, card_id,
