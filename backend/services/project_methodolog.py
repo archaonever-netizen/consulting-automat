@@ -521,6 +521,8 @@ def _has_section_content(project_model: dict | None) -> bool:
     """
     if not isinstance(project_model, dict):
         return False
+    if str(project_model.get("text") or "").strip():
+        return True
     if str(project_model.get("context_text") or "").strip():
         return True
     compact = project_model.get("compact")
@@ -623,14 +625,14 @@ def _run_collect(project_model: dict | None) -> dict:
         return {"manifest": "", "composition": "В разделе пока нет данных для композиции."}
     payload = json.dumps(project_model, ensure_ascii=False)
     user = (
-        "PROJECT_MODEL — компактный пересказ выбранного экрана: в поле compact даны "
-        "ТОЛЬКО реально заполненные поля и элементы (label/value, сгруппированы), плюс, "
-        "если есть, context_text. Пустых полей и заглушек здесь нет.\n"
+        "PROJECT_MODEL — компактный текстовый пересказ выбранного экрана: в поле text дано "
+        "реальное содержимое экрана (заголовки блоков «###», элементы «•», строки "
+        "«Метка: значение»). Пустых заглушек здесь нет; project/section — мета.\n"
         f"{payload[:70000]}\n\n"
-        "Собери композицию этого раздела строго из приведённых данных. Сначала дай "
-        "короткий манифест экрана, затем связный текст. Отрази ВСЕ поля и элементы из "
-        "compact/context_text. Пиши ёмко, человеческим языком. Не добавляй ничего от себя "
-        "и не выдумывай структуру."
+        "Собери композицию этого раздела строго из приведённых данных (поле text). Сначала "
+        "дай короткий манифест экрана, затем структурированный текст. Отрази ВСЕ блоки, "
+        "элементы и значения из text. Пиши ёмко, человеческим языком. Не добавляй ничего "
+        "от себя и не выдумывай блоков, которых нет."
     )
     raw, usage = _chat_json(COMPOSE_COLLECT_MODEL, COMPOSITION_SYSTEM_PROMPT, user, max_tokens=6000)
     logger.info("compose stage=collect usage=%s", usage)
