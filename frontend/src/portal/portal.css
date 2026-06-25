@@ -247,7 +247,9 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 .pl-proj-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
 .pl-proj-head > div:first-child { min-width: 0; }
 .pl-proj h3 { margin: 0 0 6px; font-size: 16.5px; font-weight: 800; letter-spacing: -.02em; }
-.pl-proj p { margin: 0 0 10px; font-size: 13.5px; color: var(--p-ink-2); line-height: 1.55; }
+/* Только описание проекта в шапке. НЕ `.pl-proj p` — иначе серый цвет протекал бы
+   во все <p> композиции (.pl-comp-*) из-за более высокой специфичности (0,0,1,1). */
+.pl-proj-head p { margin: 0 0 10px; font-size: 13.5px; color: var(--p-ink-2); line-height: 1.55; }
 .pl-proj .meta { font-size: 12px; color: var(--p-ink-3); font-weight: 500; white-space: nowrap; padding-top: 2px; }
 .pl-project-empty {
   background: var(--p-surface-2); border: 1px dashed var(--p-border-2);
@@ -288,7 +290,7 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 /* Композиция раздела — иерархия отступами и линиями (как в рабочем Workspace).
    Три уровня: блок → элемент → поля. Вложенность — отступами, без буллетов/тире. */
 .pl-comp { color: var(--p-ink); font-size: 13.5px; line-height: 1.55; }
-.pl-comp p { margin: 0; overflow-wrap: anywhere; }
+.pl-comp p { margin: 0; overflow-wrap: anywhere; color: var(--p-ink); }
 .pl-comp strong { font-weight: 800; color: var(--p-ink); }
 /* Блок: заголовок с фирменным синим «/» и тонкой линией-разделителем сверху. */
 .pl-comp-group {
