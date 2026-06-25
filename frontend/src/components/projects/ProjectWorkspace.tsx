@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { Project } from '../../types/projects';
 import ProjectCanvas from './ProjectCanvas';
 import ProjectDisclosure from './ProjectDisclosure';
@@ -115,12 +115,49 @@ function readCollapsedSections(): Set<string> {
   }
 }
 
-function compositionLines(text: string): string[] {
-  return text
-    .replace(/\*\*/g, '')
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean);
+// Инлайновый разбор **жирного** внутри строки.
+function renderInline(text: string): ReactNode[] {
+  return text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
+// Лёгкий markdown-рендер композиции: заголовки (##/###), маркированные списки (- • *),
+// **жирный** и абзацы — чтобы текст читался структурно, а не сплошным полотном.
+function CompositionBody({ text }: { text: string }) {
+  const blocks: ReactNode[] = [];
+  let bullets: string[] = [];
+  let key = 0;
+  const flush = () => {
+    if (bullets.length) {
+      const items = bullets;
+      blocks.push(
+        <ul className="project-composition-list" key={`ul-${key++}`}>
+          {items.map((it, i) => <li key={i}>{renderInline(it)}</li>)}
+        </ul>,
+      );
+      bullets = [];
+    }
+  };
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    if (!line) { flush(); continue; }
+    const heading = /^(#{1,3})\s+(.*)$/.exec(line);
+    const bullet = /^[-•*]\s+(.*)$/.exec(line);
+    if (heading) {
+      flush();
+      blocks.push(
+        <p className={`project-composition-h project-composition-h${heading[1].length}`} key={`h-${key++}`}>
+          {renderInline(heading[2])}
+        </p>,
+      );
+    } else if (bullet) {
+      bullets.push(bullet[1]);
+    } else {
+      flush();
+      blocks.push(<p key={`p-${key++}`}>{renderInline(line)}</p>);
+    }
+  }
+  flush();
+  return <>{blocks}</>;
 }
 
 interface StoredProjectComposition {
@@ -449,9 +486,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
           )}
           {compositionText && (
             <div className="project-composition-text">
-              {compositionLines(compositionText).map((line, index) => (
-                <p key={`${index}:${line.slice(0, 16)}`}>{line}</p>
-              ))}
+              <CompositionBody text={compositionText} />
             </div>
           )}
         </>

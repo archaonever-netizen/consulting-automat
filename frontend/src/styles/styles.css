@@ -1247,6 +1247,19 @@ a:hover { color: var(--accent-hover); }
   display: grid; gap: 8px; max-width: 960px; color: var(--text-primary); font-size: 13.5px; line-height: 1.6;
 }
 .project-composition-text p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Структурный рендер композиции: заголовки блоков, маркированные списки, жирные подписи. */
+.project-composition-text .project-composition-h {
+  margin: 6px 0 0; font-weight: 800; color: var(--text-primary); white-space: normal;
+}
+.project-composition-text .project-composition-h1 { font-size: 15px; }
+.project-composition-text .project-composition-h2 { font-size: 14px; }
+.project-composition-text .project-composition-h3 { font-size: 13px; color: var(--text-secondary); }
+.project-composition-text .project-composition-h:first-child { margin-top: 0; }
+.project-composition-list {
+  margin: 0; padding-left: 18px; display: grid; gap: 5px;
+}
+.project-composition-list li { line-height: 1.55; overflow-wrap: anywhere; }
+.project-composition-text strong { font-weight: 700; }
 /* Прогресс-степпер многоэтапной композиции: какой этап идёт и что делает модель. */
 .project-composition-steps {
   list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; max-width: 960px;
