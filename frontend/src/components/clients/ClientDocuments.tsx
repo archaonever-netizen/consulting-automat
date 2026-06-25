@@ -15,6 +15,18 @@ interface ClientDocument {
   created_at_fmt: string;
 }
 
+type DocumentSectionKey = 'contract' | 'acts' | 'project_materials';
+
+const DOCUMENT_SECTIONS: Array<{
+  key: DocumentSectionKey;
+  title: string;
+  emptyText: string;
+}> = [
+  { key: 'contract', title: 'Договор с клиентом', emptyText: 'Договор с клиентом пока не добавлен.' },
+  { key: 'acts', title: 'Акты', emptyText: 'Акты пока не добавлены.' },
+  { key: 'project_materials', title: 'Материалы по проекту', emptyText: 'Материалов по проекту пока что нет.' },
+];
+
 function humanSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} Б`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} КБ`;
@@ -28,6 +40,13 @@ function apiError(e: unknown, fallback: string): string {
     if (Array.isArray(detail) && detail[0]?.msg) return String(detail[0].msg);
   }
   return fallback;
+}
+
+function documentSectionKey(doc: ClientDocument): DocumentSectionKey {
+  const title = doc.title.trim().toLowerCase();
+  if (/приложени[ея]\s*(?:№\s*)?(?:1|2|1\s*,\s*2)/i.test(title) || title.includes('акт')) return 'acts';
+  if (title.includes('агентский договор') || title.includes('договор')) return 'contract';
+  return 'project_materials';
 }
 
 export default function ClientDocuments({ clientId }: { clientId: number }) {
@@ -44,6 +63,11 @@ export default function ClientDocuments({ clientId }: { clientId: number }) {
     queryKey: ['client-documents', clientId],
     queryFn: async () => (await api.get(`/api/clients/${clientId}/documents`)).data,
   });
+
+  const docsBySection = DOCUMENT_SECTIONS.map(section => ({
+    ...section,
+    docs: docs.filter(doc => documentSectionKey(doc) === section.key),
+  }));
 
   async function upload(file: File) {
     setError('');
@@ -146,20 +170,36 @@ export default function ClientDocuments({ clientId }: { clientId: number }) {
           </button>
         </div>
       ) : (
-        <div className="brief-grid">
-          {docs.map((d, i) => (
-            <div key={d.id} className={`brief-card rise d${Math.min(i + 1, 6)}`}>
-              <h4 style={{ wordBreak: 'break-word' }}>{d.title}</h4>
-              <p style={{ wordBreak: 'break-all' }}>{d.source_type === 'yandex_disk' ? 'Яндекс Диск' : d.original_filename}</p>
-              <div className="bf-foot" style={{ marginTop: 12 }}>
-                <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>
-                  {d.source_type === 'yandex_disk' ? d.source_label : humanSize(d.size_bytes)} · {d.created_at_fmt}
-                </span>
-                <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => remove(d)}>
-                  <Icon name="trash" size={14} />
-                </button>
+        <div style={{ display: 'grid', gap: 22 }}>
+          {docsBySection.map((section, sectionIndex) => (
+            <section key={section.key} style={{ display: 'grid', gap: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <h4 style={{ margin: 0, fontSize: 15, fontWeight: 800, color: 'var(--ink-2)' }}>{section.title}</h4>
+                <span className="pill pill-gray" style={{ fontSize: 11.5 }}>{section.docs.length}</span>
               </div>
-            </div>
+              {section.docs.length === 0 ? (
+                <div className="empty-tab" style={{ padding: '22px 16px', alignItems: 'flex-start', textAlign: 'left' }}>
+                  <span style={{ maxWidth: 'none' }}>{section.emptyText}</span>
+                </div>
+              ) : (
+                <div className="brief-grid">
+                  {section.docs.map((d, i) => (
+                    <div key={d.id} className={`brief-card rise d${Math.min(sectionIndex * 2 + i + 1, 6)}`}>
+                      <h4 style={{ wordBreak: 'break-word' }}>{d.title}</h4>
+                      <p style={{ wordBreak: 'break-all' }}>{d.source_type === 'yandex_disk' ? 'Яндекс Диск' : d.original_filename}</p>
+                      <div className="bf-foot" style={{ marginTop: 12 }}>
+                        <span style={{ fontSize: 12, color: 'var(--ink-4)' }}>
+                          {d.source_type === 'yandex_disk' ? d.source_label : humanSize(d.size_bytes)} · {d.created_at_fmt}
+                        </span>
+                        <button className="btn btn-ghost btn-sm" style={{ color: 'var(--danger)' }} onClick={() => remove(d)}>
+                          <Icon name="trash" size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
           ))}
         </div>
       )}

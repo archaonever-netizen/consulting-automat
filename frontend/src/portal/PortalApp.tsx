@@ -62,6 +62,25 @@ function humanSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
 }
 
+type DocumentSectionKey = 'contract' | 'acts' | 'project_materials';
+
+const DOCUMENT_SECTIONS: Array<{
+  key: DocumentSectionKey;
+  title: string;
+  emptyText: string;
+}> = [
+  { key: 'contract', title: 'Договор с клиентом', emptyText: 'Договор с клиентом пока не добавлен.' },
+  { key: 'acts', title: 'Акты', emptyText: 'Акты пока не добавлены.' },
+  { key: 'project_materials', title: 'Материалы по проекту', emptyText: 'Материалов по проекту пока что нет.' },
+];
+
+function documentSectionKey(doc: PortalDocument): DocumentSectionKey {
+  const title = doc.title.trim().toLowerCase();
+  if (/приложени[ея]\s*(?:№\s*)?(?:1|2|1\s*,\s*2)/i.test(title) || title.includes('акт')) return 'acts';
+  if (title.includes('агентский договор') || title.includes('договор')) return 'contract';
+  return 'project_materials';
+}
+
 type Phase = 'loading' | 'login' | 'ready';
 
 export default function PortalApp() {
@@ -488,6 +507,10 @@ function ProjectField({ field }: { field: PortalProjectField }) {
 function DocumentsSection({ docs }: { docs: PortalDocument[] }) {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [error, setError] = useState('');
+  const docsBySection = DOCUMENT_SECTIONS.map(section => ({
+    ...section,
+    docs: docs.filter(doc => documentSectionKey(doc) === section.key),
+  }));
 
   async function download(doc: PortalDocument) {
     setBusyId(doc.id);
@@ -509,25 +532,37 @@ function DocumentsSection({ docs }: { docs: PortalDocument[] }) {
       {docs.length === 0 ? (
         <Empty icon="documents" title="Документов пока нет" text="Здесь появятся файлы, которыми с вами поделится команда." />
       ) : (
-        <div>
-          {docs.map(d => (
-            <div key={d.id} className="pl-item">
-              <span className="pl-item-ic"><PlIcon name="documents" size={19} /></span>
-              <div className="pl-item-main">
-                <b>{d.title}</b>
-                <span>
-                  {d.source_type === 'yandex_disk' ? 'Яндекс Диск' : d.original_filename}
-                  {' · '}
-                  {d.source_type === 'yandex_disk' ? d.source_label : humanSize(d.size_bytes)}
-                  {' · '}
-                  {d.created_at_fmt}
-                </span>
+        <div className="pl-doc-sections">
+          {docsBySection.map(section => (
+            <section key={section.key} className="pl-doc-section">
+              <div className="pl-doc-section-head">
+                <h3>{section.title}</h3>
+                <span>{section.docs.length}</span>
               </div>
-              <button className="pl-btn pl-btn-soft" disabled={busyId === d.id} onClick={() => download(d)}>
-                <PlIcon name="download" size={15} />
-                {busyId === d.id ? 'Скачивание…' : 'Скачать'}
-              </button>
-            </div>
+              {section.docs.length === 0 ? (
+                <div className="pl-doc-empty">{section.emptyText}</div>
+              ) : (
+                section.docs.map(d => (
+                  <div key={d.id} className="pl-item">
+                    <span className="pl-item-ic"><PlIcon name="documents" size={19} /></span>
+                    <div className="pl-item-main">
+                      <b>{d.title}</b>
+                      <span>
+                        {d.source_type === 'yandex_disk' ? 'Яндекс Диск' : d.original_filename}
+                        {' · '}
+                        {d.source_type === 'yandex_disk' ? d.source_label : humanSize(d.size_bytes)}
+                        {' · '}
+                        {d.created_at_fmt}
+                      </span>
+                    </div>
+                    <button className="pl-btn pl-btn-soft" disabled={busyId === d.id} onClick={() => download(d)}>
+                      <PlIcon name="download" size={15} />
+                      {busyId === d.id ? 'Скачивание…' : 'Скачать'}
+                    </button>
+                  </div>
+                ))
+              )}
+            </section>
           ))}
         </div>
       )}
