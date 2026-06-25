@@ -181,13 +181,18 @@ def _chat_json(model: str, system: str, user: str, *, max_tokens: int = 1200) ->
     else:
         i, j = text.find("{"), text.rfind("}")
         candidate = text[i:j + 1] if i != -1 and j != -1 else "{}"
+    # strict=False: модели часто кладут «сырые» переводы строк/таб внутрь строковых
+    # значений JSON (длинный composition), что по умолчанию роняет json.loads с
+    # «Invalid control character». strict=False разрешает control-символы в строках.
     try:
-        return json.loads(candidate), usage
+        return json.loads(candidate, strict=False), usage
     except json.JSONDecodeError:
         salvaged = _salvage_json(text) or _salvage_json(candidate)
         if salvaged:
             return salvaged, usage
-        raise
+        # Последняя попытка: вычистить «голые» control-символы и распарсить снова.
+        cleaned = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", "", candidate)
+        return json.loads(cleaned, strict=False), usage
 
 
 def _evidence_block(hits: list[SearchHit]) -> tuple[str, dict[str, SearchHit]]:
