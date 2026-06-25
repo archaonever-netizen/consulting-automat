@@ -63,10 +63,10 @@ export const THEORY_BLOCKS: TheoryBlockSpec[] = [
 
 export interface StrategyBlockSpec { list: string; title: string; nameField: string; }
 export const STRATEGY_BLOCKS: StrategyBlockSpec[] = [
-  { list: 'capabilities', title: 'Capabilities', nameField: 'name' },
+  { list: 'capabilities', title: 'Способности', nameField: 'name' },
   { list: 'alternatives', title: 'Стратегические альтернативы', nameField: 'name' },
-  { list: 'tradeOffs', title: 'Trade-offs', nameField: 'name' },
-  { list: 'actions', title: 'Coherent actions', nameField: 'name' },
+  { list: 'tradeOffs', title: 'Компромиссы', nameField: 'name' },
+  { list: 'actions', title: 'Согласованные действия', nameField: 'name' },
   { list: 'hypotheses', title: 'Гипотезы выбора', nameField: 'name' },
 ];
 
@@ -87,8 +87,8 @@ export const TARGET_BLOCKS: TargetBlockSpec[] = [
   { list: 'results', title: 'Целевые результаты', nameField: 'name', addable: true },
   { list: 'stakeholderValues', title: 'Клиентская ценность', nameField: 'name', addable: true },
   { list: 'operatingModels', title: 'Операционная модель', nameField: 'name', addable: true },
-  { list: 'capabilities', title: 'Целевые capabilities', nameField: 'name', addable: true },
-  { list: 'managementSystems', title: 'Management systems', nameField: 'name', addable: true },
+  { list: 'capabilities', title: 'Целевые способности', nameField: 'name', addable: true },
+  { list: 'managementSystems', title: 'Системы управления', nameField: 'name', addable: true },
   { list: 'qualityTargets', title: 'Целевое качество', nameField: 'name', addable: true },
   { list: 'preserveTargets', title: 'Сохраняемое ядро', nameField: 'name', addable: true },
   { list: 'comparisonRows', title: 'Что изменится / сохранится', nameField: 'change', addable: false },
@@ -142,18 +142,18 @@ export const ENTITY_COLORS: { list: string; title: string; color: string }[] = [
   { list: 'constraints', title: 'Ограничения', color: '#DC2626' },
   { list: 'quality', title: 'Качество', color: '#CA8A04' },
   { list: 'preserve', title: 'Сохраняемое ядро', color: '#DB2777' },
-  { list: 'capabilities', title: 'Capabilities', color: '#7C3AED' },
+  { list: 'capabilities', title: 'Способности', color: '#7C3AED' },
   { list: 'alternatives', title: 'Альтернативы выбора', color: '#0891B2' },
-  { list: 'tradeOffs', title: 'Trade-offs', color: '#DC2626' },
-  { list: 'actions', title: 'Coherent actions', color: '#16A34A' },
+  { list: 'tradeOffs', title: 'Компромиссы', color: '#DC2626' },
+  { list: 'actions', title: 'Согласованные действия', color: '#16A34A' },
   { list: 'hypotheses', title: 'Гипотезы выбора', color: '#CA8A04' },
   // Диагноз — цвет назначаем только сущностям-целям связей (разрыв/факт/симптом).
-  { list: 'gaps', title: 'Разрывы (Диагноз)', color: '#B45309' },
-  { list: 'facts', title: 'Факты (Диагноз)', color: '#0D9488' },
-  { list: 'symptoms', title: 'Симптомы (Диагноз)', color: '#C026D3' },
+  { list: 'gaps', title: 'Разрывы (Диагностика)', color: '#B45309' },
+  { list: 'facts', title: 'Факты (Диагностика)', color: '#0D9488' },
+  { list: 'symptoms', title: 'Симптомы (Диагностика)', color: '#C026D3' },
   { list: 'stakeholderValues', title: 'Ценность для стейкхолдера', color: '#2563EB' },
   { list: 'operatingModels', title: 'Операционная модель', color: '#16A34A' },
-  { list: 'managementSystems', title: 'Management systems', color: '#0F766E' },
+  { list: 'managementSystems', title: 'Системы управления', color: '#0F766E' },
   { list: 'qualityTargets', title: 'Целевое качество', color: '#CA8A04' },
   { list: 'preserveTargets', title: 'Сохраняемое ядро', color: '#DB2777' },
   { list: 'keyResults', title: 'Key results', color: '#0891B2' },
@@ -454,7 +454,7 @@ export function buildTheoryGraph(projectId: number, expanded: ReadonlySet<string
   const diagnosis = m.editable_cards.find(c => c.card_id === DIAGNOSIS_CARD_ID);
   nodes.push({
     id: DIAGNOSIS_SECTION_NODE_ID, type: 'sectionNode',
-    data: { kind: 'section', cardId: DIAGNOSIS_CARD_ID, title: 'Диагноз', subtitle: 'Раздел проекта' },
+    data: { kind: 'section', cardId: DIAGNOSIS_CARD_ID, title: 'Диагностика', subtitle: 'Раздел проекта' },
   });
   edges.push({ id: 'section:diagnosis->root', source: DIAGNOSIS_SECTION_NODE_ID, target: DIAGNOSIS_ROOT_NODE_ID, kind: 'section', label: 'диагноз' });
   nodes.push({

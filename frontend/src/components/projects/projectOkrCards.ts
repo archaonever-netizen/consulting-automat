@@ -40,9 +40,9 @@ interface OkrFieldSpec {
 }
 
 const OBJECTIVE_FIELDS: OkrFieldSpec[] = [
-  { key: 'name', label: 'Название objective' },
-  { key: 'source', label: 'Источник objective', options: objectiveSourceOptions },
-  { key: 'objective', label: 'Формулировка objective' },
+  { key: 'name', label: 'Название цели' },
+  { key: 'source', label: 'Источник цели', options: objectiveSourceOptions },
+  { key: 'objective', label: 'Формулировка цели' },
   { key: 'level', label: 'Уровень', options: levelOptions },
   { key: 'period', label: 'Период', options: periodOptions },
   { key: 'owner', label: 'Владелец' },
@@ -77,7 +77,7 @@ const KPI_FIELDS: OkrFieldSpec[] = [
 // Синтетическое поле-селектор родителя для KR/KPI (не хранится в строке — служит для add_item
 // и как контекст: к какому objective относится элемент).
 const PARENT_KEY = 'objectiveRef';
-const PARENT_LABEL = 'К какому Objective относится';
+const PARENT_LABEL = 'К какой Цели относится';
 
 type ChildKind = 'keyResults' | 'kpis';
 type ChildRow = (KeyResultRow | KpiRow) & Record<string, unknown>;
@@ -103,7 +103,7 @@ const fail = (message: string): ApplyResult => ({ ok: false, message });
 
 // === Метки / поля ===
 
-const objectiveLabel = (o: ObjectiveCard) => o.name.trim() || o.objective.trim() || `Objective ${o.id}`;
+const objectiveLabel = (o: ObjectiveCard) => o.name.trim() || o.objective.trim() || `Цель ${o.id}`;
 
 function childLabel(kind: ChildKind, row: ChildRow): string {
   const name = String(row.name ?? '').trim();
@@ -176,8 +176,8 @@ export function buildOkrEditable(projectId: number): EditableCard {
     })));
 
   const lists: EditableList[] = [
-    { list: 'objectives', title: 'Objective', item_fields: toSchema(OBJECTIVE_FIELDS), items: objectiveItems },
-    { list: 'keyResults', title: 'Key Result', item_fields: [parentField, ...toSchema(KR_FIELDS)], items: childItems('keyResults') },
+    { list: 'objectives', title: 'Цель', item_fields: toSchema(OBJECTIVE_FIELDS), items: objectiveItems },
+    { list: 'keyResults', title: 'Ключевой результат', item_fields: [parentField, ...toSchema(KR_FIELDS)], items: childItems('keyResults') },
     { list: 'kpis', title: 'KPI', item_fields: [parentField, ...toSchema(KPI_FIELDS)], items: childItems('kpis') },
   ];
 
@@ -189,8 +189,8 @@ export function buildOkrEditable(projectId: number): EditableCard {
 function normalizeList(name: string | undefined): '' | 'objectives' | 'keyResults' | 'kpis' {
   const lc = (name ?? '').trim().toLowerCase();
   if (!lc) return '';
-  if (['objectives', 'objective', 'цели', 'objective (повторяемая карточка)'].includes(lc)) return 'objectives';
-  if (['keyresults', 'key results', 'key result', 'kr', 'keyresult', 'ключевые результаты'].includes(lc)) return 'keyResults';
+  if (['objectives', 'objective', 'цели', 'цель', 'objective (повторяемая карточка)'].includes(lc)) return 'objectives';
+  if (['keyresults', 'key results', 'key result', 'kr', 'keyresult', 'ключевые результаты', 'ключевой результат'].includes(lc)) return 'keyResults';
   if (['kpis', 'kpi', 'показатели'].includes(lc)) return 'kpis';
   return '';
 }
@@ -271,22 +271,22 @@ function applyObjectiveOp(projectId: number, objectives: ObjectiveCard[], propos
     const objective = createObjective(nextId(objectives));
     applyScalarValues(objective as unknown as Record<string, unknown>, OBJECTIVE_FIELDS, proposal.values);
     objectives.push(objective);
-    return writeObjectives(projectId, objectives, 'Добавлен objective.');
+    return writeObjectives(projectId, objectives, 'Добавлена цель.');
   }
   if (proposal.op === 'update_item' || proposal.op === 'update_field') {
     const idx = findObjectiveIndex(objectives, proposal.item_id);
-    if (idx === -1) return fail('Не найден objective для изменения.');
+    if (idx === -1) return fail('Не найдена цель для изменения.');
     const values = proposal.values ?? (proposal.field ? { [proposal.field]: proposal.value } : undefined);
     if (!applyScalarValues(objectives[idx] as unknown as Record<string, unknown>, OBJECTIVE_FIELDS, values)) {
-      return fail('Нечего изменять: не распознаны поля objective.');
+      return fail('Нечего изменять: не распознаны поля цели.');
     }
-    return writeObjectives(projectId, objectives, 'Objective обновлён.');
+    return writeObjectives(projectId, objectives, 'Цель обновлена.');
   }
   if (proposal.op === 'delete_item') {
     const idx = findObjectiveIndex(objectives, proposal.item_id);
-    if (idx === -1) return fail('Не найден objective для удаления.');
+    if (idx === -1) return fail('Не найдена цель для удаления.');
     objectives.splice(idx, 1);
-    return writeObjectives(projectId, objectives, 'Objective удалён.');
+    return writeObjectives(projectId, objectives, 'Цель удалена.');
   }
   return fail('Неизвестная операция.');
 }
@@ -294,11 +294,11 @@ function applyObjectiveOp(projectId: number, objectives: ObjectiveCard[], propos
 function applyChildOp(projectId: number, objectives: ObjectiveCard[], proposal: Proposal, kind: ChildKind): ApplyResult {
   const fields = childFields(kind);
   const { objRef, childRef } = parseComposite(proposal.item_id);
-  const title = kind === 'keyResults' ? 'Key Result' : 'KPI';
+  const title = kind === 'keyResults' ? 'Ключевой результат' : 'KPI';
 
   if (proposal.op === 'add_item') {
     const oi = resolveParentForAdd(objectives, objRef, proposal.values);
-    if (oi === -1) return fail(`Укажите, к какому Objective относится новый ${title} (поле «${PARENT_LABEL}»).`);
+    if (oi === -1) return fail(`Укажите, к какой Цели относится новый ${title} (поле «${PARENT_LABEL}»).`);
     const rows = objectives[oi][kind] as ChildRow[];
     const row = childFactory(kind, nextId(rows));
     applyScalarValues(row, fields, proposal.values);

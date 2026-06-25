@@ -114,7 +114,7 @@ const diagnosisAreaOptions = [
   'Внутренние процессы',
   'Обучение и развитие',
   'Управленческая система',
-  'Социальное воздействие / common good',
+  'Социальное воздействие / общее благо',
 ];
 
 const obstacleTypeOptions = [
@@ -519,7 +519,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
     <div className="project-theory project-diagnosis">
       <section className="project-theory-hero">
         <div>
-          <div className="project-panel-title">Диагноз проекта</div>
+          <div className="project-panel-title">Диагностика проекта</div>
           <h2>Почему текущая реальность не позволяет проекту создать заявленную ценность</h2>
           <p>Экран проверяет каждый блок Теории проекта через факты, симптомы и разрывы между ожидаемым состоянием и наблюдаемой реальностью.</p>
         </div>
@@ -533,7 +533,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
       </section>
 
       <ProjectDisclosure title="Контекст — связь с Теорией проекта">
-        <p className="project-disclosure-dependency">Диагноз проверяет, что мешает каждому блоку Теории проекта быть правдой в текущей реальности.</p>
+        <p className="project-disclosure-dependency">Диагностика проверяет, что мешает каждому блоку Теории проекта быть правдой в текущей реальности.</p>
         <div className="project-diagnosis-relations">
           {theoryRelations.map(relation => (
             <div className="project-diagnosis-relation" key={relation.id}>
@@ -667,7 +667,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
         </div>
       </DiagnosisSection>
 
-      <DiagnosisSection number="12-14" title="Альтернативы, проверки и последствия" note="Диагноз должен выдерживать альтернативные объяснения, иметь план проверки и показывать ущерб без изменений.">
+      <DiagnosisSection number="12-14" title="Альтернативы, проверки и последствия" note="Диагностика должна выдерживать альтернативные объяснения, иметь план проверки и показывать ущерб без изменений.">
         <div className="project-diagnosis-split three">
           <div className="project-theory-repeater">
             <div className="project-theory-card-title">Альтернативные объяснения</div>
@@ -752,7 +752,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
         </div>
       </DiagnosisSection>
 
-      <DiagnosisSection number="15-17" title="Вывод и итоговая формулировка" note="Диагноз готовит следующий экран: Стратегический выбор. Итог можно собрать автоматически и затем отредактировать.">
+      <DiagnosisSection number="15-17" title="Вывод и итоговая формулировка" note="Диагностика готовит следующий экран: Стратегический выбор. Итог можно собрать автоматически и затем отредактировать.">
         <div className="project-theory-grid two">
           <TextField label="15. Вывод для стратегического выбора" placeholder="Какой стратегический выбор должен быть сделан, если диагноз верен?" value={diagnosis.strategicConclusion} onChange={value => updateDiagnosis({ strategicConclusion: value })} multiline />
           <TextField label="16. Что диагноз предварительно исключает" placeholder="Какие решения или объяснения уже не выглядят достаточными?" value={diagnosis.exclusions} onChange={value => updateDiagnosis({ exclusions: value })} multiline />
@@ -762,7 +762,7 @@ export default function ProjectDiagnosisCanvas({ projectId }: ProjectDiagnosisCa
       </DiagnosisSection>
 
       <ProjectDisclosure title="Проверка готовности" count={`${completedChecks} из ${validationChecks.length}`}>
-        <p className="project-disclosure-dependency">Диагноз считается валидным, когда сырой запрос связан с Теорией проекта, симптомы отделены от проблемы, а ключевой вызов подтверждается фактами.</p>
+        <p className="project-disclosure-dependency">Диагностика считается валидной, когда сырой запрос связан с Теорией проекта, симптомы отделены от проблемы, а ключевой вызов подтверждается фактами.</p>
         <div className="project-theory-validation-grid">
           {validationChecks.map(([label, value]) => (
             <label className="project-theory-validation-item" key={label}>

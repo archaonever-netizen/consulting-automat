@@ -134,7 +134,7 @@ function collectElementGaps(byId: Map<string, EditableCard>): GraphGap[] {
     const keyResults = contentItems('okr-kpi', listById(okr, 'keyResults')?.items ?? []);
     for (const obj of objectives) {
       if (!keyResults.some(kr => String(kr.id).split(':')[0] === String(obj.id))) {
-        gaps.push({ id: `okr-obj-no-kr:${obj.id}`, cardId: 'okr-kpi', nodeId: itemNodeId('okr-kpi', 'objectives', String(obj.id)), message: 'Objective без key results' });
+        gaps.push({ id: `okr-obj-no-kr:${obj.id}`, cardId: 'okr-kpi', nodeId: itemNodeId('okr-kpi', 'objectives', String(obj.id)), message: 'Цель без ключевых результатов' });
       }
     }
   }

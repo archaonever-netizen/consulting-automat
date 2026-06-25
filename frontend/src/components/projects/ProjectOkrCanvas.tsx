@@ -110,7 +110,7 @@ function buildInitialObjectives(target: ProjectTargetStateSnapshot): ObjectiveCa
 
 function buildOkrValidationChecks(objectives: ObjectiveCard[]): Array<[string, boolean]> {
   return [
-    ['objective сформулирован как направление, не задача', objectives.some(objective => hasText(objective.objective))],
+    ['цель сформулирована как направление, не задача', objectives.some(objective => hasText(objective.objective))],
     ['KR измеримы (есть метрика и целевое значение)', objectives.some(objective => objective.keyResults.some(kr => hasText(kr.metric) && hasText(kr.target)))],
     ['есть источник данных', objectives.some(objective => objective.keyResults.some(kr => hasText(kr.controlSource)) || objective.kpis.some(kpi => hasText(kpi.dataSource)))],
     ['есть владелец', objectives.some(objective => hasText(objective.owner))],
@@ -129,7 +129,7 @@ function buildOkrSnapshot(projectId: number, objectives: ObjectiveCard[]): Proje
     updatedAt: new Date().toISOString(),
     items: objectives.map((objective, index) => ({
       id: String(objective.id),
-      label: objective.name.trim() || objective.objective.trim() || `Objective ${index + 1}`,
+      label: objective.name.trim() || objective.objective.trim() || `Цель ${index + 1}`,
       summary: compactJoin([
         objective.level,
         objective.period,
@@ -232,7 +232,7 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
       <section className="project-theory-hero">
         <div>
           <h2>OKR / KPI</h2>
-          <p>OKR / KPI переводят стратегию, целевое состояние и решения в измеримые цели, key results и показатели контроля.</p>
+          <p>OKR / KPI переводят стратегию, целевое состояние и решения в измеримые цели, ключевые результаты и показатели контроля.</p>
         </div>
         <span className="project-readiness-pill">Готовность {completedChecks}/{validationChecks.length}</span>
       </section>
@@ -243,7 +243,7 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
           <div className="project-strategy-source-card">
             <span>Целевое состояние</span>
             <strong>{target.objective || target.finalStatement || 'Сначала заполните Целевое состояние'}</strong>
-            <em>Objective должен вытекать из будущей системы.</em>
+            <em>Цель должна вытекать из будущей системы.</em>
           </div>
           <div className="project-strategy-source-card">
             <span>Критерии результата</span>
@@ -253,13 +253,13 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
         </div>
       </ProjectDisclosure>
 
-      <Section title="Objective">
+      <Section title="Цели">
         <div className="project-theory-repeater">
           {objectives.map((objective, index) => (
             <DraftCard
               key={objective.id}
               card={objective}
-              title={`Objective ${index + 1}`}
+              title={`Цель ${index + 1}`}
               onApply={next => setObjectives(current => current.map(item => item.id === next.id ? next : item))}
             >
               {(draft, patch) => {
@@ -270,31 +270,31 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
                 return (
                   <>
                     <label className="project-theory-field">
-                      <span>Название objective</span>
+                      <span>Название цели</span>
                       <input
                         className="form-input"
-                        placeholder={`Objective ${index + 1}`}
+                        placeholder={`Цель ${index + 1}`}
                         value={draft.name}
                         onChange={event => patch({ name: event.target.value })}
                       />
                     </label>
                     <div className="project-theory-grid two">
-                      <TextField label="Источник objective" options={objectiveSourceOptions} value={draft.source} onChange={value => patch({ source: value })} />
+                      <TextField label="Источник цели" options={objectiveSourceOptions} value={draft.source} onChange={value => patch({ source: value })} />
                       <TextField label="Уровень" options={levelOptions} value={draft.level} onChange={value => patch({ level: value })} />
-                      <TextField label="Формулировка objective" multiline placeholder="Качественное направление, не задача и не метрика" value={draft.objective} onChange={value => patch({ objective: value })} />
+                      <TextField label="Формулировка цели" multiline placeholder="Качественное направление, не задача и не метрика" value={draft.objective} onChange={value => patch({ objective: value })} />
                       <TextField label="Период" options={periodOptions} value={draft.period} onChange={value => patch({ period: value })} />
                       <TextField label="Владелец" placeholder="Роль / пользователь" value={draft.owner} onChange={value => patch({ owner: value })} />
-                      <TextField label="CFR / управленческий ритм" multiline placeholder="Conversations / feedback / recognition" value={draft.rhythm} onChange={value => patch({ rhythm: value })} />
+                      <TextField label="CFR / управленческий ритм" multiline placeholder="Беседы / обратная связь / признание" value={draft.rhythm} onChange={value => patch({ rhythm: value })} />
                     </div>
 
-                    <div className="project-theory-card-title">Связанные Key Results</div>
+                    <div className="project-theory-card-title">Связанные ключевые результаты</div>
                     <div className="project-theory-repeater">
                       {draft.keyResults.map((kr, krIndex) => (
                         <div className="project-theory-card" key={kr.id}>
                           <div className="project-theory-card-title">
                             <input
                               className="form-input project-card-name-input"
-                              placeholder={`Key Result ${krIndex + 1}`}
+                              placeholder={`Ключевой результат ${krIndex + 1}`}
                               value={kr.name}
                               onChange={event => updateKr(kr.id, { name: event.target.value })}
                             />
@@ -314,7 +314,7 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
                       ))}
                       <button className="project-theory-add-card" type="button" onClick={addKr}>
                         <Icon name="plus" size={16} />
-                        Добавить Key Result
+                        Добавить ключевой результат
                       </button>
                     </div>
 
@@ -354,7 +354,7 @@ export default function ProjectOkrCanvas({ projectId }: ProjectOkrCanvasProps) {
           ))}
           <button className="project-theory-add-card" type="button" onClick={() => setObjectives(current => [...current, createObjective(nextId(current))])}>
             <Icon name="plus" size={16} />
-            Добавить objective
+            Добавить цель
           </button>
         </div>
       </Section>

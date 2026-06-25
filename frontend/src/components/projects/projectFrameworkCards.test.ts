@@ -7,7 +7,7 @@ describe('PROJECT_FRAMEWORK_CARDS', () => {
     expect(PROJECT_FRAMEWORK_CARDS.map(card => card.order)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14]);
     expect(PROJECT_FRAMEWORK_CARDS.map(card => card.title)).toEqual([
       'Теория проекта',
-      'Диагноз',
+      'Диагностика',
       'Стратегический выбор',
       'Целевое состояние',
       'Стратегическая карта',

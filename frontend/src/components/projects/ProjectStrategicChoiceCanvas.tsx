@@ -373,14 +373,14 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
   const [actions, setActions] = useState<ActionCard[]>(() => savedForm?.actions ?? [createAction(1)]);
   const [hypotheses, setHypotheses] = useState<HypothesisCard[]>(() => savedForm?.hypotheses ?? [createHypothesis(1)]);
 
-  const obstacle = diagnosisSnapshot.keyChallenge || diagnosisSnapshot.obstacleType || '[главное препятствие из Диагноза]';
+  const obstacle = diagnosisSnapshot.keyChallenge || diagnosisSnapshot.obstacleType || '[главное препятствие из Диагностики]';
   const strategicQuestion = choice.strategicQuestion || `Как нам преодолеть ${obstacle} для ${stakeholder.items[0]?.label || '[выгодоприобретатель]'}, чтобы достичь ${results.items[0]?.label || '[критерий результата]'}, не нарушив ${constraints.items[0]?.label || preserve.items[0]?.label || '[ограничения / ядро]'}?`;
   const winningAspiration = choice.winningAspiration || compactJoin([
     mission.expectedState,
     results.items[0]?.summary || results.expectedState,
     stakeholder.items[0]?.summary,
   ]);
-  const acceptedChoice = choice.acceptedChoice || `Мы выбираем ${choice.whereClient || '[where to play]'}, чтобы выиграть через ${choice.howApproach || '[how to win]'}, потому что это преодолевает ${obstacle}, требует ${capabilities.map(item => item.competency).filter(Boolean).join(', ') || '[capabilities]'}, поддерживается ${choice.managementMetrics || choice.managementRhythm || '[management systems]'} и не нарушает ${choice.whereExcluded || constraints.items[0]?.label || preserve.items[0]?.label || '[ограничения / сохраняемое ядро]'}.`;
+  const acceptedChoice = choice.acceptedChoice || `Мы выбираем ${choice.whereClient || '[где конкурируем]'}, чтобы выиграть через ${choice.howApproach || '[как выигрываем]'}, потому что это преодолевает ${obstacle}, требует ${capabilities.map(item => item.competency).filter(Boolean).join(', ') || '[способности]'}, поддерживается ${choice.managementMetrics || choice.managementRhythm || '[системы управления]'} и не нарушает ${choice.whereExcluded || constraints.items[0]?.label || preserve.items[0]?.label || '[ограничения / сохраняемое ядро]'}.`;
   const guidingPolicy = choice.guidingPolicy || `Для преодоления ${obstacle} мы будем ${choice.howApproach || '[подход]'}, фокусируя ресурсы на ${choice.whereProcess || choice.whereClient || '[зона выбора]'} и отказываясь от ${tradeOffs[0]?.refusal || '[что не делаем]'}.`;
 
   useEffect(() => {
@@ -423,7 +423,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
       guidingPolicy,
       capabilities: capabilities.map((capability, index) => ({
         id: String(capability.id),
-        label: capability.name.trim() || capability.competency || `Capability ${index + 1}`,
+        label: capability.name.trim() || capability.competency || `Способность ${index + 1}`,
         summary: compactJoin([
           capability.competency,
           capability.currentLevel ? `текущий уровень: ${capability.currentLevel}` : '',
@@ -448,7 +448,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
       })),
       tradeOffs: tradeOffs.map((tradeOff, index) => ({
         id: String(tradeOff.id),
-        label: tradeOff.name.trim() || tradeOff.refusal || `Trade-off ${index + 1}`,
+        label: tradeOff.name.trim() || tradeOff.refusal || `Компромисс ${index + 1}`,
         summary: compactJoin([tradeOff.refusal, tradeOff.reason, tradeOff.releasedResource, tradeOff.reducedRisk, tradeOff.approver]),
       })),
       actions: actions.map((action, index) => ({
@@ -485,16 +485,16 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
   const aspirationLinkedToClientResult = hasText(aspiration) && hasText(choice.howValue) && (results.items.length > 0 || hasText(results.expectedState));
 
   const validationChecks = [
-    ['выбор отвечает на Диагноз', diagnosisSnapshot.keyChallenge || choice.howDiagnosisFit],
+    ['выбор отвечает на Диагностику', diagnosisSnapshot.keyChallenge || choice.howDiagnosisFit],
     ['выбор связан с миссией', mission.expectedState],
     ['выбор ведет к критериям результата', results.expectedState],
-    ['winning aspiration не сведён к участию / задаче', hasText(aspiration) && !aspirationTaskOnly ? 'yes' : ''],
-    ['winning aspiration не сведён только к деньгам', hasText(aspiration) && !aspirationMoneyOnly ? 'yes' : ''],
-    ['winning aspiration связан с клиентом и результатом', aspirationLinkedToClientResult ? 'yes' : ''],
-    ['выбрано where to play', choice.whereClient || choice.whereProcess],
-    ['выбрано how to win', choice.howApproach],
-    ['указаны capabilities', capabilities.some(item => hasText(item.competency)) ? 'yes' : ''],
-    ['указаны management systems', choice.managementMetrics || choice.managementRhythm || choice.dataSystem],
+    ['«что считаем победой» не сведено к участию / задаче', hasText(aspiration) && !aspirationTaskOnly ? 'yes' : ''],
+    ['«что считаем победой» не сведено только к деньгам', hasText(aspiration) && !aspirationMoneyOnly ? 'yes' : ''],
+    ['«что считаем победой» связано с клиентом и результатом', aspirationLinkedToClientResult ? 'yes' : ''],
+    ['выбрано «где конкурируем»', choice.whereClient || choice.whereProcess],
+    ['выбрано «как выигрываем»', choice.howApproach],
+    ['указаны способности', capabilities.some(item => hasText(item.competency)) ? 'yes' : ''],
+    ['указаны системы управления', choice.managementMetrics || choice.managementRhythm || choice.dataSystem],
     ['указано, что не делаем', tradeOffs.some(item => hasText(item.refusal)) ? 'yes' : ''],
     ['есть согласованные действия', actions.some(item => hasText(item.action)) ? 'yes' : ''],
     ['есть ресурсные обязательства', alternatives.some(item => hasText(item.resourceCommitments)) || actions.some(item => hasText(item.resource)) ? 'yes' : ''],
@@ -514,7 +514,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         <div>
           <div className="project-panel-title">Стратегический выбор проекта</div>
           <h2>Выбор способа преодолеть диагноз и сфокусировать ресурсы</h2>
-          <p>Экран связывает Диагноз с Теорией проекта и превращает главное препятствие в where to play, how to win, capabilities, systems, trade-offs и coherent actions.</p>
+          <p>Экран связывает Диагностику с Теорией проекта и превращает главное препятствие в «где конкурируем», «как выигрываем», способности, системы управления, компромиссы и согласованные действия.</p>
         </div>
         <label className="project-theory-status">
           <span>Статус проверки</span>
@@ -525,13 +525,13 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         </label>
       </section>
 
-      <ProjectDisclosure title="Контекст — связи с Диагнозом и Теорией проекта">
+      <ProjectDisclosure title="Контекст — связи с Диагностикой и Теорией проекта">
         <p className="project-disclosure-dependency">Стратегический выбор должен отвечать диагнозу и не отрываться от миссии, результатов, ограничений и сохраняемого ядра.</p>
         <div className="project-strategy-source-grid">
           <div className="project-strategy-source-card">
-            <b>Диагноз</b>
+            <b>Диагностика</b>
             <span>Ключевой вызов</span>
-            <strong>{diagnosisSnapshot.keyChallenge || diagnosisSnapshot.finalStatement || 'Сначала заполните экран Диагноз'}</strong>
+            <strong>{diagnosisSnapshot.keyChallenge || diagnosisSnapshot.finalStatement || 'Сначала заполните экран Диагностика'}</strong>
             <span>Главное препятствие</span>
             <em>{diagnosisSnapshot.obstacleType || 'Не указано'}</em>
             <span>Ограничивающий фактор</span>
@@ -559,14 +559,14 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         </div>
       </ProjectDisclosure>
 
-      <StrategicSection number="2-3" title="Стратегический вопрос и выигрыш" note="Формулируем, какой подход выбираем, чтобы преодолеть препятствие из Диагноза и достичь результата из Теории проекта.">
+      <StrategicSection number="2-3" title="Стратегический вопрос и выигрыш" note="Формулируем, какой подход выбираем, чтобы преодолеть препятствие из Диагностики и достичь результата из Теории проекта.">
         <div className="project-theory-grid two">
           <TextField label="2. Стратегический вопрос" value={strategicQuestion} onChange={value => updateChoice({ strategicQuestion: value })} multiline />
-          <TextField label="3. Winning aspiration / что считается выигрышем" value={winningAspiration} onChange={value => updateChoice({ winningAspiration: value })} multiline />
+          <TextField label="3. Что считаем победой" value={winningAspiration} onChange={value => updateChoice({ winningAspiration: value })} multiline />
         </div>
       </StrategicSection>
 
-      <StrategicSection number="4-6" title="Where to play и How to win" note="Выбор должен явно указать, где играем, как выигрываем и почему этот способ отвечает диагнозу.">
+      <StrategicSection number="4-6" title="Где конкурируем и как выигрываем" note="Выбор должен явно указать, где конкурируем, как выигрываем и почему этот способ отвечает диагнозу.">
         <div className="project-theory-grid two">
           <SelectField label="4. Выбранный клиент / сегмент" options={stakeholderOptions} value={choice.whereClient} onChange={value => updateChoice({ whereClient: value })} />
           <TextField label="4. География / зона действия" value={choice.whereGeography} onChange={value => updateChoice({ whereGeography: value })} />
@@ -575,7 +575,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
           <TextField label="4. Что входит в выбор" value={choice.whereIncluded} onChange={value => updateChoice({ whereIncluded: value })} multiline />
           <TextField label="4. Что сознательно не входит" value={choice.whereExcluded} onChange={value => updateChoice({ whereExcluded: value })} multiline />
           <TextField label="5. Способ победы / подход" value={choice.howApproach} onChange={value => updateChoice({ howApproach: value })} multiline />
-          <TextField label="5. Почему способ отвечает Диагнозу" value={choice.howDiagnosisFit} onChange={value => updateChoice({ howDiagnosisFit: value })} multiline />
+          <TextField label="5. Почему способ отвечает Диагностике" value={choice.howDiagnosisFit} onChange={value => updateChoice({ howDiagnosisFit: value })} multiline />
           <TextField label="5. Ценность для клиента / выгодоприобретателя" value={choice.howValue} onChange={value => updateChoice({ howValue: value })} multiline />
           <TextField label="5. За счет чего появляется преимущество" value={choice.howAdvantage} onChange={value => updateChoice({ howAdvantage: value })} multiline />
           <TextField label="5. Что должно измениться в системе" value={choice.howSystemChange} onChange={value => updateChoice({ howSystemChange: value })} multiline />
@@ -584,10 +584,10 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         </div>
       </StrategicSection>
 
-      <StrategicSection number="7-8" title="Capabilities и Management systems" note="Фиксируем способности и управленческие системы, без которых выбор не будет реализуемым.">
+      <StrategicSection number="7-8" title="Способности и системы управления" note="Фиксируем способности и управленческие системы, без которых выбор не будет реализуемым.">
         <div className="project-diagnosis-split">
           <div className="project-theory-repeater">
-            <div className="project-theory-card-title">Capabilities</div>
+            <div className="project-theory-card-title">Способности</div>
             {capabilities.map((capability, index) => (
               <DraftCard
                 key={capability.id}
@@ -616,12 +616,12 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
             ))}
             <button className="project-theory-add-card" type="button" onClick={() => setCapabilities(current => [...current, createCapability(current.length + 1)])}>
               <Icon name="plus" size={16} />
-              Добавить capability
+              Добавить способность
             </button>
           </div>
 
           <div className="project-theory-card">
-            <div className="project-theory-card-title">Management systems</div>
+            <div className="project-theory-card-title">Системы управления</div>
             <div className="project-theory-grid two">
               <TextField label="Метрики / KPI" value={choice.managementMetrics} onChange={value => updateChoice({ managementMetrics: value })} multiline />
               <TextField label="Управленческий ритм" value={choice.managementRhythm} onChange={value => updateChoice({ managementRhythm: value })} multiline />
@@ -653,14 +653,14 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
                   <div className="project-theory-grid two">
                     <TextField label="Название альтернативы" value={draft.name} onChange={value => patch({ name: value })} />
                     <SelectField label="Статус альтернативы" options={alternativeStatusOptions} value={draft.status} onChange={value => patch({ status: value })} />
-                    <TextField label="Как отвечает на Диагноз" value={draft.diagnosisFit} onChange={value => patch({ diagnosisFit: value })} multiline />
-                    <ProjectLinkField label="→ Связь: симптом Диагноза" value={draft.diagnosisFitRef} options={diagnosisSymptomOptions} onChange={value => patch({ diagnosisFitRef: value })} />
-                    <TextField label="Where to play альтернативы" value={draft.whereToPlay} onChange={value => patch({ whereToPlay: value })} multiline />
-                    <TextField label="How to win альтернативы" value={draft.howToWin} onChange={value => patch({ howToWin: value })} multiline />
-                    <TextField label="Management systems" value={draft.managementSystems} onChange={value => patch({ managementSystems: value })} multiline />
-                    <TextField label="Resource commitments" value={draft.resourceCommitments} onChange={value => patch({ resourceCommitments: value })} multiline />
+                    <TextField label="Как отвечает на Диагностику" value={draft.diagnosisFit} onChange={value => patch({ diagnosisFit: value })} multiline />
+                    <ProjectLinkField label="→ Связь: симптом Диагностики" value={draft.diagnosisFitRef} options={diagnosisSymptomOptions} onChange={value => patch({ diagnosisFitRef: value })} />
+                    <TextField label="Где конкурируем (альтернатива)" value={draft.whereToPlay} onChange={value => patch({ whereToPlay: value })} multiline />
+                    <TextField label="Как выигрываем (альтернатива)" value={draft.howToWin} onChange={value => patch({ howToWin: value })} multiline />
+                    <TextField label="Системы управления" value={draft.managementSystems} onChange={value => patch({ managementSystems: value })} multiline />
+                    <TextField label="Ресурсные обязательства" value={draft.resourceCommitments} onChange={value => patch({ resourceCommitments: value })} multiline />
                     <TextField label="Что придется не делать" value={draft.whatNotToDo} onChange={value => patch({ whatNotToDo: value })} multiline />
-                    <Checklist label="Нужные capabilities" options={competencyOptions} values={draft.capabilities} onToggle={value => toggleValue('capabilities', value)} />
+                    <Checklist label="Нужные способности" options={competencyOptions} values={draft.capabilities} onToggle={value => toggleValue('capabilities', value)} />
                     <Checklist label="Ограничения и риски" options={constraintOptions} values={draft.constraints} onToggle={value => toggleValue('constraints', value)} />
                     <Checklist label="Что может повредить" options={preserveOptions} values={draft.preserveRisk} onToggle={value => toggleValue('preserveRisk', value)} />
                   </div>
@@ -684,15 +684,15 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
         </div>
       </StrategicSection>
 
-      <StrategicSection number="11-14" title="Принятый выбор, trade-offs и действия" note="Фиксируем выбранную стратегическую позицию, что не делаем, guiding policy и согласованные действия.">
+      <StrategicSection number="11-14" title="Принятый выбор, компромиссы и действия" note="Фиксируем выбранную стратегическую позицию, что не делаем, направляющую политику и согласованные действия.">
         <div className="project-theory-grid two">
           <SelectField label="11. Выбранная альтернатива" options={alternatives.map((alternative, index) => alternative.name || `Альтернатива ${index + 1}`)} value={choice.selectedAlternative} onChange={value => updateChoice({ selectedAlternative: value })} />
           <TextField label="11. Принятый стратегический выбор" value={acceptedChoice} onChange={value => updateChoice({ acceptedChoice: value })} multiline />
-          <TextField label="13. Guiding policy" value={guidingPolicy} onChange={value => updateChoice({ guidingPolicy: value })} multiline className="full" />
+          <TextField label="13. Направляющая политика" value={guidingPolicy} onChange={value => updateChoice({ guidingPolicy: value })} multiline className="full" />
         </div>
         <div className="project-diagnosis-split">
           <div className="project-theory-repeater">
-            <div className="project-theory-card-title">12. Trade-offs / что не делаем</div>
+            <div className="project-theory-card-title">12. Компромиссы / от чего отказываемся</div>
             {tradeOffs.map((tradeOff, index) => (
               <DraftCard
                 key={tradeOff.id}
@@ -724,7 +724,7 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
             </button>
           </div>
           <div className="project-theory-repeater">
-            <div className="project-theory-card-title">14. Coherent actions</div>
+            <div className="project-theory-card-title">14. Согласованные действия</div>
             {actions.map((action, index) => (
               <DraftCard
                 key={action.id}
@@ -795,15 +795,15 @@ export default function ProjectStrategicChoiceCanvas({ projectId }: ProjectStrat
           <div className="project-strategy-output">
             <b>Выход</b>
             <span>{acceptedChoice}</span>
-            <span>Where to play: {compactJoin([choice.whereClient, choice.whereGeography, choice.whereProduct, choice.whereProcess]) || 'не заполнено'}</span>
-            <span>How to win: {choice.howApproach || 'не заполнено'}</span>
-            <span>Trade-offs: {tradeOffs.map(item => item.refusal).filter(Boolean).join(', ') || 'не заполнено'}</span>
+            <span>Где конкурируем: {compactJoin([choice.whereClient, choice.whereGeography, choice.whereProduct, choice.whereProcess]) || 'не заполнено'}</span>
+            <span>Как выигрываем: {choice.howApproach || 'не заполнено'}</span>
+            <span>Компромиссы: {tradeOffs.map(item => item.refusal).filter(Boolean).join(', ') || 'не заполнено'}</span>
           </div>
         </div>
       </StrategicSection>
 
       <ProjectDisclosure title="Проверка готовности" count={`${completedChecks} из ${validationChecks.length}`}>
-        <p className="project-disclosure-dependency">Выбор валиден, когда отвечает диагнозу, связан с теорией проекта, указывает where/how to win, capabilities, systems, trade-offs и согласованные действия.</p>
+        <p className="project-disclosure-dependency">Выбор валиден, когда отвечает диагнозу, связан с теорией проекта, указывает «где конкурируем» и «как выигрываем», способности, системы управления, компромиссы и согласованные действия.</p>
         <div className="project-theory-validation-grid">
           {validationChecks.map(([label, value]) => (
             <label className="project-theory-validation-item" key={label}>

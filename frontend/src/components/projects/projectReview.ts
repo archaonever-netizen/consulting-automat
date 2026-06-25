@@ -134,22 +134,25 @@ export async function composeProject(projectId: number, projectModel: unknown): 
   return data as ProjectCompositionResponse;
 }
 
-// ── Многоэтапная композиция (SSE-конвейер с поэтапным сохранением в БД) ──
+// ── Композиция ПО БЛОКАМ (SSE + кэш по хешу: пересобираются только изменённые блоки) ──
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000';
 
-export type CompositionStageKey = 'collect' | 'structure' | 'review' | 'finalize';
-export type CompositionStageStatus = 'running' | 'done' | 'fallback' | 'skipped';
+export type CompositionBlockStatus = 'running' | 'done' | 'cached' | 'fallback';
 
-export interface CompositionStageEvent {
-  type: 'stage';
-  stage: CompositionStageKey;
-  stage_no: number;
-  model: string;
-  status: CompositionStageStatus;
-  cached?: boolean;
+// Событие прогресса по одному блоку композиции.
+export interface CompositionBlockEvent {
+  type: 'block';
+  id: string;
+  title: string;
+  status: CompositionBlockStatus;
   error?: string;
-  recommendations?: string[];
-  verdict?: string;
+}
+
+// Блок исходных данных экрана для отправки на сборку.
+export interface CompositionBlockInput {
+  id: string;
+  title: string;
+  text: string;
 }
 
 export interface CompositionSection {
@@ -159,18 +162,17 @@ export interface CompositionSection {
 
 // Чекпоинт композиции из БД (источник истины для гидрации после обновления страницы).
 export interface CompositionState {
-  status: 'idle' | 'collecting' | 'structuring' | 'reviewing' | 'finalizing' | 'done' | 'failed';
-  stage_no?: number;
-  draft?: CompositionSection;
-  structured?: CompositionSection;
-  recommendations?: { verdict: string; recommendations: string[] };
+  status: 'idle' | 'running' | 'done' | 'failed';
+  order?: string[];
+  block_cache?: Record<string, { hash?: string; title?: string; composition?: string }>;
+  manifest?: string;
   final?: CompositionSection;
   error?: string;
   updated_at?: string;
 }
 
 type CompositionEvent =
-  | CompositionStageEvent
+  | CompositionBlockEvent
   | { type: 'done'; manifest?: string; composition?: string }
   | { type: 'error'; error?: string };
 
@@ -184,15 +186,15 @@ export async function resetComposition(projectId: number, cardId: string): Promi
 }
 
 interface CompositionStreamHandlers {
-  onStage?: (event: CompositionStageEvent) => void;
+  onBlock?: (event: CompositionBlockEvent) => void;
   onDone?: (section: CompositionSection) => void;
   onError?: (message: string) => void;
   signal?: AbortSignal;
 }
 
 /**
- * Запустить (или возобновить) многоэтапную композицию раздела и читать прогресс по SSE.
- * Возобновление — повторный вызов с тем же card_id: бэкенд продолжит с незавершённого этапа.
+ * Собрать композицию раздела по блокам и читать прогресс по SSE. Повторный вызов с тем же
+ * card_id пересобирает ТОЛЬКО изменённые блоки (остальные берутся из кэша по хешу).
  */
 export async function streamComposition(
   projectId: number,
@@ -231,7 +233,7 @@ export async function streamComposition(
         } catch {
           continue; // неполный фрагмент
         }
-        if (parsed.type === 'stage') handlers.onStage?.(parsed);
+        if (parsed.type === 'block') handlers.onBlock?.(parsed);
         else if (parsed.type === 'done') handlers.onDone?.({ manifest: parsed.manifest ?? '', composition: parsed.composition ?? '' });
         else if (parsed.type === 'error') handlers.onError?.(parsed.error ?? 'Ошибка композиции');
       }

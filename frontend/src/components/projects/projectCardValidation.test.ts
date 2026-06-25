@@ -33,7 +33,7 @@ describe('buildCardValidationText', () => {
     expect(text).toContain('Конверсия — Конверсия — 2% за квартал');
   });
 
-  it('аудит связей Диагноза: показывает поля-ссылки и помечает незаполненные ⚠', () => {
+  it('аудит связей Диагностики: показывает поля-ссылки и помечает незаполненные ⚠', () => {
     const snap = getFallbackProjectDiagnosisSnapshot(PROJECT_ID);
     snap.keyChallenge = 'Узкое место в процессе';
     snap.form = {
@@ -54,7 +54,7 @@ describe('buildCardValidationText', () => {
     writeProjectDiagnosisSnapshot(PROJECT_ID, snap);
 
     const text = buildCardValidationText(PROJECT_ID, 'diagnosis');
-    expect(text).toContain('Проверка связей Диагноза');
+    expect(text).toContain('Проверка связей Диагностики');
     expect(text).toContain('связан с разрывом «1. Критерии результата»'); // заполненная связь видна
     expect(text).toContain('⚠ разрыв не выбран');
     expect(text).toContain('⚠ подтверждающий факт не выбран');

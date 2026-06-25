@@ -118,7 +118,7 @@ function buildDiagnosisLinks(form: Record<string, unknown>): string {
   if (!sections) return '';
 
   return compose([
-    'Проверка связей Диагноза (методологическое требование):',
+    'Проверка связей Диагностики (методологическое требование):',
     'Правило: каждый симптом должен быть связан с разрывом; каждый разрыв — подтверждён фактом; '
       + 'у каждого альтернативного объяснения должен быть подтверждающий или опровергающий факт. '
       + 'Отметка ⚠ означает, что связь не настроена (выпадающий список пуст) — это методологический пробел. '
@@ -160,16 +160,16 @@ function buildStrategicChoice(projectId: number): string {
   if (!s) return '';
   return compose([
     field('Стратегический вопрос', s.strategicQuestion),
-    field('Winning aspiration', s.winningAspiration),
+    field('Что считаем победой', s.winningAspiration),
     field('Тип победы', s.winType),
-    field('Where to play', s.whereToPlay),
+    field('Где конкурируем', s.whereToPlay),
     field('Где: клиент', s.whereClient),
     field('Где: география', s.whereGeography),
     field('Где: продукт', s.whereProduct),
     field('Где: процесс', s.whereProcess),
     field('Где: включено', s.whereIncluded),
     field('Где: исключено', s.whereExcluded),
-    field('How to win', s.howToWin),
+    field('Как выигрываем', s.howToWin),
     field('Как закрывает диагноз', s.howDiagnosisFit),
     field('Ценность', s.howValue),
     field('Преимущество', s.howAdvantage),
@@ -177,11 +177,11 @@ function buildStrategicChoice(projectId: number): string {
     field('Лучше альтернатив', s.howBetterThanAlternatives),
     field('Системы управления', s.managementSystems),
     field('Принятый выбор', s.acceptedChoice),
-    field('Guiding policy', s.guidingPolicy),
+    field('Направляющая политика', s.guidingPolicy),
     field('Что будет, если ничего не делать', s.noActionConsequence),
-    items('Способности (capabilities)', s.capabilities),
+    items('Способности', s.capabilities),
     items('Стратегические альтернативы', s.alternatives),
-    items('Trade-offs', s.tradeOffs),
+    items('Компромиссы', s.tradeOffs),
     items('Действия', s.actions),
     items('Гипотезы', s.hypotheses),
   ]);
@@ -207,9 +207,9 @@ function buildTargetState(projectId: number): string {
   return compose([
     field('Формулировка целевого состояния', s.statement),
     field('Тип', s.type),
-    field('Where to play', s.whereToPlay),
-    field('How to win', s.howToWin),
-    field('Objective', s.objective),
+    field('Где конкурируем', s.whereToPlay),
+    field('Как выигрываем', s.howToWin),
+    field('Цель (Objective)', s.objective),
     field('Итоговая формулировка', s.finalStatement),
     items('Результаты', s.results),
     items('Ценность для стейкхолдеров', s.stakeholderValues),
@@ -220,7 +220,7 @@ function buildTargetState(projectId: number): string {
     items('Что сохраняем', s.preserveTargets),
     comparison,
     items('Ограничения', s.constraints),
-    items('Key results', s.keyResults),
+    items('Ключевые результаты', s.keyResults),
   ]);
 }
 
@@ -233,7 +233,7 @@ function buildSection(projectId: number, cardId: string): string {
 function buildWholeProject(projectId: number): string {
   const blocks: Array<[string, string]> = [
     ['Теория проекта', buildTheory(projectId)],
-    ['Диагноз', buildDiagnosis(projectId)],
+    ['Диагностика', buildDiagnosis(projectId)],
     ['Стратегический выбор', buildStrategicChoice(projectId)],
     ['Целевое состояние', buildTargetState(projectId)],
     ...Object.keys(SECTION_TITLES).map(

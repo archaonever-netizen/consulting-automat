@@ -30,40 +30,51 @@ function compactModelToText(model: CompactSectionModel): string {
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
 import {
   fetchCompositionState,
-  resetComposition,
   streamComposition,
-  type CompositionSection,
-  type CompositionStageEvent,
-  type CompositionStageKey,
+  type CompositionBlockEvent,
+  type CompositionBlockInput,
+  type CompositionBlockStatus,
   type CompositionState,
 } from './projectReview';
 
-// Этапы конвейера композиции — для прогресс-степпера (порядок = порядку выполнения).
-type StageStatus = 'pending' | 'running' | 'done' | 'fallback' | 'skipped';
-const COMPOSITION_STEPS: { key: CompositionStageKey; title: string }[] = [
-  { key: 'collect', title: 'Сбор данных и черновик · DeepSeek' },
-  { key: 'structure', title: 'Структурирование и ясный язык · Sonnet' },
-  { key: 'review', title: 'Проверка и рекомендации · Opus' },
-  { key: 'finalize', title: 'Финальные правки · Sonnet' },
-];
+// Шаг прогресса композиции по одному блоку (для степпера).
+interface BlockStep { id: string; title: string; status: CompositionBlockStatus }
 
-function emptyStages(): Record<CompositionStageKey, StageStatus> {
-  return { collect: 'pending', structure: 'pending', review: 'pending', finalize: 'pending' };
-}
-
-// Лучший доступный текст композиции из чекпоинта: финал → структурированный → черновик.
-function bestSection(state: CompositionState): CompositionSection | null {
-  return state.final ?? state.structured ?? state.draft ?? null;
-}
-
-// Статусы этапов по сохранённому чекпоинту (для паузы/гидрации после обновления страницы).
-function stagesFromState(state: CompositionState): Record<CompositionStageKey, StageStatus> {
-  return {
-    collect: state.draft ? 'done' : 'pending',
-    structure: state.structured ? 'done' : 'pending',
-    review: state.recommendations ? 'done' : 'pending',
-    finalize: state.final ? 'done' : 'pending',
+// Разбить исходный текст экрана на блоки по строкам-заголовкам «### …»/«## …».
+// id блока = его заголовок (стабилен между сборками) → правка одного блока меняет только его.
+function splitIntoBlocks(text: string): CompositionBlockInput[] {
+  const blocks: CompositionBlockInput[] = [];
+  let cur: { id: string; title: string; lines: string[] } | null = null;
+  const flush = () => {
+    if (cur && cur.lines.join('\n').trim()) {
+      blocks.push({ id: cur.id, title: cur.title, text: cur.lines.join('\n').trim() });
+    }
   };
+  for (const raw of text.split('\n')) {
+    const h = /^#{1,6}\s+(.*)$/.exec(raw.trim());
+    if (h) {
+      flush();
+      const title = h[1].replace(/\*\*/g, '').trim();
+      let id = title || `b${blocks.length}`;
+      let k = 2;
+      while (blocks.some(b => b.id === id)) id = `${title}-${k++}`; // защита от дублей заголовков
+      cur = { id, title, lines: [] };
+    } else {
+      if (!cur) cur = { id: '_intro', title: '', lines: [] };
+      cur.lines.push(raw);
+    }
+  }
+  flush();
+  return blocks;
+}
+
+// Статусы блоков по сохранённому чекпоинту (для гидрации после обновления страницы).
+function blocksFromState(state: CompositionState): BlockStep[] {
+  const order = state.order ?? [];
+  const cache = state.block_cache ?? {};
+  return order
+    .map(id => ({ id, title: cache[id]?.title ?? '', status: 'done' as CompositionBlockStatus }))
+    .filter(b => (cache[b.id]?.composition ?? '').trim().length > 0);
 }
 
 export interface ProjectSection {
@@ -262,11 +273,8 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   const [compositionSectionTitle, setCompositionSectionTitle] = useState('');
   const [compositionError, setCompositionError] = useState('');
   const [composingProject, setComposingProject] = useState(false);
-  // Прогресс по этапам конвейера композиции (для степпера) + рекомендации Opus.
-  const [stageStatus, setStageStatus] = useState<Record<CompositionStageKey, StageStatus>>(emptyStages);
-  const [reviewRecs, setReviewRecs] = useState<string[]>([]);
-  // Незавершённый чекпоинт (частичная композиция) → доступна кнопка «Продолжить».
-  const [compositionResumable, setCompositionResumable] = useState(false);
+  // Прогресс по блокам композиции (степпер): какой блок собирается / взят из кэша.
+  const [blockSteps, setBlockSteps] = useState<BlockStep[]>([]);
   // Управление активным SSE-стримом (отмена при смене карточки/размонтировании).
   const composeAbortRef = useRef<AbortController | null>(null);
 
@@ -370,13 +378,9 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
     const card = PROJECT_FRAMEWORK_CARDS.find(item => item.id === cardId);
     setCompositionSectionTitle(card?.title || '');
     setCompositionError(state.status === 'failed' && state.error ? state.error : '');
-    setStageStatus(stagesFromState(state));
-    setReviewRecs(state.recommendations?.recommendations ?? []);
-    const best = bestSection(state);
-    setCompositionManifest(best?.manifest ?? '');
-    setCompositionText(best?.composition ?? '');
-    // Частичный (или сбойный) чекпоинт → можно продолжить с незавершённого этапа.
-    setCompositionResumable(!['idle', 'done'].includes(state.status));
+    setBlockSteps(blocksFromState(state));
+    setCompositionManifest(state.final?.manifest ?? '');
+    setCompositionText(state.final?.composition ?? '');
     if (state.status !== 'idle') setCompositionOpen(true);
     setComposingProject(false);
   }
@@ -397,14 +401,21 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
   // Отменить стрим при размонтировании воркспейса.
   useEffect(() => () => composeAbortRef.current?.abort(), []);
 
-  function onCompositionStage(event: CompositionStageEvent) {
-    const next: StageStatus = event.status === 'running' ? 'running' : event.status;
-    setStageStatus(prev => ({ ...prev, [event.stage]: next }));
-    if (event.stage === 'review' && event.recommendations) setReviewRecs(event.recommendations);
+  // Обновить статус одного блока в степпере (приходит из SSE).
+  function onCompositionBlock(event: CompositionBlockEvent) {
+    setBlockSteps(prev => {
+      const idx = prev.findIndex(b => b.id === event.id);
+      const step: BlockStep = { id: event.id, title: event.title, status: event.status };
+      if (idx === -1) return [...prev, step];
+      const next = [...prev];
+      next[idx] = step;
+      return next;
+    });
   }
 
-  // Запустить (fresh=true: «с нуля», сброс чекпоинта) или продолжить (fresh=false) композицию.
-  async function runComposition(fresh: boolean) {
+  // Собрать композицию. Пересобираются только ИЗМЕНЁННЫЕ блоки (кэш по хешу на бэкенде):
+  // неизменные блоки берутся из БД как есть, поэтому при точечной правке текст не «плывёт».
+  async function runComposition() {
     if (composingProject) return;
     const cardId = activeFrameworkCard.id;
     setCompositionOpen(true);
@@ -414,15 +425,16 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       setCompositionError('Выберите конкретный раздел проекта, чтобы собрать его композицию.');
       return;
     }
-    // Источник — текстовый пересказ экрана из валидатора (buildCardValidationText): он
-    // надёжно покрывает «Теорию» (snap.blocks). Если у экрана производная проекция пуста
-    // (напр. Диагноз без открытого редактора) — берём компактную form-модель как запас.
+    // Источник — текстовый пересказ экрана из валидатора (buildCardValidationText): надёжно
+    // покрывает «Теорию» (snap.blocks). Если проекция пуста (напр. Диагноз без открытого
+    // редактора) — берём компактную form-модель как запас. Затем режем на блоки.
     let sectionText = buildCardValidationText(project.id, cardId).trim();
     if (!sectionText) {
       const compact = buildCompactSectionModel(project.id, cardId);
       if (compact) sectionText = compactModelToText(compact).trim();
     }
-    if (!sectionText) {
+    const blocks = splitIntoBlocks(sectionText);
+    if (!blocks.length) {
       setCompositionError('Для выбранного раздела пока нет данных для композиции.');
       return;
     }
@@ -434,30 +446,22 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
         description: project.description || '',
       },
       section: { card_id: cardId, title: activeFrameworkCard.title },
-      text: sectionText,
+      blocks,
     };
 
     setComposingProject(true);
-    setCompositionResumable(false);
+    setBlockSteps([]);
     try {
-      if (fresh) {
-        await resetComposition(project.id, cardId);
-        setStageStatus(emptyStages());
-        setReviewRecs([]);
-        setCompositionManifest('');
-        setCompositionText('');
-      }
       composeAbortRef.current?.abort();
       const ctrl = new AbortController();
       composeAbortRef.current = ctrl;
       await streamComposition(project.id, cardId, projectModel, {
         signal: ctrl.signal,
-        onStage: onCompositionStage,
+        onBlock: onCompositionBlock,
         onError: msg => setCompositionError(msg),
         onDone: section => {
           setCompositionManifest(section.manifest);
           setCompositionText(section.composition);
-          setCompositionResumable(false);
           writeStoredComposition(project.id, cardId, {
             title: activeFrameworkCard.title,
             manifest: section.manifest,
@@ -467,60 +471,42 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
         },
       });
     } catch (e) {
-      // Отмена (смена карточки/уход) — не ошибка; чекпоинт уже в БД, продолжим позже.
+      // Отмена (смена карточки/уход) — не ошибка; готовые блоки уже в БД.
       if (!(e instanceof DOMException && e.name === 'AbortError')) {
         setCompositionError('Не удалось собрать композицию раздела. Попробуйте ещё раз.');
-        setCompositionResumable(true);
       }
     } finally {
       setComposingProject(false);
     }
   }
 
-  const hasStageProgress = composingProject || compositionResumable
-    || Object.values(stageStatus).some(s => s !== 'pending');
+  const showBlockSteps = composingProject || blockSteps.length > 0;
 
   const compositionSlot = compositionOpen ? (
     <ProjectDisclosure title={`Композиция раздела — ${compositionSectionTitle || activeFrameworkCard.title}`} defaultOpen>
       {compositionError && <div className="project-card-validator-error">{compositionError}</div>}
 
-      {hasStageProgress && (
+      {showBlockSteps && (
         <ol className="project-composition-steps">
-          {COMPOSITION_STEPS.map(step => {
-            const st = stageStatus[step.key];
-            return (
-              <li key={step.key} className={`project-composition-step is-${st}`}>
-                <span className="project-composition-step-icon">
-                  {st === 'running'
-                    ? <span className="spinner" />
-                    : st === 'done' ? '✓'
-                    : st === 'fallback' ? '⚠'
-                    : st === 'skipped' ? '–'
-                    : '○'}
-                </span>
-                <span className="project-composition-step-title">{step.title}</span>
-                {st === 'fallback' && (
-                  <span className="project-composition-step-note">сбой этапа — взят текст предыдущего</span>
-                )}
-              </li>
-            );
-          })}
+          {blockSteps.map(step => (
+            <li key={step.id} className={`project-composition-step is-${step.status}`}>
+              <span className="project-composition-step-icon">
+                {step.status === 'running'
+                  ? <span className="spinner" />
+                  : step.status === 'cached' ? '↺'
+                  : step.status === 'fallback' ? '⚠'
+                  : '✓'}
+              </span>
+              <span className="project-composition-step-title">{step.title || 'Основное'}</span>
+              {step.status === 'cached' && (
+                <span className="project-composition-step-note">без изменений</span>
+              )}
+              {step.status === 'fallback' && (
+                <span className="project-composition-step-note">сбой — взят прежний текст</span>
+              )}
+            </li>
+          ))}
         </ol>
-      )}
-
-      {reviewRecs.length > 0 && (
-        <div className="project-composition-recs">
-          <b>Рекомендации рецензента</b>
-          <ul>
-            {reviewRecs.map((rec, i) => <li key={`${i}:${rec.slice(0, 16)}`}>{rec}</li>)}
-          </ul>
-        </div>
-      )}
-
-      {compositionResumable && !composingProject && (
-        <button type="button" className="project-card-validator-btn" onClick={() => runComposition(false)}>
-          Продолжить сборку
-        </button>
       )}
 
       {(compositionManifest || compositionText) && (
@@ -543,7 +529,7 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
 
   return (
     <div className="project-workspace">
-      <ProjectToolbar project={project} onComposeProject={() => runComposition(true)} composingProject={composingProject} />
+      <ProjectToolbar project={project} onComposeProject={() => runComposition()} composingProject={composingProject} />
       <div className="project-workspace-grid" ref={gridRef} style={{ '--rp-width': `${rightWidth}px` } as React.CSSProperties}>
         <ProjectLeftPanel
           project={project}

@@ -14,6 +14,7 @@ HARD RULE (как в methodolog.py / card_validator.py): ссылаться мо
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import logging
 import re
@@ -521,6 +522,11 @@ def _has_section_content(project_model: dict | None) -> bool:
     """
     if not isinstance(project_model, dict):
         return False
+    blocks = project_model.get("blocks")
+    if isinstance(blocks, list):
+        for blk in blocks:
+            if isinstance(blk, dict) and str(blk.get("text") or "").strip():
+                return True
     if str(project_model.get("text") or "").strip():
         return True
     if str(project_model.get("context_text") or "").strip():
@@ -684,6 +690,107 @@ def _run_finalize(structured: dict, recommendations: list[str]) -> dict:
     return _compose_clean(raw)
 
 
+# ── Блочная композиция (Вариант A): пересобираем только изменённые блоки ──
+# Исходный текст экрана делится на блоки (по «### Заголовок»). Для каждого блока
+# храним хеш исходных данных и его готовый текст. При повторной сборке блок с тем же
+# хешом берём из кэша как есть (без модели) — меняется только тот блок, чьи данные
+# изменились. Это и стабилизирует текст, и экономит токены.
+
+BLOCK_COLLECT_SYSTEM = (
+    "Ты — ИИ-Методолог. Тебе дают данные ОДНОГО блока экрана проекта. Перескажи их "
+    "связным человеческим языком СТРОГО из этих данных. Ничего не выдумывай и не добавляй "
+    "блоков/полей, которых нет. НЕ пиши заголовок самого блока — только его содержимое.\n"
+    'Верни ТОЛЬКО валидный JSON: {"composition": "markdown-текст блока"}.'
+)
+
+BLOCK_STRUCTURE_SYSTEM = (
+    "Ты — редактор. Сделай текст блока читаемым и структурным в лёгком markdown: элементы — "
+    "маркерами «- » с ведущим «**названием**»; поля — строкой «**Подпись:** значение». "
+    "Сохрани ВСЕ факты, ничего не придумывай, НЕ добавляй заголовок самого блока.\n"
+    'Верни ТОЛЬКО валидный JSON: {"composition": "markdown-текст блока"}.'
+)
+
+MANIFEST_SYSTEM = (
+    "Ты пишешь короткий манифест раздела — 2-4 плотных предложения о том, ЧТО в разделе. "
+    "Строго по данному тексту, без выдумок, без заголовков и списков.\n"
+    'Верни ТОЛЬКО валидный JSON: {"manifest": "короткий манифест"}.'
+)
+
+
+def _block_hash(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()[:16]
+
+
+def _payload_blocks(project_model: dict | None) -> list[dict]:
+    """Нормализовать вход в список блоков [{id, title, text}] (с непустым text).
+
+    Поддерживает старый payload без blocks (поле text) — тогда один блок целиком.
+    """
+    out: list[dict] = []
+    if not isinstance(project_model, dict):
+        return out
+    raw_blocks = project_model.get("blocks")
+    if isinstance(raw_blocks, list) and raw_blocks:
+        for b in raw_blocks:
+            if not isinstance(b, dict):
+                continue
+            text = str(b.get("text") or "").strip()
+            if not text:
+                continue
+            title = str(b.get("title") or "").strip()
+            bid = str(b.get("id") or title or f"b{len(out)}").strip() or f"b{len(out)}"
+            out.append({"id": bid, "title": title, "text": text})
+        return out
+    text = str(project_model.get("text") or project_model.get("context_text") or "").strip()
+    if text:
+        out.append({"id": "_all", "title": "", "text": text})
+    return out
+
+
+def _run_block(title: str, text: str) -> str:
+    """Собрать ОДИН блок: deepseek (пересказ данных) → sonnet (читаемый markdown).
+
+    Возвращает markdown-тело блока без заголовка (заголовок добавляется при сборке).
+    """
+    head = f"Блок: «{title}».\n" if title else ""
+    u1 = head + "Данные блока:\n" + text + "\n\nПерескажи строго эти данные. Верни JSON {composition}."
+    raw1, us1 = _chat_json(COMPOSE_COLLECT_MODEL, BLOCK_COLLECT_SYSTEM, u1, max_tokens=2500)
+    draft = str(raw1.get("composition") or "").strip() or text
+    u2 = head + "Текст блока:\n" + draft + "\n\nСделай читаемо и структурно, сохрани все факты. Верни JSON {composition}."
+    raw2, us2 = _chat_json(COMPOSE_STRUCTURE_MODEL, BLOCK_STRUCTURE_SYSTEM, u2, max_tokens=2500)
+    body = str(raw2.get("composition") or "").strip() or draft
+    # Заголовок блока добавляем при сборке детерминированно — снимаем дубль, если модель его всё же вписала.
+    if title:
+        body = re.sub(rf"^\s*#{{1,6}}\s*{re.escape(title)}\s*\n", "", body, count=1, flags=re.IGNORECASE).strip()
+    logger.info("compose block=%s usage_collect=%s usage_structure=%s", title or "_all", us1, us2)
+    return body
+
+
+def _run_manifest(composition: str) -> str:
+    user = (
+        "Текст раздела:\n" + composition[:8000] + "\n\n"
+        "Дай короткий манифест (2-4 предложения, без заголовков и списков). Верни JSON {manifest}."
+    )
+    raw, usage = _chat_json(COMPOSE_STRUCTURE_MODEL, MANIFEST_SYSTEM, user, max_tokens=600)
+    logger.info("compose manifest usage=%s", usage)
+    return str(raw.get("manifest") or "").strip()
+
+
+def _assemble_blocks(order: list[str], cache: dict) -> str:
+    """Собрать финальную композицию: «## Заголовок» (детерминированно) + тело блока."""
+    parts: list[str] = []
+    for bid in order:
+        b = cache.get(bid)
+        if not isinstance(b, dict):
+            continue
+        body = str(b.get("composition") or "").strip()
+        if not body:
+            continue
+        title = str(b.get("title") or "").strip()
+        parts.append(f"## {title}\n{body}" if title else body)
+    return "\n\n".join(parts)
+
+
 def _sse(payload: dict) -> str:
     """Сериализовать событие в формат SSE (как в agent_network.stream_network)."""
     return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
@@ -701,134 +808,92 @@ async def compose_stream(
     card_id: str,
     project_model: dict | None,
 ) -> AsyncGenerator[str, None]:
-    """SSE-конвейер композиции с поэтапным сохранением в БД и возобновлением.
+    """SSE-композиция ПО БЛОКАМ с кэшем по хешу и поблочным сохранением в БД.
 
-    Стримит события этапов (`type:'stage'`) и финал (`type:'done'`). Каждый этап
-    коммитится сразу после завершения, поэтому обрыв соединения (обновление
-    страницы) или рестарт сервера не теряют готовые этапы — повторный вызов
-    продолжит с первого незавершённого этапа.
+    Для каждого блока: если хеш его исходных данных совпал с сохранённым — берём готовый
+    текст из кэша (без вызова модели, status='cached'); иначе пересобираем только этот блок.
+    Так при точечной правке проекта меняется лишь изменённый блок, остальной текст —
+    прежний (байт-в-байт). Прогресс — события type='block', финал — type='done'.
+    Каждый блок коммитится сразу → готовые блоки переживают обрыв соединения/рестарт.
     """
+    blocks = _payload_blocks(project_model)
     ckpt = await project_cards.get_composition(db, project_id, card_id)
-    draft = ckpt.get("draft")
-    structured = ckpt.get("structured")
-    recommendations = ckpt.get("recommendations")
-    final = ckpt.get("final")
+    cache = ckpt.get("block_cache") if isinstance(ckpt.get("block_cache"), dict) else {}
 
-    # Уже собрано целиком → сразу отдаём результат (быстрая гидрация).
-    if ckpt.get("status") == "done" and isinstance(final, dict):
-        for s in COMPOSE_STAGES:
-            yield _sse(_stage_event(s["key"], "done", cached=True))
-        yield _sse({"type": "done", **_compose_clean(final)})
-        return
-
-    # Раздел пуст → не запускаем модели (иначе они выдумают шаблон-болванку).
-    if not isinstance(draft, dict) and not _has_section_content(project_model):
+    # Раздел пуст → честный ответ без вызова моделей.
+    if not blocks:
         empty = {"manifest": "", "composition": _SECTION_EMPTY_MSG}
-        yield _sse(_stage_event("collect", "done"))
-        for key in ("structure", "review", "finalize"):
-            yield _sse(_stage_event(key, "skipped"))
         await project_cards.save_composition_stage(
             db, project_id, card_id,
-            patch={"status": "done", "stage_no": 4, "draft": empty, "final": empty},
+            patch={"status": "done", "block_cache": {}, "order": [], "manifest": "", "final": empty},
         )
         yield _sse({"type": "done", **empty})
         return
 
+    new_cache: dict = {}
+    order: list[str] = []
+    any_changed = False
     try:
-        # ── Этап 1: collect (deepseek) ──
-        if not isinstance(draft, dict):
-            yield _sse(_stage_event("collect", "running"))
-            draft = await asyncio.to_thread(_run_collect, project_model)
-            await project_cards.save_composition_stage(
-                db, project_id, card_id,
-                patch={"status": "collecting", "stage_no": 1, "draft": draft},
-            )
-            yield _sse(_stage_event("collect", "done"))
-        else:
-            yield _sse(_stage_event("collect", "done", cached=True))
-
-        # ── Этап 2: structure (sonnet), откат к черновику при сбое ──
-        if not isinstance(structured, dict):
-            yield _sse(_stage_event("structure", "running"))
+        for blk in blocks:
+            bid, title, text = blk["id"], blk["title"], blk["text"]
+            order.append(bid)
+            h = _block_hash(text)
+            prev = cache.get(bid)
+            # Хеш совпал → блок не менялся: берём готовый текст из кэша.
+            if isinstance(prev, dict) and prev.get("hash") == h and str(prev.get("composition") or "").strip():
+                new_cache[bid] = {"hash": h, "title": title, "composition": prev["composition"]}
+                yield _sse({"type": "block", "id": bid, "title": title, "status": "cached"})
+                continue
+            any_changed = True
+            yield _sse({"type": "block", "id": bid, "title": title, "status": "running"})
+            extra: dict = {}
             try:
-                structured = await asyncio.to_thread(_run_structure, draft)
-                yield _sse(_stage_event("structure", "done"))
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("compose structure failed: %s", exc)
-                structured = dict(draft)
-                yield _sse(_stage_event("structure", "fallback", error=str(exc)[:160]))
+                body = await asyncio.to_thread(_run_block, title, text)
+                status = "done"
+            except Exception as exc:  # noqa: BLE001 — откат к прежней версии блока или сырому тексту
+                logger.warning("compose block %r failed: %s", title, exc)
+                body = (prev.get("composition") if isinstance(prev, dict) else None) or text
+                status = "fallback"
+                extra = {"error": str(exc)[:160]}
+            new_cache[bid] = {"hash": h, "title": title, "composition": body}
             await project_cards.save_composition_stage(
                 db, project_id, card_id,
-                patch={"status": "structuring", "stage_no": 2, "structured": structured},
+                patch={"status": "running", "block_cache": new_cache, "order": order},
             )
-        else:
-            yield _sse(_stage_event("structure", "done", cached=True))
+            yield _sse({"type": "block", "id": bid, "title": title, "status": status, **extra})
 
-        # ── Этап 3: review (opus), при сбое — verdict ok (этап 4 пропустится) ──
-        if not isinstance(recommendations, dict):
-            yield _sse(_stage_event("review", "running"))
+        composition = _assemble_blocks(order, new_cache) or _SECTION_EMPTY_MSG
+        # Манифест регенерим только если что-то менялось (иначе оставляем прежний — стабильность).
+        manifest = str(ckpt.get("manifest") or "").strip()
+        if any_changed or not manifest:
             try:
-                recommendations = await asyncio.to_thread(_run_review, structured)
-                yield _sse(_stage_event("review", "done",
-                                        recommendations=recommendations.get("recommendations", []),
-                                        verdict=recommendations.get("verdict")))
+                manifest = await asyncio.to_thread(_run_manifest, composition)
             except Exception as exc:  # noqa: BLE001
-                logger.warning("compose review failed: %s", exc)
-                recommendations = {"verdict": "ok", "recommendations": []}
-                yield _sse(_stage_event("review", "fallback", error=str(exc)[:160]))
-            await project_cards.save_composition_stage(
-                db, project_id, card_id,
-                patch={"status": "reviewing", "stage_no": 3, "recommendations": recommendations},
-            )
-        else:
-            yield _sse(_stage_event("review", "done", cached=True,
-                                    recommendations=recommendations.get("recommendations", []),
-                                    verdict=recommendations.get("verdict")))
-
-        # ── Этап 4: finalize (sonnet) или skip ──
-        if not isinstance(final, dict):
-            recs = recommendations.get("recommendations") or []
-            if recommendations.get("verdict") == "ok" or not recs:
-                final = dict(structured)
-                yield _sse(_stage_event("finalize", "skipped"))
-            else:
-                yield _sse(_stage_event("finalize", "running"))
-                try:
-                    final = await asyncio.to_thread(_run_finalize, structured, recs)
-                    yield _sse(_stage_event("finalize", "done"))
-                except Exception as exc:  # noqa: BLE001
-                    logger.warning("compose finalize failed: %s", exc)
-                    final = dict(structured)
-                    yield _sse(_stage_event("finalize", "fallback", error=str(exc)[:160]))
-            await project_cards.save_composition_stage(
-                db, project_id, card_id,
-                patch={"status": "done", "stage_no": 4, "final": final},
-            )
-        else:
-            yield _sse(_stage_event("finalize", "done", cached=True))
-            await project_cards.save_composition_stage(
-                db, project_id, card_id, patch={"status": "done", "stage_no": 4},
-            )
-
-        yield _sse({"type": "done", **_compose_clean(final)})
+                logger.warning("compose manifest failed: %s", exc)
+        final = {"manifest": manifest, "composition": composition}
+        await project_cards.save_composition_stage(
+            db, project_id, card_id,
+            patch={"status": "done", "block_cache": new_cache, "order": order,
+                   "manifest": manifest, "final": final},
+        )
+        yield _sse({"type": "done", **final})
 
     except asyncio.CancelledError:
-        # Клиент отключился (обновление страницы) — готовые этапы уже в БД, просто выходим.
+        # Клиент отключился (обновление страницы) — готовые блоки уже в БД, выходим.
         raise
     except Exception as exc:  # noqa: BLE001 — крайний случай: отдаём лучший доступный текст
         logger.warning("compose_stream failed: %s", exc)
-        best = final or structured or draft or {
-            "manifest": "", "composition": "Не удалось собрать композицию раздела. Попробуйте ещё раз.",
-        }
+        prev_final = ckpt.get("final") if isinstance(ckpt.get("final"), dict) else {}
+        best_comp = _assemble_blocks(order, new_cache) or str(prev_final.get("composition") or "") \
+            or "Не удалось собрать композицию раздела. Попробуйте ещё раз."
         try:
             await project_cards.save_composition_stage(
-                db, project_id, card_id,
-                patch={"status": "failed", "error": str(exc)[:200]},
+                db, project_id, card_id, patch={"status": "failed", "error": str(exc)[:200]},
             )
         except Exception:  # noqa: BLE001
             await db.rollback()
         yield _sse({"type": "error", "error": str(exc)[:200]})
-        yield _sse({"type": "done", **_compose_clean(best)})
+        yield _sse({"type": "done", "manifest": str(prev_final.get("manifest") or ""), "composition": best_comp})
 
 
 async def chat_methodolog(

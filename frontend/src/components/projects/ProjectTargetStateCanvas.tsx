@@ -377,8 +377,8 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
   const qualityOptions = labels(quality.items, 'Сначала заполните показатели качества');
   const preserveOptions = labels(preserve.items, 'Сначала заполните сохраняемое ядро');
   const strategyChoiceOptions = [
-    strategy.whereToPlay || 'where to play',
-    strategy.howToWin || 'how to win',
+    strategy.whereToPlay || 'где конкурируем',
+    strategy.howToWin || 'как выигрываем',
     ...strategy.capabilities.map(item => item.label),
   ].filter(Boolean);
 
@@ -395,8 +395,8 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
   const [comparisonRows, setComparisonRows] = useState<ComparisonRow[]>(() => savedForm?.comparisonRows ?? createComparisonRows());
   const [keyResults, setKeyResults] = useState<KeyResult[]>(() => savedForm?.keyResults ?? [createKeyResult(1)]);
 
-  const statement = target.statement || `[система / функция / команда] работает для ${target.whereClient || strategy.whereClient || stakeholder.items[0]?.label || '[клиент / выгодоприобретатель]'} так, что ${targetResults[0]?.target || results.items[0]?.label || '[измеримый результат]'}, за счет ${target.howApproach || strategy.howToWin || '[how to win / capabilities / management systems]'}, без нарушения ${constraints.items[0]?.label || preserve.items[0]?.label || '[ограничения / сохраняемое ядро]'}.`;
-  const finalStatement = target.finalStatement || `В целевом состоянии [система / функция / команда] действует в ${compactJoin([target.whereClient || strategy.whereClient, target.whereGeography || strategy.whereGeography, target.whereProduct || strategy.whereProduct, target.whereProcess || strategy.whereProcess]) || '[where to play]'}, выигрывает за счет ${target.howApproach || strategy.howToWin || '[how to win]'}, создает ${target.howValue || strategy.howValue || '[ценность]'} для ${target.whereClient || strategy.whereClient || stakeholder.items[0]?.label || '[клиент / выгодоприобретатель]'}, достигает ${targetResults.map(item => item.target || item.criterion).filter(Boolean).join(', ') || '[целевые результаты]'}, поддерживается ${capabilityTargets.map(item => item.competency).filter(Boolean).join(', ') || '[capabilities]'} + ${strategy.managementSystems || '[management systems]'}, соблюдает ${constraintTargets.map(item => item.constraint).filter(Boolean).join(', ') || '[ограничения]'} + ${qualityTargets.map(item => item.qualityIndicator).filter(Boolean).join(', ') || '[качество]'} и сохраняет ${preserveTargets.map(item => item.preserveElement).filter(Boolean).join(', ') || '[ядро]'}.`;
+  const statement = target.statement || `[система / функция / команда] работает для ${target.whereClient || strategy.whereClient || stakeholder.items[0]?.label || '[клиент / выгодоприобретатель]'} так, что ${targetResults[0]?.target || results.items[0]?.label || '[измеримый результат]'}, за счет ${target.howApproach || strategy.howToWin || '[как выигрываем / способности / системы управления]'}, без нарушения ${constraints.items[0]?.label || preserve.items[0]?.label || '[ограничения / сохраняемое ядро]'}.`;
+  const finalStatement = target.finalStatement || `В целевом состоянии [система / функция / команда] действует в ${compactJoin([target.whereClient || strategy.whereClient, target.whereGeography || strategy.whereGeography, target.whereProduct || strategy.whereProduct, target.whereProcess || strategy.whereProcess]) || '[где конкурируем]'}, выигрывает за счет ${target.howApproach || strategy.howToWin || '[как выигрываем]'}, создает ${target.howValue || strategy.howValue || '[ценность]'} для ${target.whereClient || strategy.whereClient || stakeholder.items[0]?.label || '[клиент / выгодоприобретатель]'}, достигает ${targetResults.map(item => item.target || item.criterion).filter(Boolean).join(', ') || '[целевые результаты]'}, поддерживается ${capabilityTargets.map(item => item.competency).filter(Boolean).join(', ') || '[способности]'} + ${strategy.managementSystems || '[системы управления]'}, соблюдает ${constraintTargets.map(item => item.constraint).filter(Boolean).join(', ') || '[ограничения]'} + ${qualityTargets.map(item => item.qualityIndicator).filter(Boolean).join(', ') || '[качество]'} и сохраняет ${preserveTargets.map(item => item.preserveElement).filter(Boolean).join(', ') || '[ядро]'}.`;
 
   useEffect(() => {
     const timer = setTimeout(() => writeProjectTargetStateSnapshot(projectId, {
@@ -425,12 +425,12 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
       })),
       capabilities: capabilityTargets.map(item => ({
         id: String(item.id),
-        label: item.name.trim() || item.competency || `Capability ${item.id}`,
+        label: item.name.trim() || item.competency || `Способность ${item.id}`,
         summary: compactJoin([item.currentLevel || strategy.capabilities.find(capability => capability.label === item.competency)?.summary, item.requiredLevel, item.gap, item.developmentAction, item.owner]),
       })),
       managementSystems: managementTargets.map(item => ({
         id: String(item.id),
-        label: item.name.trim() || item.systemType || `Management system ${item.id}`,
+        label: item.name.trim() || item.systemType || `Система управления ${item.id}`,
         summary: compactJoin([item.targetWork, item.supportsChoice, item.dataSource, item.owner]),
       })),
       qualityTargets: qualityTargets.map(item => ({
@@ -450,7 +450,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
       })),
       keyResults: keyResults.map(item => ({
         id: String(item.id),
-        label: item.name.trim() || item.statement || `Key Result ${item.id}`,
+        label: item.name.trim() || item.statement || `Ключевой результат ${item.id}`,
         summary: compactJoin([item.metric, item.target, item.deadline, item.controlSource, item.indisputable]),
       })),
       form: {
@@ -493,13 +493,13 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
     ['есть связь с диагнозом', diagnosis.keyChallenge || diagnosis.finalStatement],
     ['целевое состояние отвечает миссии', mission.expectedState],
     ['указан клиент / выгодоприобретатель', target.whereClient || strategy.whereClient],
-    ['указано where to play', target.whereClient || target.whereProcess || strategy.whereToPlay],
-    ['указано how to win', target.howApproach || strategy.howToWin],
+    ['указано «где конкурируем»', target.whereClient || target.whereProcess || strategy.whereToPlay],
+    ['указано «как выигрываем»', target.howApproach || strategy.howToWin],
     ['есть целевые результаты', targetResults.some(item => hasText(item.criterion) || hasText(item.target)) ? 'yes' : ''],
     ['есть целевые значения', targetResults.some(item => hasText(item.target)) || keyResults.some(item => hasText(item.target)) ? 'yes' : ''],
     ['есть источники контроля', targetResults.some(item => hasText(item.controlSource)) || qualityTargets.some(item => hasText(item.controlSource)) ? 'yes' : ''],
-    ['указаны capabilities', capabilityTargets.some(item => hasText(item.competency)) ? 'yes' : ''],
-    ['указаны management systems', managementTargets.some(item => hasText(item.systemType) || hasText(item.targetWork)) ? 'yes' : ''],
+    ['указаны способности', capabilityTargets.some(item => hasText(item.competency)) ? 'yes' : ''],
+    ['указаны системы управления', managementTargets.some(item => hasText(item.systemType) || hasText(item.targetWork)) ? 'yes' : ''],
     ['указано, что меняется', comparisonRows.some(item => hasText(item.change)) ? 'yes' : ''],
     ['указано, что сохраняется', comparisonRows.some(item => hasText(item.preserve)) || preserveTargets.some(item => hasText(item.preserveElement)) ? 'yes' : ''],
     ['качество задано через измеримый показатель', qualityTargets.some(item => hasText(item.qualityIndicator) && hasText(item.target)) ? 'yes' : ''],
@@ -523,7 +523,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         <div>
           <div className="project-panel-title">Целевое состояние</div>
           <h2>Какой должна стать система после выбранной стратегии</h2>
-          <p>Экран собирает будущую модель из Теории проекта, Диагноза и Стратегического выбора: клиент, зона действия, способ выигрыша, результаты, capabilities, systems, качество, ограничения и сохраняемое ядро.</p>
+          <p>Экран собирает будущую модель из Теории проекта, Диагностики и Стратегического выбора: клиент, зона действия, способ выигрыша, результаты, способности, системы управления, качество, ограничения и сохраняемое ядро.</p>
         </div>
         <label className="project-theory-status">
           <span>Статус проверки</span>
@@ -547,9 +547,9 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
             ))}
           </div>
           <div className="project-strategy-source-card">
-            <b>Диагноз</b>
+            <b>Диагностика</b>
             <span>Ключевой вызов</span>
-            <strong>{diagnosis.keyChallenge || diagnosis.finalStatement || 'Сначала заполните Диагноз'}</strong>
+            <strong>{diagnosis.keyChallenge || diagnosis.finalStatement || 'Сначала заполните Диагностику'}</strong>
             <span>Главное препятствие</span>
             <em>{diagnosis.obstacleType || 'Не указано'}</em>
             <span>Разрывы теории и реальности</span>
@@ -559,23 +559,23 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           </div>
           <div className="project-strategy-source-card">
             <b>Стратегический выбор</b>
-            <span>Winning aspiration</span>
+            <span>Что считаем победой</span>
             <strong>{strategy.winningAspiration || 'Сначала заполните Стратегический выбор'}</strong>
-            <span>Where / How</span>
+            <span>Где конкурируем / Как выигрываем</span>
             <em>{compactJoin([strategy.whereToPlay, strategy.howToWin]) || 'Не указано'}</em>
-            <span>Capabilities</span>
+            <span>Способности</span>
             <em>{strategy.capabilities.map(item => item.label).join(', ') || 'Не указаны'}</em>
-            <span>Management systems</span>
+            <span>Системы управления</span>
             <em>{strategy.managementSystems || 'Не указаны'}</em>
-            <span>Trade-offs</span>
+            <span>Компромиссы</span>
             <em>{strategy.tradeOffs.map(item => item.label).join(', ') || 'Не указаны'}</em>
-            <span>Guiding policy</span>
+            <span>Направляющая политика</span>
             <em>{strategy.guidingPolicy || 'Не указана'}</em>
           </div>
         </div>
       </ProjectDisclosure>
 
-      <TargetSection number="1-4" title="Формулировка, тип, where to play и how to win" note="Фиксируем общую будущую правду о системе, ее тип и стратегическую позицию.">
+      <TargetSection number="1-4" title="Формулировка, тип, где конкурируем и как выигрываем" note="Фиксируем общую будущую правду о системе, ее тип и стратегическую позицию.">
         <div className="project-theory-grid two">
           <TextField label="1. Формулировка целевого состояния" value={statement} onChange={value => updateTarget({ statement: value })} multiline />
           <SelectField label="2. Тип целевого состояния" options={targetTypeOptions} value={target.type} onChange={value => updateTarget({ type: value })} />
@@ -680,10 +680,10 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         </div>
       </TargetSection>
 
-      <TargetSection number="8-11" title="Capabilities, systems, качество и ядро" note="Фиксируем способности, системы управления, качество и сохраняемое ядро в целевой модели.">
+      <TargetSection number="8-11" title="Способности, системы управления, качество и ядро" note="Фиксируем способности, системы управления, качество и сохраняемое ядро в целевой модели.">
         <div className="project-diagnosis-split">
           <div className="project-theory-repeater">
-            <div className="project-theory-card-title">8. Целевые capabilities</div>
+            <div className="project-theory-card-title">8. Целевые способности</div>
             {capabilityTargets.map((item, index) => (
               <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'capabilities', String(item.id))} title={`Компетенция ${index + 1}`} onApply={next => setCapabilityTargets(current => current.map(row => row.id === next.id ? next : row))}>
                 {(draft, patch) => (
@@ -710,7 +710,7 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
             </button>
           </div>
           <div className="project-theory-repeater">
-            <div className="project-theory-card-title">9. Management systems</div>
+            <div className="project-theory-card-title">9. Системы управления</div>
             {managementTargets.map((item, index) => (
               <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'managementSystems', String(item.id))} title={`Система ${index + 1}`} onApply={next => setManagementTargets(current => current.map(row => row.id === next.id ? next : row))}>
                 {(draft, patch) => (
@@ -829,22 +829,22 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
         </div>
       </TargetSection>
 
-      <TargetSection number="14-16" title="Objective, key results и итоговая формулировка" note="Objective задает направление, key results измеряют достижение без спора.">
+      <TargetSection number="14-16" title="Цель (Objective), ключевые результаты и итоговая формулировка" note="Цель задаёт направление, ключевые результаты измеряют достижение без спора.">
         <div className="project-theory-grid two">
-          <TextField label="14. Целевое состояние как objective" value={target.objective} onChange={value => updateTarget({ objective: value })} multiline />
+          <TextField label="14. Целевое состояние как цель (Objective)" value={target.objective} onChange={value => updateTarget({ objective: value })} multiline />
           <TextField label="16. Итоговая формулировка" value={finalStatement} onChange={value => updateTarget({ finalStatement: value })} multiline />
         </div>
         <div className="project-theory-repeater" style={{ marginTop: 12 }}>
           {keyResults.map((item, index) => (
-            <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'keyResults', String(item.id))} title={`Key Result ${index + 1}`} onApply={next => setKeyResults(current => current.map(row => row.id === next.id ? next : row))}>
+            <DraftCard key={item.id} card={item} focusId={focusKey('target-state', 'keyResults', String(item.id))} title={`Ключевой результат ${index + 1}`} onApply={next => setKeyResults(current => current.map(row => row.id === next.id ? next : row))}>
               {(draft, patch) => (
                 <>
                   <label className="project-theory-field">
-                    <span>Название key result</span>
-                    <input className="form-input" placeholder={`Key Result ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
+                    <span>Название ключевого результата</span>
+                    <input className="form-input" placeholder={`Ключевой результат ${index + 1}`} value={draft.name} onChange={event => patch({ name: event.target.value })} />
                   </label>
                   <div className="project-theory-grid two">
-                    <TextField label="Формулировка key result" value={draft.statement} onChange={value => patch({ statement: value })} multiline />
+                    <TextField label="Формулировка ключевого результата" value={draft.statement} onChange={value => patch({ statement: value })} multiline />
                     <SelectField label="Метрика" options={resultOptions} value={draft.metric} onChange={value => patch({ metric: value })} />
                     <TextField label="Целевое значение" value={draft.target} onChange={value => patch({ target: value })} />
                     <TextField label="Срок" value={draft.deadline} onChange={value => patch({ deadline: value })} />
@@ -857,13 +857,13 @@ export default function ProjectTargetStateCanvas({ projectId }: ProjectTargetSta
           ))}
           <button className="project-theory-add-card" type="button" onClick={() => setKeyResults(current => [...current, createKeyResult(current.length + 1)])}>
             <Icon name="plus" size={16} />
-            Добавить key result
+            Добавить ключевой результат
           </button>
         </div>
       </TargetSection>
 
       <ProjectDisclosure title="Проверка готовности" count={`${completedChecks} из ${validationChecks.length}`}>
-        <p className="project-disclosure-dependency">Целевое состояние валидно, когда связано со стратегией и диагнозом, измеримо, учитывает capabilities, systems, качество, ограничения и сохраняемое ядро.</p>
+        <p className="project-disclosure-dependency">Целевое состояние валидно, когда связано со стратегией и диагнозом, измеримо, учитывает способности, системы управления, качество, ограничения и сохраняемое ядро.</p>
         <div className="project-theory-validation-grid">
           {validationChecks.map(([label, value]) => (
             <label className="project-theory-validation-item" key={label}>

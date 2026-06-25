@@ -14,7 +14,7 @@ export const PROJECT_FRAMEWORK_CARDS: ProjectFrameworkCard[] = [
   },
   {
     id: 'diagnosis',
-    title: 'Диагноз',
+    title: 'Диагностика',
     description: 'Реальная проблема, ограничение или причина, из-за которой проект необходим.',
     order: 2,
   },

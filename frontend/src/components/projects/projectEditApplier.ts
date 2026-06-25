@@ -260,6 +260,7 @@ function resolveCardId(projectId: number, raw: string): string {
   if (!lc) return raw;
   if (lc === 'теория проекта') return THEORY_CARD_ID;
   if (lc === 'okr / kpi' || lc === 'okr/kpi' || lc === 'okr') return OKR_CARD_ID;
+  if (lc === 'диагноз') return 'diagnosis'; // легаси-псевдоним: раздел переименован в «Диагностика»
   for (const id of Object.keys(COMPLEX_CARDS)) {
     if (COMPLEX_CARDS[id].title.toLowerCase() === lc) return id;
   }
