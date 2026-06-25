@@ -25,6 +25,14 @@ export interface PortalProjectSection {
   id: string;
   title: string;
   description: string;
+  // Фаза жизненного цикла проекта — портал группирует разделы в 4 фазы.
+  phase?: string;
+  phase_label?: string;
+  phase_summary?: string;
+  phase_order?: number;
+  // Человеческая композиция раздела (приоритетный источник). Пустая → fallback на fields/groups.
+  composition?: string;
+  manifest?: string;
   fields: PortalProjectField[];
   groups: PortalProjectGroup[];
   updated_at?: string | null;

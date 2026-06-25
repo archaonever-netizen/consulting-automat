@@ -100,6 +100,7 @@ def test_portal_projects_include_workspace_compact_sections_only():
                         "projectId": created.id,
                         "updatedAt": "2026-06-24T10:00:00",
                         "keyChallenge": "Скорость принятия решений ниже требуемой.",
+                        "scale": "Региональный",  # внутренняя таксономия — не для клиента
                         "form": {"internal": "hidden"},
                         "facts": [
                             {"id": "f1", "label": "Цикл согласования", "summary": "Средний цикл занимает 14 дней.", "status": "ready"},
@@ -129,7 +130,10 @@ def test_portal_projects_include_workspace_compact_sections_only():
                     card_id="__composition__:project-theory",
                     content_json={
                         "status": "done",
-                        "final": {"manifest": "Не показываем AI-манифест", "composition": "Не тот экран"},
+                        "final": {
+                            "manifest": "Зачем проект и что считаем результатом.",
+                            "composition": "### Смысл\nРазделить роли заказчика и пользователя.",
+                        },
                     },
                 ),
             ])
@@ -141,6 +145,24 @@ def test_portal_projects_include_workspace_compact_sections_only():
             assert [section["id"] for section in projects[0]["sections"]] == ["project-theory", "diagnosis", "hypotheses"]
             assert all(section["updated_at"] is not None for section in projects[0]["sections"])
             theory, diagnosis, hypotheses = projects[0]["sections"]
+
+            # Композиция раздела — приоритетный источник человеческого текста для клиента.
+            assert theory["composition"] == "### Смысл\nРазделить роли заказчика и пользователя."
+            assert theory["manifest"] == "Зачем проект и что считаем результатом."
+            # Разделы без своей композиции остаются на fallback (структурные поля/группы).
+            assert diagnosis["composition"] == ""
+            assert hypotheses["composition"] == ""
+
+            # Группировка по фазам жизненного цикла (клиентский нарратив).
+            assert theory["phase"] == "goal" and theory["phase_label"] == "Цель проекта"
+            assert diagnosis["phase"] == "concept"
+            assert hypotheses["phase"] == "plan"
+            assert theory["phase_order"] < diagnosis["phase_order"] < hypotheses["phase_order"]
+
+            # Внутренняя таксономия (scale → «Масштаб») клиенту не показывается.
+            assert "Масштаб" not in str(projects[0]["sections"])
+            assert "Региональный" not in str(projects[0]["sections"])
+
             assert theory["groups"] == [{
                 "title": "Логика проекта",
                 "items": [{

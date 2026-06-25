@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   portalApi, getToken, setToken, clearToken, PortalError,
-  type PortalMe, type PortalData, type PortalDocument, type PortalProject, type PortalProjectField,
+  type PortalMe, type PortalData, type PortalDocument, type PortalProject,
+  type PortalProjectField, type PortalProjectSection,
 } from './api';
 
 const SECTION_LABEL: Record<string, string> = {
@@ -221,11 +222,43 @@ function SectionView({ section, data, isPreview }: { section: string; data: Port
   );
 }
 
+// Фаза жизненного цикла проекта (порядок фронта совпадает с phase_order бэка).
+interface PhaseGroup {
+  key: string;
+  label: string;
+  summary: string;
+  order: number;
+  sections: PortalProjectSection[];
+}
+
+// Сгруппировать секции проекта по фазам, сохранив серверный порядок секций.
+function groupSectionsByPhase(sections: PortalProjectSection[]): PhaseGroup[] {
+  const byKey = new Map<string, PhaseGroup>();
+  const order: string[] = [];
+  for (const section of sections) {
+    const key = section.phase || 'other';
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        key,
+        label: section.phase_label || 'Прочее',
+        summary: section.phase_summary || '',
+        order: section.phase_order ?? 99,
+        sections: [],
+      });
+      order.push(key);
+    }
+    byKey.get(key)!.sections.push(section);
+  }
+  return order
+    .map(key => byKey.get(key)!)
+    .sort((a, b) => a.order - b.order);
+}
+
 function ProjectSection({ projects }: { projects: PortalProject[] }) {
   return (
     <div className="pl-project-list">
       {projects.map(project => {
-        const sections = project.sections || [];
+        const phases = groupSectionsByPhase(project.sections || []);
         return (
           <article key={project.id} className="pl-proj">
             <div className="pl-proj-head">
@@ -236,54 +269,162 @@ function ProjectSection({ projects }: { projects: PortalProject[] }) {
               <div className="meta">Обновлено: {project.updated_at_fmt}</div>
             </div>
 
-            {sections.length === 0 ? (
+            {phases.length === 0 ? (
               <div className="pl-project-empty">Готовые разделы проекта появятся здесь после сборки.</div>
             ) : (
-              <div className="pl-project-sections">
-                {sections.map(section => (
-                  <details key={section.id} className="pl-project-section">
-                    <summary>
-                      <span>{section.title}</span>
-                      <PlIcon name="chevron" size={16} />
-                    </summary>
-                    <div className="pl-project-section-body">
-                      {section.description && <p className="pl-project-section-desc">{section.description}</p>}
-                      {section.fields.length > 0 && (
-                        <dl className="pl-project-fields">
-                          {section.fields.map(field => (
-                            <ProjectField key={`${section.id}:field:${field.label}`} field={field} />
-                          ))}
-                        </dl>
-                      )}
-                      {section.groups.map(group => (
-                        <details className="pl-project-group" key={`${section.id}:group:${group.title}`}>
-                          <summary>
-                            <span>{group.title}</span>
-                            <PlIcon name="chevron" size={15} />
-                          </summary>
-                          <div className="pl-project-group-body">
-                            <div className="pl-project-items">
-                              {group.items.map(item => (
-                                <article className="pl-project-item" key={`${section.id}:${group.title}:${item.title}`}>
-                                  <h5>{item.title}</h5>
-                                  <dl className="pl-project-fields">
-                                    {item.fields.map(field => (
-                                      <ProjectField key={`${section.id}:${item.title}:${field.label}`} field={field} />
-                                    ))}
-                                  </dl>
-                                </article>
-                              ))}
-                            </div>
-                          </div>
-                        </details>
+              <div className="pl-phases">
+                {phases.map(phase => (
+                  <section className="pl-phase" key={`${project.id}:${phase.key}`}>
+                    <div className="pl-phase-head">
+                      <h4>{phase.label}</h4>
+                      {phase.summary && <p>{phase.summary}</p>}
+                    </div>
+                    <div className="pl-phase-sections">
+                      {phase.sections.map(section => (
+                        <SectionCard key={section.id} section={section} />
                       ))}
                     </div>
-                  </details>
+                  </section>
                 ))}
               </div>
             )}
           </article>
         );
+      })}
+    </div>
+  );
+}
+
+// Один раздел: человеческая композиция в приоритете; структурные поля/группы —
+// под «Подробнее». Если композиции нет — поля показываем сразу (fallback).
+function SectionCard({ section }: { section: PortalProjectSection }) {
+  const composition = (section.composition || '').trim();
+  const hasDetails = section.fields.length > 0 || section.groups.length > 0;
+
+  return (
+    <article className="pl-sec">
+      <h5 className="pl-sec-title">{section.title}</h5>
+      {composition ? (
+        <>
+          <div className="pl-sec-body"><CompositionText text={composition} /></div>
+          {hasDetails && (
+            <details className="pl-sec-more">
+              <summary>
+                <span>Подробнее</span>
+                <PlIcon name="chevron" size={15} />
+              </summary>
+              <div className="pl-sec-more-body">
+                <SectionDetails section={section} />
+              </div>
+            </details>
+          )}
+        </>
+      ) : (
+        <div className="pl-sec-body">
+          <SectionDetails section={section} />
+        </div>
+      )}
+    </article>
+  );
+}
+
+// Структурный вывод раздела (поля + группы) — fallback и содержимое «Подробнее».
+function SectionDetails({ section }: { section: PortalProjectSection }) {
+  return (
+    <>
+      {section.fields.length > 0 && (
+        <dl className="pl-project-fields">
+          {section.fields.map(field => (
+            <ProjectField key={`${section.id}:field:${field.label}`} field={field} />
+          ))}
+        </dl>
+      )}
+      {section.groups.map(group => (
+        <details className="pl-project-group" key={`${section.id}:group:${group.title}`}>
+          <summary>
+            <span>{group.title}</span>
+            <PlIcon name="chevron" size={15} />
+          </summary>
+          <div className="pl-project-group-body">
+            <div className="pl-project-items">
+              {group.items.map(item => (
+                <article className="pl-project-item" key={`${section.id}:${group.title}:${item.title}`}>
+                  <h5>{item.title}</h5>
+                  <dl className="pl-project-fields">
+                    {item.fields.map(field => (
+                      <ProjectField key={`${section.id}:${item.title}:${field.label}`} field={field} />
+                    ))}
+                  </dl>
+                </article>
+              ))}
+            </div>
+          </div>
+        </details>
+      ))}
+    </>
+  );
+}
+
+// ── Рендер композиции (лёгкий markdown без «ИИ-вида») ───────────────────────
+// Портал автономен, поэтому парсер инлайнится здесь (тот же подход, что в
+// ProjectWorkspace.tsx): заголовок = блок, **жирный** = элемент, «метка: значение» = поле.
+type CompNode =
+  | { kind: 'group'; text: string }
+  | { kind: 'element'; text: string }
+  | { kind: 'field'; label: string; value: string }
+  | { kind: 'para'; text: string };
+
+function renderInline(text: string): React.ReactNode[] {
+  return text.split(/\*\*(.+?)\*\*/g).map((part, i) => (i % 2 === 1 ? <strong key={i}>{part}</strong> : part));
+}
+
+function parseComposition(text: string): CompNode[] {
+  const strip = (s: string) => s.replace(/\*\*/g, '').trim();
+  const nodes: CompNode[] = [];
+  for (const raw of text.replace(/\r/g, '').split('\n')) {
+    let line = raw.trim();
+    if (!line) continue;
+    if (/^[-*_=]{3,}$/.test(line)) continue;
+    const heading = /^(#{1,6})\s+(.*)$/.exec(line);
+    if (heading) { nodes.push({ kind: 'group', text: strip(heading[2]) }); continue; }
+    const bullet = /^(?:[-•*]|\d+[.)])\s+(.*)$/.exec(line);
+    if (bullet) line = bullet[1].trim();
+    const field =
+      /^\*\*\s*([^*]+?)\s*:\s*\*\*\s*(.+)$/.exec(line) ||
+      /^\*\*\s*([^*]+?)\s*\*\*\s*:\s*(.+)$/.exec(line) ||
+      /^([^:*][^:]{0,40}):\s+(.+)$/.exec(line);
+    const boldOnly = /^\*\*(.+?)\*\*$/.exec(line);
+    if (field) nodes.push({ kind: 'field', label: strip(field[1]), value: strip(field[2]) });
+    else if (boldOnly) nodes.push({ kind: 'element', text: boldOnly[1].trim() });
+    else if (bullet) nodes.push({ kind: 'element', text: strip(line) });
+    else nodes.push({ kind: 'para', text: line });
+  }
+  // Обычная строка прямо над полем — это имя элемента-родителя.
+  for (let i = 0; i < nodes.length - 1; i++) {
+    if (nodes[i].kind === 'para' && nodes[i + 1].kind === 'field') {
+      nodes[i] = { kind: 'element', text: (nodes[i] as { text: string }).text };
+    }
+  }
+  return nodes;
+}
+
+function CompositionText({ text }: { text: string }) {
+  const nodes = parseComposition(text);
+  if (nodes.length === 0) return null;
+  return (
+    <div className="pl-comp">
+      {nodes.map((n, i) => {
+        if (n.kind === 'group') return <p key={i} className="pl-comp-group">{n.text}</p>;
+        if (n.kind === 'element') return <p key={i} className="pl-comp-el">{renderInline(n.text)}</p>;
+        if (n.kind === 'field') {
+          return (
+            <p key={i} className="pl-comp-field">
+              <span className="pl-comp-label">{n.label}:</span>{' '}
+              <span>{renderInline(n.value)}</span>
+            </p>
+          );
+        }
+        return <p key={i} className="pl-comp-para">{renderInline(n.text)}</p>;
       })}
     </div>
   );

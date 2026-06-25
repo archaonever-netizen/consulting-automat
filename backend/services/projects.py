@@ -21,6 +21,44 @@ _PORTAL_SECTION_META: dict[str, tuple[int, str, str]] = {
     "facts-learning": (13, "Факты и обучение", "Фактические данные, обратная связь и выводы."),
 }
 
+# Фазы жизненного цикла проекта — клиентский нарратив (тот же костяк, что у
+# рабочего воркспейса: PROJECT_SECTIONS во ProjectWorkspace.tsx). Портал
+# группирует 13 методологических разделов в 4 понятные клиенту фазы, чтобы он
+# видел историю «зачем → что поняли → план → ход», а не плоский список секций.
+# (phase_order, phase_key, phase_label, phase_summary)
+_PORTAL_PHASE_META: dict[str, tuple[int, str, str]] = {
+    "goal": (1, "Цель проекта", "Зачем этот проект и какой результат мы считаем успехом."),
+    "concept": (2, "Концепция", "Что мы поняли про ситуацию и какой выбран путь."),
+    "plan": (3, "План и проверки", "Гипотезы, проверки и измеримые цели проекта."),
+    "progress": (4, "Ход проекта", "Что делаем сейчас и что узнали по ходу."),
+}
+
+# Какой раздел к какой фазе относится. Разделы вне карты в портал не группируются
+# (на всякий случай попадут в фазу-обзор последними — см. _public_compact_section).
+_PORTAL_PHASE_BY_CARD: dict[str, str] = {
+    "project-theory": "goal",
+    "diagnosis": "concept",
+    "strategic-choice": "concept",
+    "target-state": "concept",
+    "strategy-map": "concept",
+    "hypotheses": "plan",
+    "experiments": "plan",
+    "decisions": "plan",
+    "okr-kpi": "plan",
+    "initiatives": "progress",
+    "business-processes": "progress",
+    "tasks": "progress",
+    "facts-learning": "progress",
+}
+
+# Префикс синтетической строки чекпоинта композиции (см. project_cards.COMPOSITION_PREFIX).
+# Дублируем константой, чтобы не вводить импорт-зависимость между сервисами.
+_COMPOSITION_PREFIX = "__composition__:"
+
+# Заглушка, которую конвейер композиции кладёт при пустом разделе — для клиента
+# это «нет данных», поэтому такой текст за композицию не считаем.
+_COMPOSITION_EMPTY = "В разделе пока нет данных для композиции."
+
 _PUBLIC_LABELS = {
     "rawRequest": "Запрос",
     "requestType": "Тип запроса",
@@ -78,6 +116,10 @@ _GROUP_TITLES = {
 _SKIP_KEYS = {
     "id", "projectId", "sectionId", "updatedAt", "form", "status", "completedChecks", "totalChecks",
 }
+
+# Внутренняя классификация — служебная для методологии, клиенту это шум.
+# Прячем в fallback-выводе (в человеческой композиции её и так нет).
+_CLIENT_HIDDEN_KEYS = {"requestType", "obstacleType", "winType", "scale"}
 
 
 def _format_date(value) -> str:
@@ -157,7 +199,7 @@ def _item_fields(item: dict) -> list[dict]:
     if summary:
         fields.append(summary)
     for key, value in item.items():
-        if key in _SKIP_KEYS or key in {"title", "label", "summary", "name", "__cardName"}:
+        if key in _SKIP_KEYS or key in _CLIENT_HIDDEN_KEYS or key in {"title", "label", "summary", "name", "__cardName"}:
             continue
         label = _PUBLIC_LABELS.get(key)
         if not label:
@@ -187,18 +229,38 @@ def _group_from_items(title: str, items: list) -> dict | None:
     return {"title": title, "items": public_items}
 
 
-def _public_compact_section(row: ProjectCardState) -> dict | None:
+def _composition_text(comp_content: dict | None) -> tuple[str, str]:
+    """Достать (composition, manifest) из чекпоинта композиции раздела.
+
+    Лучший доступный этап: final → structured → draft (как у фронта рабочего
+    воркспейса). Текст-заглушку пустого раздела за композицию не считаем.
+    """
+    if not isinstance(comp_content, dict):
+        return "", ""
+    for key in ("final", "structured", "draft"):
+        stage = comp_content.get(key)
+        if not isinstance(stage, dict):
+            continue
+        text = str(stage.get("composition") or "").strip()
+        if text and text != _COMPOSITION_EMPTY:
+            return text, str(stage.get("manifest") or "").strip()
+    return "", ""
+
+
+def _public_compact_section(row: ProjectCardState, comp_content: dict | None = None) -> dict | None:
     content = row.content_json if isinstance(row.content_json, dict) else {}
     meta = _PORTAL_SECTION_META.get(row.card_id)
     if not meta:
         return None
     order, title, description = meta
 
+    composition, manifest = _composition_text(comp_content)
+
     fields: list[dict] = []
     groups: list[dict] = []
 
     for key, value in content.items():
-        if key in _SKIP_KEYS:
+        if key in _SKIP_KEYS or key in _CLIENT_HIDDEN_KEYS:
             continue
         if isinstance(value, list):
             group = _group_from_items(_GROUP_TITLES.get(key, key), value)
@@ -207,6 +269,8 @@ def _public_compact_section(row: ProjectCardState) -> dict | None:
         elif isinstance(value, dict):
             # Lossless editor state lives in `form`; other dicts are usually scalar containers.
             for child_key, child_value in value.items():
+                if child_key in _CLIENT_HIDDEN_KEYS:
+                    continue
                 label = _PUBLIC_LABELS.get(child_key)
                 if not label:
                     continue
@@ -221,14 +285,27 @@ def _public_compact_section(row: ProjectCardState) -> dict | None:
             if field:
                 fields.append(field)
 
-    if not fields and not groups:
+    # Секция попадает к клиенту, если есть человеческая композиция ИЛИ хоть какие-то
+    # структурные данные (fallback). Иначе пропускаем — пустых разделов клиент не видит.
+    if not composition and not fields and not groups:
         return None
+
+    phase_key = _PORTAL_PHASE_BY_CARD.get(row.card_id, "")
+    phase_order, phase_label, phase_summary = _PORTAL_PHASE_META.get(
+        phase_key, (99, "", "")
+    )
 
     return {
         "id": row.card_id,
         "title": title,
         "description": description,
         "order": order,
+        "phase": phase_key,
+        "phase_label": phase_label,
+        "phase_summary": phase_summary,
+        "phase_order": phase_order,
+        "composition": composition,
+        "manifest": manifest,
         "fields": fields,
         "groups": groups,
         "updated_at": (
@@ -246,22 +323,41 @@ async def list_portal_projects(db: AsyncSession, client_id: int) -> list[dict]:
         return []
 
     project_ids = [project["id"] for project in projects]
+
+    # Содержимое разделов + чекпоинты их композиции одним запросом. Композиция —
+    # приоритетный источник человеческого текста для клиента (см. _composition_text),
+    # её строки лежат под синтетическим card_id с префиксом _COMPOSITION_PREFIX.
+    composition_ids = [f"{_COMPOSITION_PREFIX}{card_id}" for card_id in _PORTAL_SECTION_META]
     rows = (await db.scalars(
         select(ProjectCardState).where(
             ProjectCardState.project_id.in_(project_ids),
-            ProjectCardState.card_id.in_(list(_PORTAL_SECTION_META)),
+            ProjectCardState.card_id.in_(list(_PORTAL_SECTION_META) + composition_ids),
         )
     )).all()
 
+    comp_by_project_card: dict[tuple[int, str], dict] = {}
+    for row in rows:
+        if isinstance(row.card_id, str) and row.card_id.startswith(_COMPOSITION_PREFIX):
+            real_card_id = row.card_id[len(_COMPOSITION_PREFIX):]
+            if isinstance(row.content_json, dict):
+                comp_by_project_card[(row.project_id, real_card_id)] = row.content_json
+
     sections_by_project: dict[int, list[dict]] = {project_id: [] for project_id in project_ids}
     for row in rows:
-        section = _public_compact_section(row)
+        if not isinstance(row.card_id, str) or row.card_id.startswith(_COMPOSITION_PREFIX):
+            continue
+        comp_content = comp_by_project_card.get((row.project_id, row.card_id))
+        section = _public_compact_section(row, comp_content)
         if section is not None:
             sections_by_project.setdefault(row.project_id, []).append(section)
 
+    # Сортировка: сначала по фазе жизненного цикла, затем по порядку раздела внутри
+    # фазы. Так фронт получает готовый к группировке по фазам поток секций.
     for project in projects:
         sections = sections_by_project.get(project["id"], [])
-        project["sections"] = sorted(sections, key=lambda item: (item["order"], item["title"]))
+        project["sections"] = sorted(
+            sections, key=lambda item: (item["phase_order"], item["order"], item["title"])
+        )
     return projects
 
 

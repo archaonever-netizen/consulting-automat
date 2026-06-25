@@ -254,6 +254,50 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
   border-radius: var(--p-r-md); color: var(--p-ink-3); font-size: 13px;
   padding: 12px 14px;
 }
+/* ── Фазы жизненного цикла проекта (клиентский нарратив) ── */
+.pl-phases { display: grid; gap: 28px; }
+.pl-phase-head { margin-bottom: 12px; }
+.pl-phase-head h4 {
+  margin: 0; font-family: var(--p-display); font-size: 18px; font-weight: 800;
+  letter-spacing: -.02em; color: var(--p-ink);
+  display: flex; align-items: baseline; gap: 8px;
+}
+.pl-phase-head h4::before { content: "/"; color: var(--p-accent); font-weight: 800; }
+.pl-phase-head p { margin: 5px 0 0; color: var(--p-ink-3); font-size: 13px; line-height: 1.5; }
+.pl-phase-sections { display: grid; gap: 12px; }
+
+.pl-sec {
+  background: #fff; border: 1px solid var(--p-border);
+  border-radius: var(--p-r-md); padding: 16px 18px;
+}
+.pl-sec-title {
+  margin: 0 0 10px; font-size: 14px; font-weight: 800;
+  letter-spacing: -.01em; color: var(--p-ink);
+}
+.pl-sec-more { margin-top: 12px; border-top: 1px solid var(--p-border); }
+.pl-sec-more > summary {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
+  padding: 9px 0 2px; color: var(--p-ink-3); font-size: 12.5px; font-weight: 650;
+}
+.pl-sec-more > summary::-webkit-details-marker { display: none; }
+.pl-sec-more > summary svg { transition: transform .15s, color .15s; color: var(--p-ink-3); }
+.pl-sec-more[open] > summary { color: var(--p-accent-ink); }
+.pl-sec-more[open] > summary svg { transform: rotate(180deg); color: var(--p-accent); }
+.pl-sec-more-body { padding-top: 8px; }
+
+/* Композиция раздела — читаемая проза без «ИИ-markdown» */
+.pl-comp { display: grid; gap: 9px; }
+.pl-comp-group {
+  margin: 9px 0 1px; font-family: var(--p-display); font-size: 14px;
+  font-weight: 800; letter-spacing: 0; color: var(--p-ink);
+}
+.pl-comp-group:first-child { margin-top: 0; }
+.pl-comp-el { margin: 0; color: var(--p-ink); font-size: 13.5px; line-height: 1.6; font-weight: 650; }
+.pl-comp-para { margin: 0; color: var(--p-ink-2); font-size: 13.5px; line-height: 1.66; overflow-wrap: anywhere; }
+.pl-comp-field { margin: 0; color: var(--p-ink); font-size: 13.5px; line-height: 1.6; overflow-wrap: anywhere; }
+.pl-comp-label { color: var(--p-ink-3); font-weight: 700; }
+.pl-comp strong { font-weight: 800; color: var(--p-ink); }
+
 .pl-project-sections { display: grid; gap: 8px; }
 .pl-project-section {
   border: 1px solid var(--p-border); border-radius: var(--p-r-md);
