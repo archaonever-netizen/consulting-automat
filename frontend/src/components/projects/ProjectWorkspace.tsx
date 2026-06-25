@@ -10,6 +10,23 @@ import ProjectToolbar from './ProjectToolbar';
 import { hydrateProjectCards } from './projectCardSync';
 import type { CanvasFocusTarget } from './projectCanvasFocus';
 import { buildCardValidationText } from './projectCardValidation';
+import { buildCompactSectionModel, type CompactSectionModel } from './projectCompactSectionModel';
+
+// Текст из компактной модели экрана (form-based) — запасной источник композиции для
+// экранов, где производная проекция пуста (напр. Диагноз без открытого редактора).
+// Формат (### блок / - элемент / Метка: значение) совпадает с тем, что ждут конвейер и рендер.
+function compactModelToText(model: CompactSectionModel): string {
+  const lines: string[] = [];
+  for (const f of model.fields) lines.push(`${f.label}: ${f.value}`);
+  for (const group of model.groups) {
+    lines.push(`### ${group.title}`);
+    for (const item of group.items) {
+      lines.push(`- ${item.title}`);
+      for (const f of item.fields) lines.push(`${f.label}: ${f.value}`);
+    }
+  }
+  return lines.join('\n');
+}
 import { PROJECT_FRAMEWORK_CARDS } from './projectFrameworkCards';
 import {
   fetchCompositionState,
@@ -397,10 +414,14 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       setCompositionError('Выберите конкретный раздел проекта, чтобы собрать его композицию.');
       return;
     }
-    // Источник — компактный текстовый пересказ экрана (тот же, что использует валидатор:
-    // buildCardValidationText). Он надёжно покрывает все экраны, включая «Теорию» (читает
-    // готовую проекцию snap.blocks, а не хрупкую form-модель), и уже структурирован.
-    const sectionText = buildCardValidationText(project.id, cardId).trim();
+    // Источник — текстовый пересказ экрана из валидатора (buildCardValidationText): он
+    // надёжно покрывает «Теорию» (snap.blocks). Если у экрана производная проекция пуста
+    // (напр. Диагноз без открытого редактора) — берём компактную form-модель как запас.
+    let sectionText = buildCardValidationText(project.id, cardId).trim();
+    if (!sectionText) {
+      const compact = buildCompactSectionModel(project.id, cardId);
+      if (compact) sectionText = compactModelToText(compact).trim();
+    }
     if (!sectionText) {
       setCompositionError('Для выбранного раздела пока нет данных для композиции.');
       return;

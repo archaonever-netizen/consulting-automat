@@ -256,10 +256,9 @@ class ClientUser(Base):
 class ClientDocument(Base):
     """Документ/файл, опубликованный для клиента (раздел «Документы и файлы»).
 
-    Файл хранится на сервере (Этап 2 — локальная ФС, см. services/client_documents);
-    в БД лежит относительный путь `stored_path`. Загружает наш сотрудник из
-    карточки клиента; клиент в портале видит и скачивает. Принадлежит клиенту
-    (а не конкретному проекту) — портал на Этапе 2 работает на уровне клиента.
+    Источник может быть локальным файлом (`source_type=local`) или публичной
+    ссылкой Яндекс Диска (`source_type=yandex_disk`). Клиент в портале видит
+    только список документов и скачивание через наш backend.
     """
     __tablename__ = 'client_documents'
 
@@ -270,6 +269,8 @@ class ClientDocument(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
     stored_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    source_type: Mapped[str] = mapped_column(String(40), default='local', server_default='local', nullable=False)
+    external_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     content_type: Mapped[str] = mapped_column(String(120), default='application/octet-stream', nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     uploaded_by_id: Mapped[Optional[int]] = mapped_column(Integer, ForeignKey('users.id'), nullable=True)
