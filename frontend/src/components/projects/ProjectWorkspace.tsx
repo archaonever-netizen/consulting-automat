@@ -11,6 +11,7 @@ import { hydrateProjectCards } from './projectCardSync';
 import type { CanvasFocusTarget } from './projectCanvasFocus';
 import { buildCardValidationText } from './projectCardValidation';
 import { buildCompactSectionModel, type CompactSectionModel } from './projectCompactSectionModel';
+import { buildScaffoldedCompositionText } from './projectCompositionSource';
 
 // Текст из компактной модели экрана (form-based) — запасной источник композиции для
 // экранов, где производная проекция пуста (напр. Диагноз без открытого редактора).
@@ -442,13 +443,17 @@ export default function ProjectWorkspace({ project }: ProjectWorkspaceProps) {
       setCompositionError('Выберите конкретный раздел проекта, чтобы собрать его композицию.');
       return;
     }
-    // Источник — текстовый пересказ экрана из валидатора (buildCardValidationText): надёжно
-    // покрывает «Теорию» (snap.blocks). Если проекция пуста (напр. Диагноз без открытого
-    // редактора) — берём компактную form-модель как запас. Затем режем на блоки.
-    let sectionText = buildCardValidationText(project.id, cardId).trim();
+    // Источник по образцу «Теории проекта»: для карточек со «строительными лесами»
+    // (Диагностика/Стратегический выбор/Целевое состояние/Стратегическая карта) собираем блоки
+    // с методологическими пояснениями + данными рабочей формы — текст всегда непуст, как у Теории.
+    // Остальные карточки идут прежним путём: пересказ из валидатора, затем компактная form-модель.
+    let sectionText = buildScaffoldedCompositionText(project.id, cardId).trim();
     if (!sectionText) {
-      const compact = buildCompactSectionModel(project.id, cardId);
-      if (compact) sectionText = compactModelToText(compact).trim();
+      sectionText = buildCardValidationText(project.id, cardId).trim();
+      if (!sectionText) {
+        const compact = buildCompactSectionModel(project.id, cardId);
+        if (compact) sectionText = compactModelToText(compact).trim();
+      }
     }
     const blocks = splitIntoBlocks(sectionText);
     if (!blocks.length) {
