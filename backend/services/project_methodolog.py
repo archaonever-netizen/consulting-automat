@@ -362,6 +362,63 @@ async def review_project(
     }
 
 
+SUGGEST_SYSTEM_PROMPT = (
+    "Ты — методолог-стратег. На основе Диагностики, Стратегического выбора и Целевого состояния "
+    "выдели КЛЮЧЕВЫЕ ДОПУЩЕНИЯ — то, что должно быть истинно, чтобы выбор и цели сработали, но что "
+    "пока не проверено. Сформулируй их как проверяемые гипотезы.\n"
+    "Требования к каждой:\n"
+    "• формулировка вида «если … то … потому что …»;\n"
+    "• фальсифицируема — можно представить факт, который её опровергнет;\n"
+    "• привязана к конкретному результату/цели проекта.\n"
+    "Не повторяй уже существующие гипотезы. Дай 4–7 штук.\n"
+    "Ответ — СТРОГО JSON без пояснений: "
+    '{"hypotheses":[{"name":"коротко","statement":"если…то…потому что…",'
+    '"source":"диагноз|стратегический выбор|целевое состояние","expectedEffect":"на какой результат влияет"}]}'
+)
+
+
+def _sanitize_hypotheses(raw) -> list[dict]:
+    """Оставить только валидные по форме гипотезы (есть формулировка или название)."""
+    items = raw.get("hypotheses") if isinstance(raw, dict) else None
+    out: list[dict] = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        name = str(item.get("name") or "").strip()
+        statement = str(item.get("statement") or "").strip()
+        if not name and not statement:
+            continue
+        out.append({
+            "name": name[:160],
+            "statement": statement[:600],
+            "source": str(item.get("source") or "").strip()[:60],
+            "expectedEffect": str(item.get("expectedEffect") or "").strip()[:200],
+        })
+    return out[:8]
+
+
+async def suggest_hypotheses(
+    context: str,
+    existing: list[str],
+    *,
+    model: str = METHODOLOG_MODEL,
+) -> dict:
+    """Предложить проверяемые гипотезы из контекста проекта. Возврат: {hypotheses[], usage}."""
+    existing_block = "\n".join(f"- {e.strip()}" for e in existing if e and e.strip()) or "(пока нет)"
+    user = (
+        f"КОНТЕКСТ ПРОЕКТА (диагностика, стратегический выбор, целевое состояние):\n"
+        f"{(context or '(пусто)').strip()[:6000]}\n\n"
+        f"УЖЕ ЕСТЬ ГИПОТЕЗЫ (не повторяй их):\n{existing_block}\n\n"
+        "Предложи новые проверяемые гипотезы строго по схеме."
+    )
+    usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+    try:
+        raw, usage = await asyncio.to_thread(_chat_json, model, SUGGEST_SYSTEM_PROMPT, user, max_tokens=1500)
+    except Exception as e:  # noqa: BLE001 — отдаём честный фолбэк, не валим запрос
+        return {"hypotheses": [], "usage": usage, "_error": f"{type(e).__name__}: {str(e)[:160]}"}
+    return {"hypotheses": _sanitize_hypotheses(raw), "usage": usage}
+
+
 def _sanitize_proposals(raw_proposals) -> list[dict]:
     """Оставить только валидные по форме proposals (op из белого списка, есть card_id и human)."""
     out: list[dict] = []

@@ -76,6 +76,13 @@ class ProjectReviewRequest(BaseModel):
     sections: list[ProjectReviewSection] = []
 
 
+class HypothesesSuggestRequest(BaseModel):
+    # Компактный контекст проекта (диагностика + выбор + целевое состояние) из frontend.
+    context: str = ""
+    # Уже существующие гипотезы (формулировки/названия) — чтобы не предлагать дубли.
+    existing: list[str] = []
+
+
 class ProjectCompositionRequest(BaseModel):
     # Машиночитаемая карта проекта из frontend: все карточки, поля и элементы.
     project_model: Optional[dict] = None

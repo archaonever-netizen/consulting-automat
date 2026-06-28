@@ -3,6 +3,9 @@ import Icon from '../Icon';
 import { useCanvasFocus, type CanvasFocusTarget } from './projectCanvasFocus';
 import ProjectDiagnosisCanvas from './ProjectDiagnosisCanvas';
 import ProjectFrameworkSectionCanvas from './ProjectFrameworkSectionCanvas';
+import ProjectHypothesesWorkbench from './ProjectHypothesesWorkbench';
+import HypothesesWorkbenchToggle from './HypothesesWorkbenchToggle';
+import { useHypothesesWorkbenchFlag } from './projectFeatureFlags';
 import ProjectOkrCanvas from './ProjectOkrCanvas';
 import ProjectCompactSectionCanvas from './ProjectCompactSectionCanvas';
 import ProjectStrategicChoiceCanvas from './ProjectStrategicChoiceCanvas';
@@ -45,6 +48,7 @@ function renderCanvasBody(
   projectId: number,
   frameworkCardId: string,
   nonce: number,
+  hypothesesWorkbench: boolean,
   onSelectFrameworkCard?: (cardId: string) => void,
 ): ReactNode {
   const k = `${projectId}:${nonce}`;
@@ -54,6 +58,10 @@ function renderCanvasBody(
   if (frameworkCardId === 'target-state') return <ProjectTargetStateCanvas key={k} projectId={projectId} />;
   if (frameworkCardId === 'whole-project') return <ProjectWholeProjectCanvas key={k} projectId={projectId} onSelectCard={onSelectFrameworkCard} />;
   if (frameworkCardId === 'okr-kpi') return <ProjectOkrCanvas key={k} projectId={projectId} />;
+  // Новый экран реестра гипотез — только при включённом флаге; иначе старая форма ниже.
+  if (frameworkCardId === 'hypotheses' && hypothesesWorkbench) {
+    return <ProjectHypothesesWorkbench key={`hyp-${projectId}:${nonce}`} projectId={projectId} />;
+  }
   if (SECTION_CARD_IDS.includes(frameworkCardId)) {
     return <ProjectFrameworkSectionCanvas key={`${projectId}-${frameworkCardId}:${nonce}`} projectId={projectId} screenId={frameworkCardId} />;
   }
@@ -70,6 +78,7 @@ export default function ProjectCanvas({
 }: ProjectCanvasProps) {
   const cardId = view.frameworkCardId;
   const focusRef = useCanvasFocus<HTMLElement>(focusTarget);
+  const [hypothesesWorkbench, setHypothesesWorkbench] = useHypothesesWorkbenchFlag();
 
   if (cardId && view.mode === 'compact') {
     return (
@@ -80,7 +89,7 @@ export default function ProjectCanvas({
     );
   }
 
-  const body = cardId ? renderCanvasBody(projectId, cardId, reloadNonce, onSelectFrameworkCard) : null;
+  const body = cardId ? renderCanvasBody(projectId, cardId, reloadNonce, hypothesesWorkbench, onSelectFrameworkCard) : null;
 
   if (cardId && body) {
     // Экран «Весь проект» — граф во всю рабочую область (flex-колонка), остальные — обычные формы.
@@ -88,6 +97,9 @@ export default function ProjectCanvas({
     return (
       <section className={`project-canvas project-canvas-work${isGraph ? ' project-canvas-graph' : ''}`} ref={focusRef}>
         {compositionSlot}
+        {cardId === 'hypotheses' && (
+          <HypothesesWorkbenchToggle enabled={hypothesesWorkbench} onToggle={setHypothesesWorkbench} />
+        )}
         {body}
       </section>
     );

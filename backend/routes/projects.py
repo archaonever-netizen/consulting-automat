@@ -10,6 +10,7 @@ from ..routes.auth import get_current_user_dep
 from ..schemas.projects import (
     CardContentUpsert,
     CardValidateRequest,
+    HypothesesSuggestRequest,
     ProjectChatRequest,
     ProjectCompositionRequest,
     ProjectCreate,
@@ -138,6 +139,27 @@ async def review_project(
     }
     await project_cards.save_review(db, project_id, review)
     return review
+
+
+@router.post(
+    "/{project_id}/hypotheses/suggest",
+    dependencies=[Depends(rate_limit("project_hypotheses_suggest", 10))],
+)
+async def suggest_project_hypotheses(
+    project_id: int,
+    data: HypothesesSuggestRequest,
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Предложить проверяемые гипотезы из контекста проекта (платный ИИ-вызов)."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    model = await bots.get_methodolog_model(db)
+    try:
+        result = await project_methodolog.suggest_hypotheses(data.context, data.existing, model=model)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return result
 
 
 @router.post(

@@ -12,7 +12,7 @@ import { getFallbackProjectTheorySnapshot, readProjectTheorySnapshot } from './p
 
 type FieldType = 'text' | 'textarea' | 'select' | 'multiselect' | 'date';
 
-type FieldDef = {
+export type FieldDef = {
   key: string;
   label: string;
   type?: FieldType;
@@ -121,7 +121,7 @@ function useProjectSources(projectId: number) {
   return useMemo(() => readProjectSources(projectId), [projectId]);
 }
 
-function TextField({ field, value, onChange }: { field: FieldDef; value: string; onChange: (value: string) => void }) {
+export function TextField({ field, value, onChange }: { field: FieldDef; value: string; onChange: (value: string) => void }) {
   if (field.type === 'multiselect') {
     const selected = value.split('; ').map(item => item.trim()).filter(Boolean);
     const options = field.options || [];
