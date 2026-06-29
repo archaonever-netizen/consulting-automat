@@ -4,6 +4,7 @@ import { useCanvasFocus, type CanvasFocusTarget } from './projectCanvasFocus';
 import ProjectDiagnosisCanvas from './ProjectDiagnosisCanvas';
 import ProjectFrameworkSectionCanvas from './ProjectFrameworkSectionCanvas';
 import ProjectHypothesesWorkbench from './ProjectHypothesesWorkbench';
+import ProjectChecksWorkbench from './ProjectChecksWorkbench';
 import HypothesesWorkbenchToggle from './HypothesesWorkbenchToggle';
 import { useHypothesesWorkbenchFlag } from './projectFeatureFlags';
 import ProjectOkrCanvas from './ProjectOkrCanvas';
@@ -61,6 +62,10 @@ function renderCanvasBody(
   // Новый экран реестра гипотез — только при включённом флаге; иначе старая форма ниже.
   if (frameworkCardId === 'hypotheses' && hypothesesWorkbench) {
     return <ProjectHypothesesWorkbench key={`hyp-${projectId}:${nonce}`} projectId={projectId} />;
+  }
+  // Новый инструмент «Проверки» — за тем же флагом; иначе старая форма ниже.
+  if (frameworkCardId === 'experiments' && hypothesesWorkbench) {
+    return <ProjectChecksWorkbench key={`chk-${projectId}:${nonce}`} projectId={projectId} />;
   }
   if (SECTION_CARD_IDS.includes(frameworkCardId)) {
     return <ProjectFrameworkSectionCanvas key={`${projectId}-${frameworkCardId}:${nonce}`} projectId={projectId} screenId={frameworkCardId} />;

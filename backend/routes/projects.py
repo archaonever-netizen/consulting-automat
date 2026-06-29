@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -20,6 +20,7 @@ from ..schemas.projects import (
 from ..services import (
     bots,
     card_validator,
+    check_evidence,
     project_cards,
     project_methodolog,
     projects as project_service,
@@ -160,6 +161,85 @@ async def suggest_project_hypotheses(
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc))
     return result
+
+
+# --- Файлы-свидетельства проверок гипотез (инструмент «Проверки») ---------------------
+# Байты файла хранятся в Supabase Storage; метаданные свидетельства — на фронте в поле
+# `evidence` секции `experiments`. Путь scoped под проект/проверку (см. check_evidence).
+
+
+@router.post(
+    "/{project_id}/checks/{check_id}/evidence",
+    dependencies=[Depends(rate_limit("project_check_evidence_upload", 30))],
+)
+async def upload_check_evidence(
+    project_id: int,
+    check_id: str,
+    file: UploadFile = File(...),
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Залить файл-свидетельство проверки, вернуть метаданные для записи в `evidence`."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="Пустой файл")
+    if len(data) > check_evidence.MAX_EVIDENCE_BYTES:
+        raise HTTPException(status_code=413, detail="Файл больше 25 МБ")
+    try:
+        return check_evidence.upload_evidence(
+            project_id, check_id, file.filename or "file", data, file.content_type or "application/octet-stream"
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:  # Supabase Storage не настроен
+        raise HTTPException(status_code=503, detail=str(exc))
+
+
+@router.get("/{project_id}/checks/{check_id}/evidence")
+async def download_check_evidence(
+    project_id: int,
+    check_id: str,
+    path: str = Query(..., description="Путь объекта в Storage, выданный при загрузке"),
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Скачать файл-свидетельство (проксируем из приватного бакета под скоуп проверки)."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        data = check_evidence.download_evidence(project_id, check_id, path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    filename = check_evidence.filename_from_path(path)
+    return StreamingResponse(
+        iter([data]),
+        media_type="application/octet-stream",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.delete("/{project_id}/checks/{check_id}/evidence", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_check_evidence(
+    project_id: int,
+    check_id: str,
+    path: str = Query(..., description="Путь объекта в Storage, выданный при загрузке"),
+    current_user=Depends(get_current_user_dep),
+    db: AsyncSession = Depends(get_db),
+):
+    """Удалить файл-свидетельство из Storage (идемпотентно)."""
+    if not await project_cards.project_exists(db, project_id):
+        raise HTTPException(status_code=404, detail="Project not found")
+    try:
+        check_evidence.delete_evidence(project_id, check_id, path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc))
+    return None
 
 
 @router.post(
