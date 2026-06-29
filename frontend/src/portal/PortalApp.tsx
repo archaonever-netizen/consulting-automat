@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   portalApi, getToken, setToken, clearToken, PortalError,
   type PortalMe, type PortalData, type PortalDocument, type PortalProject,
@@ -88,7 +88,15 @@ export default function PortalApp() {
   const [me, setMe] = useState<PortalMe | null>(null);
   const [data, setData] = useState<PortalData>({});
   const [active, setActive] = useState<string>('');
+  const [activeProjectSectionKey, setActiveProjectSectionKey] = useState('');
   const [loadError, setLoadError] = useState('');
+  const projectNavItems = useMemo(() => buildProjectNavItems(data.project || []), [data.project]);
+  const resolvedProjectSectionKey = projectNavItems.some(item => item.key === activeProjectSectionKey)
+    ? activeProjectSectionKey
+    : projectNavItems[0]?.key || '';
+  const selectedProjectNavItem = active === 'project'
+    ? projectNavItems.find(item => item.key === resolvedProjectSectionKey) || null
+    : null;
 
   const loadAll = useCallback(async () => {
     setPhase('loading');
@@ -134,7 +142,17 @@ export default function PortalApp() {
     clearToken();
     setMe(null);
     setData({});
+    setActiveProjectSectionKey('');
     setPhase('login');
+  }
+
+  function openSection(section: string) {
+    setActive(section);
+  }
+
+  function openProjectSection(key: string) {
+    setActive('project');
+    setActiveProjectSectionKey(key);
   }
 
   if (phase === 'loading') {
@@ -177,18 +195,34 @@ export default function PortalApp() {
       <div className="pl-body">
         <nav className="pl-nav">
           {me.sections.map(s => (
-            <button
-              key={s}
-              className={`pl-nav-item${active === s ? ' active' : ''}`}
-              onClick={() => setActive(s)}
-            >
-              <PlIcon name={s} size={18} />
-              {SECTION_LABEL[s] || s}
-            </button>
+            <div className="pl-nav-entry" key={s}>
+              <button
+                className={`pl-nav-item${active === s ? ' active' : ''}`}
+                onClick={() => openSection(s)}
+              >
+                <PlIcon name={s} size={18} />
+                {SECTION_LABEL[s] || s}
+              </button>
+              {s === 'project' && active === 'project' && projectNavItems.length > 0 && (
+                <div className="pl-nav-sub">
+                  {projectNavItems.map(item => (
+                    <button
+                      key={item.key}
+                      className={`pl-nav-subitem${resolvedProjectSectionKey === item.key ? ' active' : ''}`}
+                      title={`${item.project.name} - ${item.section.title}`}
+                      onClick={() => openProjectSection(item.key)}
+                    >
+                      <span className="pl-nav-sub-title">{item.section.title}</span>
+                      <span className="pl-nav-sub-meta">{item.phase.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </nav>
         <main className="pl-main">
-          <SectionView section={active} data={data} isPreview={me.is_preview} />
+          <SectionView section={active} data={data} isPreview={me.is_preview} selectedProjectNavItem={selectedProjectNavItem} />
         </main>
       </div>
 
@@ -200,7 +234,17 @@ export default function PortalApp() {
   );
 }
 
-function SectionView({ section, data, isPreview }: { section: string; data: PortalData; isPreview: boolean }) {
+function SectionView({
+  section,
+  data,
+  isPreview,
+  selectedProjectNavItem,
+}: {
+  section: string;
+  data: PortalData;
+  isPreview: boolean;
+  selectedProjectNavItem?: ProjectNavItem | null;
+}) {
   const title = SECTION_LABEL[section] || section;
 
   if (section === 'documents') {
@@ -219,6 +263,8 @@ function SectionView({ section, data, isPreview }: { section: string; data: Port
         <p className="pl-sub">Собранная логика и ключевые выводы по проектам вашей компании.</p>
         {projects.length === 0 ? (
           <Empty icon="project" title="Проектов пока нет" text="Здесь появятся проекты по мере их запуска." />
+        ) : selectedProjectNavItem ? (
+          <ProjectSelectedSection item={selectedProjectNavItem} />
         ) : (
           <ProjectSection projects={projects} />
         )}
@@ -250,6 +296,13 @@ interface PhaseGroup {
   sections: PortalProjectSection[];
 }
 
+interface ProjectNavItem {
+  key: string;
+  project: PortalProject;
+  phase: PhaseGroup;
+  section: PortalProjectSection;
+}
+
 // Сгруппировать секции проекта по фазам, сохранив серверный порядок секций.
 function groupSectionsByPhase(sections: PortalProjectSection[]): PhaseGroup[] {
   const byKey = new Map<string, PhaseGroup>();
@@ -271,6 +324,38 @@ function groupSectionsByPhase(sections: PortalProjectSection[]): PhaseGroup[] {
   return order
     .map(key => byKey.get(key)!)
     .sort((a, b) => a.order - b.order);
+}
+
+function buildProjectNavItems(projects: PortalProject[]): ProjectNavItem[] {
+  return projects.flatMap(project => (
+    groupSectionsByPhase(project.sections || []).flatMap(phase => (
+      phase.sections.map(section => ({
+        key: `${project.id}:${section.id}`,
+        project,
+        phase,
+        section,
+      }))
+    ))
+  ));
+}
+
+function ProjectSelectedSection({ item }: { item: ProjectNavItem }) {
+  return (
+    <article className="pl-proj pl-proj-single">
+      <div className="pl-proj-head">
+        <div>
+          <h3>{item.project.name}</h3>
+          {item.project.description && <p>{item.project.description}</p>}
+        </div>
+        <div className="meta">Обновлено: {item.project.updated_at_fmt}</div>
+      </div>
+      <div className="pl-phase-head pl-phase-head-compact">
+        <h4>{item.phase.label}</h4>
+        {item.phase.summary && <p>{item.phase.summary}</p>}
+      </div>
+      <SectionCard section={item.section} />
+    </article>
+  );
 }
 
 function ProjectSection({ projects }: { projects: PortalProject[] }) {

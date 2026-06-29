@@ -194,8 +194,9 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 .pl-body { flex: 1; display: flex; max-width: 1100px; width: 100%; margin: 0 auto; padding: 26px 24px 40px; gap: 26px; }
 
 .pl-nav { width: 232px; flex-shrink: 0; display: flex; flex-direction: column; gap: 3px; }
+.pl-nav-entry { display: grid; gap: 3px; }
 .pl-nav-item {
-  display: flex; align-items: center; gap: 11px;
+  width: 100%; display: flex; align-items: center; gap: 11px;
   text-align: left; padding: 10px 13px; border-radius: var(--p-r-md); border: 1px solid transparent;
   background: transparent; color: var(--p-ink-2); font-size: 14px; font-weight: 600;
   transition: background .14s, color .14s, border-color .14s;
@@ -205,6 +206,21 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 .pl-nav-item:hover svg { color: var(--p-ink-2); }
 .pl-nav-item.active { background: var(--p-accent-weak); border-color: transparent; color: var(--p-accent-ink); font-weight: 700; }
 .pl-nav-item.active svg { color: var(--p-accent); }
+.pl-nav-sub {
+  display: grid; gap: 2px; margin: 1px 0 6px 24px; padding-left: 10px;
+  border-left: 1px solid var(--p-border-2);
+}
+.pl-nav-subitem {
+  width: 100%; display: grid; gap: 1px; text-align: left;
+  padding: 8px 10px; border: 1px solid transparent; border-radius: var(--p-r-sm);
+  background: transparent; color: var(--p-ink-2); font-size: 13px; font-weight: 650;
+  transition: background .14s, color .14s, border-color .14s;
+}
+.pl-nav-subitem:hover { background: var(--p-surface-2); color: var(--p-ink); }
+.pl-nav-subitem.active { background: #fff; border-color: var(--p-accent-weak-2); color: var(--p-accent-ink); box-shadow: var(--p-sh-xs); }
+.pl-nav-sub-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pl-nav-sub-meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--p-ink-3); font-size: 11px; font-weight: 600; }
+.pl-nav-subitem.active .pl-nav-sub-meta { color: var(--p-accent-ink); opacity: .72; }
 
 .pl-main { flex: 1; min-width: 0; }
 .pl-card {
@@ -259,6 +275,7 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 /* ── Проект ── */
 .pl-project-list { display: grid; gap: 12px; }
 .pl-proj { padding: 18px; border: 1px solid var(--p-border); border-radius: var(--p-r-md); margin-bottom: 12px; background: var(--p-surface); transition: border-color .15s, box-shadow .15s; }
+.pl-proj-single { margin-bottom: 0; }
 .pl-proj:last-child { margin-bottom: 0; }
 .pl-proj:hover { border-color: var(--p-border-2); box-shadow: var(--p-sh-xs); }
 .pl-proj-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
@@ -276,6 +293,7 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 /* ── Фазы жизненного цикла проекта (клиентский нарратив) ── */
 .pl-phases { display: grid; gap: 28px; }
 .pl-phase-head { margin-bottom: 12px; }
+.pl-phase-head-compact { margin-bottom: 14px; }
 .pl-phase-head h4 {
   margin: 0; font-family: var(--p-display); font-size: 18px; font-weight: 800;
   letter-spacing: -.02em; color: var(--p-ink);
@@ -431,8 +449,10 @@ h1, h2, h3 { font-family: var(--p-display); letter-spacing: -.03em; }
 /* ── Адаптив: на узких экранах навигация уходит наверх ── */
 @media (max-width: 760px) {
   .pl-body { flex-direction: column; padding: 18px 16px 32px; gap: 16px; }
-  .pl-nav { width: 100%; flex-direction: row; overflow-x: auto; gap: 6px; padding-bottom: 2px; }
+  .pl-nav { width: 100%; flex-direction: column; overflow-x: visible; gap: 6px; padding-bottom: 2px; }
   .pl-nav-item { white-space: nowrap; }
+  .pl-nav-sub { margin: 2px 0 4px; padding-left: 0; border-left: none; display: flex; gap: 6px; overflow-x: auto; }
+  .pl-nav-subitem { min-width: 168px; max-width: 220px; }
   .pl-topbar { padding: 12px 16px; }
   .pl-topbar-right { gap: 10px; }
   .pl-user span { display: none; }

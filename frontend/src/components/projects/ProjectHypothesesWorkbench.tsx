@@ -122,6 +122,16 @@ export default function ProjectHypothesesWorkbench({ projectId }: { projectId: n
     return () => clearTimeout(timer);
   }, [config, projectId, records, sources]);
 
+  // Esc закрывает слайдер карточки гипотезы.
+  useEffect(() => {
+    if (selectedId == null) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setSelectedId(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId]);
+
   if (!config) {
     return (
       <div className="project-theory">
@@ -130,7 +140,8 @@ export default function ProjectHypothesesWorkbench({ projectId }: { projectId: n
     );
   }
 
-  const selected = records.find(record => record.id === selectedId) ?? records[0] ?? null;
+  // Карточка открывается слайдером только по явному клику — без авто-выбора первой записи.
+  const selected = selectedId == null ? null : records.find(record => record.id === selectedId) ?? null;
   const nextId = () => records.reduce((max, record) => Math.max(max, record.id), 0) + 1;
 
   const addBlank = () => {
@@ -180,6 +191,7 @@ export default function ProjectHypothesesWorkbench({ projectId }: { projectId: n
 
   const switchView = (next: 'list' | 'map' | 'pipeline') => {
     setBlocked(null);
+    setSelectedId(null);
     setView(next);
   };
 
@@ -248,7 +260,7 @@ export default function ProjectHypothesesWorkbench({ projectId }: { projectId: n
           <div className="hyp-view-toggle" role="tablist">
             <button type="button" role="tab" className={view === 'list' ? 'is-active' : ''} onClick={() => switchView('list')}>Реестр</button>
             <button type="button" role="tab" className={view === 'map' ? 'is-active' : ''} onClick={() => switchView('map')}>Карта</button>
-            <button type="button" role="tab" className={view === 'pipeline' ? 'is-active' : ''} onClick={() => switchView('pipeline')}>Конвейер</button>
+            <button type="button" role="tab" className={view === 'pipeline' ? 'is-active' : ''} onClick={() => switchView('pipeline')}>Этапы</button>
           </div>
           <button className="btn btn-soft btn-sm" type="button" onClick={addFromChoice} disabled={!candidates.length}>
             <Icon name="sparkle" size={14} /> Из допущений выбора{candidates.length ? ` (${candidates.length})` : ''}
@@ -315,8 +327,7 @@ export default function ProjectHypothesesWorkbench({ projectId }: { projectId: n
           />
         </>
       ) : (
-      <div className="hyp-workbench-body">
-        <aside className="hyp-list">
+        <div className="hyp-list hyp-registry">
           {records.length === 0 && <p className="hyp-list-empty">Пока нет гипотез. Добавьте первую или подтяните из допущений выбора.</p>}
           {records.map(record => {
             const quality = evaluateHypothesisQuality(record.values);
@@ -325,97 +336,112 @@ export default function ProjectHypothesesWorkbench({ projectId }: { projectId: n
                 key={record.id}
                 type="button"
                 className={`hyp-list-item${selected?.id === record.id ? ' is-active' : ''}`}
+                title={QUALITY_LABEL[quality.level]}
                 onClick={() => setSelectedId(record.id)}
               >
                 <span className={`hyp-dot ${quality.level}`} aria-hidden />
                 <span className="hyp-list-item-label">{recordLabel(record, config)}</span>
+                <span className="hyp-list-status">{stageLabel(record)}</span>
               </button>
             );
           })}
-        </aside>
+        </div>
+      )}
 
-        <section className="hyp-detail">
-          {!selected ? (
-            <div className="hyp-detail-empty">Выберите гипотезу слева или создайте новую.</div>
-          ) : (
-            <DraftCard
-              key={selected.id}
-              card={selected}
-              title={recordLabel(selected, config)}
-              onApply={applyRecord}
-            >
-              {(draft, patch) => {
-                const setValue = (key: string, value: string) => patch({ values: { ...draft.values, [key]: value } });
-                const quality = evaluateHypothesisQuality(draft.values);
-                return (
-                  <>
-                    <div className={`hyp-quality ${quality.level}`}>
-                      <span className={`hyp-dot ${quality.level}`} aria-hidden />
-                      <strong>{QUALITY_LABEL[quality.level]}</strong>
-                      {quality.missing.length > 0 && (
-                        <ul className="hyp-quality-missing">
-                          {quality.missing.map(item => <li key={item}>{item}</li>)}
-                        </ul>
-                      )}
-                      <span className="hyp-stage-badge">Этап: {stageLabel(draft)}</span>
-                    </div>
-
-                    <label className="project-theory-field">
-                      <span>Название гипотезы</span>
-                      <input
-                        className="form-input"
-                        placeholder="Коротко, своими словами"
-                        value={draft.values[NAME_KEY] || ''}
-                        onChange={event => setValue(NAME_KEY, event.target.value)}
-                      />
-                    </label>
-
-                    {FIELD_GROUPS.map(group => {
-                      const fields = config.fields.filter(field => group.keys.includes(field.key));
-                      if (!fields.length) return null;
-                      return (
-                        <div className="hyp-group" key={group.title}>
-                          <h4 className="hyp-group-title">{group.title}</h4>
-                          <div className="project-theory-grid two">
-                            {fields.map(field => (
-                              <TextField
-                                key={field.key}
-                                field={field}
-                                value={draft.values[field.key] || ''}
-                                onChange={value => setValue(field.key, value)}
-                              />
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
-
-                    <div className="hyp-group">
-                      <h4 className="hyp-group-title">Приоритет — для карты</h4>
-                      <div className="project-theory-grid two">
-                        {PRIORITY_FIELDS.map(field => (
-                          <TextField
-                            key={field.key}
-                            field={field}
-                            value={draft.values[field.key] || ''}
-                            onChange={value => setValue(field.key, value)}
-                          />
-                        ))}
+      {selected && (
+        <div className="hyp-drawer-overlay" onClick={() => setSelectedId(null)}>
+          <aside
+            className="hyp-drawer"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Карточка гипотезы"
+            onClick={event => event.stopPropagation()}
+          >
+            <div className="hyp-drawer-head">
+              <h3>Карточка гипотезы</h3>
+              <button type="button" className="btn btn-ghost btn-sm" aria-label="Закрыть" onClick={() => setSelectedId(null)}>
+                <Icon name="close" size={16} />
+              </button>
+            </div>
+            <div className="hyp-drawer-body">
+              <DraftCard
+                key={selected.id}
+                card={selected}
+                title={recordLabel(selected, config)}
+                onApply={applyRecord}
+              >
+                {(draft, patch) => {
+                  const setValue = (key: string, value: string) => patch({ values: { ...draft.values, [key]: value } });
+                  const quality = evaluateHypothesisQuality(draft.values);
+                  return (
+                    <>
+                      <div className={`hyp-quality ${quality.level}`}>
+                        <span className={`hyp-dot ${quality.level}`} aria-hidden />
+                        <strong>{QUALITY_LABEL[quality.level]}</strong>
+                        {quality.missing.length > 0 && (
+                          <ul className="hyp-quality-missing">
+                            {quality.missing.map(item => <li key={item}>{item}</li>)}
+                          </ul>
+                        )}
+                        <span className="hyp-stage-badge">Этап: {stageLabel(draft)}</span>
                       </div>
-                    </div>
 
-                    <div className="hyp-detail-foot">
-                      <button className="btn btn-ghost btn-sm" type="button" onClick={() => removeRecord(selected.id)}>
-                        Удалить гипотезу
-                      </button>
-                    </div>
-                  </>
-                );
-              }}
-            </DraftCard>
-          )}
-        </section>
-      </div>
+                      <label className="project-theory-field">
+                        <span>Название гипотезы</span>
+                        <input
+                          className="form-input"
+                          placeholder="Коротко, своими словами"
+                          value={draft.values[NAME_KEY] || ''}
+                          onChange={event => setValue(NAME_KEY, event.target.value)}
+                        />
+                      </label>
+
+                      {FIELD_GROUPS.map(group => {
+                        const fields = config.fields.filter(field => group.keys.includes(field.key));
+                        if (!fields.length) return null;
+                        return (
+                          <div className="hyp-group" key={group.title}>
+                            <h4 className="hyp-group-title">{group.title}</h4>
+                            <div className="project-theory-grid two">
+                              {fields.map(field => (
+                                <TextField
+                                  key={field.key}
+                                  field={field}
+                                  value={draft.values[field.key] || ''}
+                                  onChange={value => setValue(field.key, value)}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      <div className="hyp-group">
+                        <h4 className="hyp-group-title">Приоритет — для карты</h4>
+                        <div className="project-theory-grid two">
+                          {PRIORITY_FIELDS.map(field => (
+                            <TextField
+                              key={field.key}
+                              field={field}
+                              value={draft.values[field.key] || ''}
+                              onChange={value => setValue(field.key, value)}
+                            />
+                          ))}
+                        </div>
+                      </div>
+
+                      <div className="hyp-detail-foot">
+                        <button className="btn btn-ghost btn-sm" type="button" onClick={() => removeRecord(selected.id)}>
+                          Удалить гипотезу
+                        </button>
+                      </div>
+                    </>
+                  );
+                }}
+              </DraftCard>
+            </div>
+          </aside>
+        </div>
       )}
     </div>
   );
