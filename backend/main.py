@@ -265,7 +265,7 @@ async def lifespan(app: FastAPI):
                 "UPDATE ingest_jobs SET status='failed', "
                 "error=COALESCE(NULLIF(error, ''), '') || "
                 "'[reaper] сервер перезапущен — задача прервана (возможно, не хватило памяти на extract)', "
-                "updated_at=now() WHERE status IN ('running', 'queued')"
+                "updated_at=CURRENT_TIMESTAMP WHERE status IN ('running', 'queued')"
             ))
             await db.commit()
             if res.rowcount:

@@ -62,7 +62,10 @@ async def portal_login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Неверный email или пароль",
         )
-    return TokenResponse(access_token=portal_auth.create_portal_token(user))
+    return TokenResponse(
+        access_token=portal_auth.create_portal_token(user),
+        session_type="portal",
+    )
 
 
 @router.get("/me")

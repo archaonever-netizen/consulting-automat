@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 from ..core.database import get_db
 from ..models import User
 from ..schemas.auth import LoginRequest, TokenResponse, UserRead
+from ..services import portal_auth
 from ..services.auth import authenticate_user, create_access_token, get_current_user
 
 router = APIRouter()
@@ -22,13 +23,22 @@ async def get_current_user_dep(
 @router.post("/auth/login", response_model=TokenResponse)
 async def login(data: LoginRequest, db: AsyncSession = Depends(get_db)):
     user = await authenticate_user(db, data.email, data.password)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Неверный email или пароль",
+    if user:
+        token = create_access_token({"sub": str(user.id)})
+        return TokenResponse(access_token=token, session_type="app")
+
+    portal_user = await portal_auth.authenticate_portal_user(db, data.email, data.password)
+    if portal_user:
+        return TokenResponse(
+            access_token=portal_auth.create_portal_token(portal_user),
+            session_type="portal",
+            redirect_to="/portal.html",
         )
-    token = create_access_token({"sub": str(user.id)})
-    return TokenResponse(access_token=token)
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Неверный email или пароль",
+    )
 
 
 @router.get("/auth/me", response_model=UserRead)

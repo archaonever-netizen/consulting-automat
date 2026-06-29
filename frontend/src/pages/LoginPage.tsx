@@ -12,6 +12,13 @@ interface ApiErrorResponse {
   detail?: string | ApiValidationDetail[];
 }
 
+interface LoginResponse {
+  access_token: string;
+  token_type?: string;
+  session_type?: 'app' | 'portal';
+  redirect_to?: string | null;
+}
+
 function getLoginErrorMessage(err: unknown): string {
   const fallback = 'Ошибка при входе';
   const response = (err as { response?: { data?: ApiErrorResponse } }).response;
@@ -42,7 +49,15 @@ export default function LoginPage() {
 
     try {
       const response = await api.post('/api/auth/login', { email: email.trim(), password });
-      localStorage.setItem('access_token', response.data.access_token);
+      const data = response.data as LoginResponse;
+      if (data.session_type === 'portal') {
+        localStorage.removeItem('access_token');
+        localStorage.setItem('portal_token', data.access_token);
+        window.location.assign(data.redirect_to || '/portal.html');
+        return;
+      }
+      localStorage.removeItem('portal_token');
+      localStorage.setItem('access_token', data.access_token);
       navigate('/');
     } catch (err: unknown) {
       setError(getLoginErrorMessage(err));

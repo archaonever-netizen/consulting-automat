@@ -87,6 +87,59 @@
 
 ---
 
+## Клиентский вход через общий экран логина
+
+### Контекст
+
+- Репозиторий: `D:\counsultin-automat-more\consulting-automat`
+- Ветка: `integrate-lab`
+- Дата: 2026-06-29
+- Цель: сделать так, чтобы email и пароль сотрудника клиента, созданного в карточке клиента во вкладке организационной структуры, принимались на обычном экране `/login` и открывали клиентский портал.
+
+### Что реализовано
+
+- Общий endpoint `POST /api/auth/login` теперь различает два типа входа:
+  - внутренний пользователь приложения (`User`) получает обычную `app`-сессию;
+  - сотрудник клиента (`ClientUser`) получает `portal`-сессию и redirect на `/portal.html`.
+- Ответ авторизации расширен полями `session_type` и `redirect_to` без поломки существующего `access_token`.
+- Основная страница логина при `session_type="portal"`:
+  - очищает внутренний `access_token`;
+  - сохраняет токен портала в `portal_token`;
+  - переводит пользователя на `/portal.html`.
+- Прямой endpoint портала `POST /api/portal/auth/login` также возвращает `session_type="portal"` для единообразия.
+- Startup reaper для `ingest_jobs` заменен с `updated_at=now()` на `updated_at=CURRENT_TIMESTAMP`, чтобы выражение работало и в Postgres/Supabase, и в SQLite lab-среде.
+- Добавлены backend-тесты для общего логина:
+  - внутренний пользователь остается в `app`-сессии;
+  - клиентский пользователь входит через общий логин и получает portal-токен;
+  - неверные учетные данные возвращают 401.
+- `frontend/dist` пересобран для Amvera-деплоя.
+
+### Измененные файлы
+
+- `backend/routes/auth.py` - общий login endpoint теперь fallback'ом проверяет `ClientUser`.
+- `backend/routes/portal.py` - portal login возвращает `session_type="portal"`.
+- `backend/schemas/auth.py` - `TokenResponse` расширен `session_type` и `redirect_to`.
+- `backend/main.py` - startup timestamp выражение сделано совместимым с SQLite/Postgres.
+- `backend/tests/test_auth_login.py` - новые тесты auth-flow.
+- `frontend/src/pages/LoginPage.tsx` - обработка portal-сессии и redirect на `/portal.html`.
+- `frontend/dist/index.html`, `frontend/dist/assets/*` - обновленные build-артефакты.
+- `docs/TRANSFER_LOG.md` - добавлена эта запись.
+
+### Проверки
+
+- `.\.venv\Scripts\python.exe -m pytest backend\tests\test_auth_login.py backend\tests\test_projects_service.py` - успешно, 7 тестов пройдено.
+- `npm.cmd run build` в `frontend` - успешно.
+- `rg -n "localhost:8000|127\.0\.0\.1:8010|localhost:8010" frontend\dist\assets frontend\dist\index.html frontend\dist\portal.html` - совпадений нет.
+- Контрольный запуск backend с `DATABASE_URL=sqlite+aiosqlite:///./instance/local_lab.db` показал успешный startup после замены `now()` на `CURRENT_TIMESTAMP`.
+
+### Риски и следующие шаги
+
+- Схема БД не менялась, миграция Supabase/Postgres не требуется.
+- В production нужно убедиться, что у клиентских пользователей в `client_users.sections` выданы нужные разделы портала, иначе вход пройдет, но портал покажет только доступные разделы.
+- Штатный `scripts\start-local-lab.ps1` на этой машине падает при переустановке `asyncpg` под Python 3.14 без Microsoft C++ Build Tools; это отдельная проблема окружения, не связанная с auth-flow.
+
+---
+
 ## Компазированные разделы Workspace в клиентском портале
 
 ### Контекст

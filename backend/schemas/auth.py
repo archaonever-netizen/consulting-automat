@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import BaseModel
 
 
@@ -11,6 +13,8 @@ class LoginRequest(BaseModel):
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
+    session_type: Literal["app", "portal"] = "app"
+    redirect_to: str | None = None
 
 
 class UserRead(BaseModel):
