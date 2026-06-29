@@ -249,15 +249,6 @@ a:hover { color: var(--accent-hover); }
   text-transform: uppercase;
 }
 
-.login-copy h1 {
-  margin: 0;
-  max-width: 8ch;
-  font-family: var(--font-display);
-  font-size: 48px;
-  font-weight: 800;
-  line-height: 1;
-}
-
 .login-copy > p:last-child {
   max-width: 360px;
   margin: 18px 0 0;
@@ -279,17 +270,6 @@ a:hover { color: var(--accent-hover); }
 
 .login-header {
   margin-bottom: 24px;
-}
-
-.login-form-mark {
-  display: block;
-  width: 96px;
-  margin-bottom: 18px;
-}
-
-.login-form-mark svg {
-  width: 100%;
-  height: auto;
 }
 
 .login-header h2 {
@@ -356,11 +336,6 @@ a:hover { color: var(--accent-hover); }
   .login-wordmark {
     width: 126px;
     margin-bottom: 18px;
-  }
-
-  .login-copy h1 {
-    max-width: 12ch;
-    font-size: 34px;
   }
 
   .login-copy > p:last-child {

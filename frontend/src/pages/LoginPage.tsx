@@ -71,14 +71,12 @@ export default function LoginPage() {
       <div className="login-shell">
         <div className="login-copy">
           <ShefWordmark className="login-wordmark" />
-          <p className="login-kicker">ИИ-консалтинг</p>
-          <h1>ШЕФ Консалтинг</h1>
+          <p className="login-kicker">Бизнес консалтинг</p>
           <p>Единое рабочее пространство команды.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-container" noValidate>
           <div className="login-header">
-            <span className="login-form-mark"><ShefWordmark /></span>
             <h2>Вход в приложение</h2>
             <p>Используйте корпоративный email и пароль.</p>
           </div>
