@@ -27,6 +27,7 @@ const NAV: NavItem[] = [
   { to: '/secretary', label: 'Секретарь', icon: 'send' },
   { to: '/clients', label: 'Клиенты', icon: 'users' },
   { to: '/leads', label: 'Заявки', icon: 'feedback' },
+  { to: '/landing', label: 'Лендинг', icon: 'edit' },
   { to: '/projects', label: 'Проекты', icon: 'template' },
   { to: '/goals', label: 'Цели', icon: 'trendUp' },
   { to: '/orchestration', label: 'Сеть агентов', icon: 'sparkle' },

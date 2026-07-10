@@ -1188,3 +1188,21 @@ class Lead(Base):
     ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
     user_agent: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class LandingContent(Base):
+    """Контент публичного лендинга — singleton (одна строка, id=1).
+
+    Весь редактируемый текст лендинга хранится единым JSON-документом. Форму
+    документа задаёт фронтенд (frontend/src/landing/content.ts), бэкенд хранит
+    его как есть и про структуру не знает. Правится из приложения (раздел
+    «Лендинг», только сотрудники), отдаётся публично самому лендингу
+    (GET /api/landing/content). Таблица создаётся на старте через create_all.
+    """
+    __tablename__ = 'landing_content'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

@@ -29,6 +29,7 @@ from .routes import (  # noqa: E402
     company,
     goals,
     knowledge,
+    landing,
     leads,
     portal,
     portal_users,
@@ -337,6 +338,7 @@ async def health():
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
 app.include_router(leads.router, prefix="/api/leads", tags=["leads"])
+app.include_router(landing.router, prefix="/api/landing", tags=["landing"])
 app.include_router(portal_users.router, prefix="/api/clients", tags=["portal-users"])
 app.include_router(portal.router, prefix="/api/portal", tags=["portal"])
 app.include_router(briefs.router, prefix="/api/briefs", tags=["briefs"])
