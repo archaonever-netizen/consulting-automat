@@ -10,12 +10,14 @@ export default defineConfig({
   plugins: [react()],
   build: {
     rollupOptions: {
-      // Два независимых приложения: основное (index.html) и клиентский портал
-      // (portal.html). Портал — отдельный бандл, не делит код с основным SPA,
-      // чтобы его можно было вынести на отдельный сервер (Этап 3).
+      // Три независимых входа: основное приложение (index.html), клиентский
+      // портал (portal.html) и публичный продающий лендинг (landing.html).
+      // Портал и лендинг — отдельные бандлы, не делят код с основным SPA;
+      // лендинг отдаётся бэкендом на корне домена (см. backend serve_spa).
       input: {
         main: entry('index.html'),
         portal: entry('portal.html'),
+        landing: entry('landing.html'),
       },
       output: {
         // Стабильный vendor-чанк: реже меняется → дольше живёт в кэше браузера

@@ -29,6 +29,7 @@ from .routes import (  # noqa: E402
     company,
     goals,
     knowledge,
+    leads,
     portal,
     portal_users,
     projects,
@@ -335,6 +336,7 @@ async def health():
 # Register routers
 app.include_router(auth.router, prefix="/api", tags=["auth"])
 app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
+app.include_router(leads.router, prefix="/api/leads", tags=["leads"])
 app.include_router(portal_users.router, prefix="/api/clients", tags=["portal-users"])
 app.include_router(portal.router, prefix="/api/portal", tags=["portal"])
 app.include_router(briefs.router, prefix="/api/briefs", tags=["briefs"])
@@ -368,9 +370,24 @@ if os.path.isdir(_DIST):
         if (full_path == "portal" or full_path.startswith("portal/")) and os.path.isfile(portal_index):
             return FileResponse(portal_index)
         # Защита от path traversal: нормализуем путь и отдаём файл только если
-        # он реально лежит внутри dist; всё остальное (вкл. /../...) — SPA fallback.
+        # он реально лежит внутри dist; всё остальное (вкл. /../...) — fallback ниже.
         candidate = os.path.normpath(os.path.join(_DIST, full_path))
         if full_path and candidate.startswith(_DIST + os.sep) and os.path.isfile(candidate):
             return FileResponse(candidate)
-        # SPA fallback: любой неизвестный путь → index.html (клиентский роутинг)
+        # «Чистые» URL статических страниц: /privacy → privacy.html и т.п.
+        # (после проверки точного файла выше, чтобы /foo.html обслуживался как есть).
+        html_candidate = os.path.normpath(os.path.join(_DIST, full_path + ".html"))
+        if full_path and html_candidate.startswith(_DIST + os.sep) and os.path.isfile(html_candidate):
+            return FileResponse(html_candidate)
+        # Основное приложение (SPA) живёт под /app: путь /app и /app/* отдаём в
+        # index.html, чтобы клиентский роутер (BrowserRouter basename="/app")
+        # разобрал маршрут сам.
+        if full_path == "app" or full_path.startswith("app/"):
+            return FileResponse(os.path.join(_DIST, "index.html"))
+        # Корень и всё прочее — продающий лендинг (статичный landing.html из
+        # frontend/public). Если его ещё нет в сборке — деградируем в index.html,
+        # чтобы сайт не падал в 404 до пересборки dist.
+        landing = os.path.join(_DIST, "landing.html")
+        if os.path.isfile(landing):
+            return FileResponse(landing)
         return FileResponse(os.path.join(_DIST, "index.html"))

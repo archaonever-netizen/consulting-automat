@@ -13,6 +13,7 @@ import HomePage from './pages/HomePage';
 // HomePage — это первые экраны после открытия приложения.
 const ClientsPage = lazy(() => import('./pages/ClientsPage'));
 const ClientDetailPage = lazy(() => import('./pages/ClientDetailPage'));
+const LeadsPage = lazy(() => import('./pages/LeadsPage'));
 const ProjectsPage = lazy(() => import('./pages/ProjectsPage'));
 const ProjectDetailPage = lazy(() => import('./pages/ProjectDetailPage'));
 const BriefFormPage = lazy(() => import('./pages/BriefFormPage'));
@@ -39,7 +40,10 @@ function PrivateRoute({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
-    <BrowserRouter>
+    {/* Приложение смонтировано под /app — корень домена занят продающим
+        лендингом (frontend/public/landing.html). basename делает все маршруты
+        и navigate(...) относительными к /app автоматически. */}
+    <BrowserRouter basename="/app">
       <Splash />
       <Routes>
         <Route path="/login" element={<LoginPage />} />
@@ -54,6 +58,7 @@ export default function App() {
           <Route index element={<HomePage />} />
           <Route path="clients" element={<ClientsPage />} />
           <Route path="clients/:clientId" element={<ClientDetailPage />} />
+          <Route path="leads" element={<LeadsPage />} />
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:projectId" element={<ProjectDetailPage />} />
           <Route path="briefs/:briefId" element={<BriefFormPage />} />

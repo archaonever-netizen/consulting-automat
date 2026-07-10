@@ -24,6 +24,7 @@ const INVALIDATION_RULES: Array<[RegExp, string[]]> = [
   [/^\/api\/clients\/\d+\/portal-users/, ['portal-users']],
   [/^\/api\/clients\/\d+\/documents/, ['client-documents']],
   [/^\/api\/clients/, ['clients', 'home']],
+  [/^\/api\/leads/, ['leads']],
   [/^\/api\/projects/, ['projects', 'clients', 'home']],
   [/^\/api\/briefs/, ['clients', 'home']],
   [/^\/api\/company/, ['company']],
@@ -53,7 +54,9 @@ api.interceptors.response.use(
     const isLoginRequest = (error.config?.url || '').includes('/api/auth/login');
     if (error.response?.status === 401 && !isLoginRequest) {
       localStorage.removeItem('access_token');
-      window.location.href = '/login';
+      // Жёсткий редирект вне react-router: приложение под /app, поэтому путь
+      // абсолютный с префиксом (basename сюда не применяется).
+      window.location.href = '/app/login';
     }
     return Promise.reject(error);
   }

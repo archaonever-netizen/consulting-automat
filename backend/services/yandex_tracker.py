@@ -104,7 +104,9 @@ def profile_redirect_url(*, connected: bool, message: str | None = None) -> str:
     params = {"yandex_tracker": "connected" if connected else "error"}
     if message:
         params["message"] = message
-    return f"{settings.frontend_url.rstrip('/')}/profile?{urlencode(params)}"
+    # Приложение живёт под /app (на корне — продающий лендинг), поэтому профиль
+    # после OAuth-колбэка трекера — /app/profile, иначе попадём на лендинг.
+    return f"{settings.frontend_url.rstrip('/')}/app/profile?{urlencode(params)}"
 
 
 async def _request_oauth_token(data: dict[str, str]) -> dict:

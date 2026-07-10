@@ -1160,3 +1160,31 @@ class EditLock(Base):
         if not self.password_hash:
             return False
         return check_password_hash(self.password_hash, raw)
+
+
+class Lead(Base):
+    """Заявка с публичного лендинга (форма «Оставить заявку на разбор»).
+
+    Приходит от анонимного посетителя chief-bc.ru: имя + контакт + короткое
+    описание ситуации. Наша команда разбирает заявки в разделе «Заявки».
+    Вместе с заявкой фиксируется согласие на обработку ПДн (152-ФЗ): факт,
+    время и версия политики, с которой согласился человек. Поля ip/user_agent —
+    для анти-спама и разбора инцидентов, не показываются клиенту.
+    """
+    __tablename__ = 'leads'
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    contact: Mapped[str] = mapped_column(String(255), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # new | in_progress | done — обрабатывается нашей командой.
+    status: Mapped[str] = mapped_column(String(20), default='new', server_default='new', nullable=False)
+    # Согласие на обработку персональных данных (152-ФЗ).
+    consent: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    consent_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    policy_version: Mapped[Optional[str]] = mapped_column(String(40), nullable=True)
+    # Аналитика/анти-спам.
+    source: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    ip: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String(512), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
