@@ -172,6 +172,30 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           color: var(--text-secondary);
         }
         .lp-plan-item:last-child .lp-plan-text { padding-bottom: 0; }
+
+        /* «Как это работает»: 4 этапа строго в один ряд. Неделя, заголовок и
+           план — три общих строки grid'а; карточки берут их через subgrid,
+           поэтому первая точка каждого этапа начинается на одной линии
+           независимо от длины заголовка (заголовки выравниваются по высоте
+           самого длинного). Без subgrid карточка деградирует в обычный
+           grid-столбец — плана это не ломает, только не выравнивает. */
+        .lp-how-grid {
+          display: grid;
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 44px 28px;
+        }
+        .lp-how-card {
+          display: grid;
+          grid-template-rows: subgrid;
+          grid-row: span 3;
+          row-gap: 12px;
+        }
+        @media (max-width: 900px) {
+          .lp-how-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+          .lp-how-grid { grid-template-columns: 1fr; }
+        }
       `}</style>
 
       {/* ===== Sticky bar ===== */}
@@ -330,7 +354,7 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
             <span className="eyebrow">{c.how.eyebrow}</span>
             <h2 style={h2Style}>{c.how.title}</h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '40px 32px' }}>
+          <div className="lp-how-grid">
             {c.how.steps.map((step, i) => {
               // Пункты этапа. Fallback на легаси-абзац text (старые сохранения из
               // БД могут не иметь points), чтобы рендер не падал.
@@ -341,7 +365,7 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
                   ? [step.text]
                   : [];
               return (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div key={i} className="lp-how-card">
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, color: 'var(--accent-ink)', letterSpacing: '-.01em' }}>
                     {step.week}
                   </span>
