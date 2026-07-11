@@ -64,12 +64,66 @@ export interface PortalDocument {
   created_at_fmt: string;
 }
 
+// ── Этапы проекта ────────────────────────────────────────────────────────────
+export interface PortalStage {
+  title: string;
+  status: 'done' | 'active' | 'upcoming';
+  period: string;
+  summary: string;
+}
+export interface PortalStages {
+  current: number;
+  items: PortalStage[];
+}
+
+// ── Статус проекта ───────────────────────────────────────────────────────────
+export interface PortalStatusMetric {
+  label: string;
+  value: string;
+  delta: string;
+  dir: 'up' | 'down' | 'flat';
+  positive: boolean;
+}
+export interface PortalStatus {
+  headline: string;
+  health: string;
+  health_label: string;
+  progress: number;
+  summary: string;
+  metrics: PortalStatusMetric[];
+  next_step: { title: string; due: string } | null;
+  focus: string[];
+}
+
+// ── События ──────────────────────────────────────────────────────────────────
+export interface PortalEvent {
+  date: string;
+  type: 'milestone' | 'meeting' | 'update' | 'document';
+  title: string;
+  text: string;
+}
+export interface PortalEvents {
+  items: PortalEvent[];
+}
+
+// ── Информация ───────────────────────────────────────────────────────────────
+export interface PortalInfoMember {
+  name: string;
+  role: string;
+  contact: string;
+}
+export interface PortalInfo {
+  team: PortalInfoMember[];
+  facts: PortalProjectField[];
+  faq: { q: string; a: string }[];
+}
+
 export interface PortalData {
   project?: PortalProject[];
-  stages?: unknown[];
-  status?: unknown;
-  events?: unknown[];
-  info?: unknown;
+  stages?: PortalStages | null;
+  status?: PortalStatus | null;
+  events?: PortalEvents | null;
+  info?: PortalInfo | null;
   documents?: PortalDocument[];
 }
 

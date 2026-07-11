@@ -3,6 +3,7 @@ import {
   portalApi, getToken, setToken, clearToken, PortalError,
   type PortalMe, type PortalData, type PortalDocument, type PortalProject,
   type PortalProjectField, type PortalProjectSection,
+  type PortalStages, type PortalStatus, type PortalEvents, type PortalInfo,
 } from './api';
 
 const SECTION_LABEL: Record<string, string> = {
@@ -31,6 +32,15 @@ const ICON_PATHS: Record<string, string> = {
   request: '<path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4 20-7Z"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
+  arrowUp: '<path d="M12 19V5"/><path d="m5 12 7-7 7 7"/>',
+  arrowDown: '<path d="M12 5v14"/><path d="m19 12-7 7-7-7"/>',
+  flag: '<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V4s-1 1-4 1-5-2-8-2-4 1-4 1Z"/><path d="M4 22v-7"/>',
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2Z"/>',
+  spark: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8"/>',
+  arrowRight: '<path d="M5 12h14"/><path d="m12 5 7 7-7 7"/>',
+  mail: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/>',
+  target: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/>',
+  help: '<circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3"/><path d="M12 17h.01"/>',
 };
 
 function PlIcon({ name, size = 18 }: { name: string; size?: number }) {
@@ -106,7 +116,12 @@ export default function PortalApp() {
       const payload = await portalApi.data();
       setMe(meData);
       setData(payload);
-      setActive(prev => (prev && meData.sections.includes(prev) ? prev : meData.sections[0] || ''));
+      // Начальный раздел: ?section=… (deep-link) → сохранённый → первый доступный.
+      const wanted = new URLSearchParams(window.location.search).get('section');
+      setActive(prev => {
+        if (wanted && meData.sections.includes(wanted)) return wanted;
+        return prev && meData.sections.includes(prev) ? prev : meData.sections[0] || '';
+      });
       setPhase('ready');
     } catch (e) {
       if (e instanceof PortalError && e.status === 401) {
@@ -253,6 +268,19 @@ function SectionView({
 
   if (section === 'request') {
     return <RequestSection isPreview={isPreview} />;
+  }
+
+  if (section === 'stages' && data.stages && data.stages.items.length > 0) {
+    return <StagesSection stages={data.stages} />;
+  }
+  if (section === 'status' && data.status) {
+    return <StatusSection status={data.status} />;
+  }
+  if (section === 'events' && data.events && data.events.items.length > 0) {
+    return <EventsSection events={data.events} />;
+  }
+  if (section === 'info' && data.info) {
+    return <InfoSection info={data.info} />;
   }
 
   if (section === 'project') {
@@ -585,6 +613,205 @@ function ProjectField({ field }: { field: PortalProjectField }) {
     <div className="pl-project-field-row">
       <dt>{field.label}</dt>
       <dd><FormattedValue value={field.value} /></dd>
+    </div>
+  );
+}
+
+// ── Этапы проекта: вертикальный таймлайн-степпер ─────────────────────────────
+const STAGE_STATUS_LABEL: Record<string, string> = {
+  done: 'Завершён', active: 'В работе', upcoming: 'Впереди',
+};
+
+function StagesSection({ stages }: { stages: PortalStages }) {
+  const doneCount = stages.items.filter(s => s.status === 'done').length;
+  return (
+    <div className="pl-card">
+      <h2 className="pl-h2">Этапы проекта</h2>
+      <p className="pl-sub">Путь проекта от диагностики до масштабирования — где мы сейчас и что впереди.</p>
+      <div className="pl-stage-progress">
+        <span className="pl-stage-progress-label">Пройдено этапов</span>
+        <b>{doneCount} из {stages.items.length}</b>
+      </div>
+      <ol className="pl-timeline">
+        {stages.items.map((s, i) => (
+          <li key={i} className={`pl-tl-item ${s.status}`}>
+            <span className="pl-tl-node">
+              {s.status === 'done' ? <PlIcon name="check" size={13} /> : <span className="pl-tl-dot" />}
+            </span>
+            <div className="pl-tl-body">
+              <div className="pl-tl-head">
+                <b>{s.title}</b>
+                <span className={`pl-pill pl-pill-${s.status === 'done' ? 'green' : s.status === 'active' ? 'blue' : 'gray'}`}>
+                  <span className="led" />{STAGE_STATUS_LABEL[s.status]}
+                </span>
+              </div>
+              <span className="pl-tl-period">{s.period}</span>
+              <p className="pl-tl-text">{s.summary}</p>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+// ── Статус проекта: сводка + кольцо прогресса + метрики + фокус ───────────────
+function ProgressRing({ value }: { value: number }) {
+  const r = 34, circ = 2 * Math.PI * r;
+  const filled = Math.max(0, Math.min(100, value)) / 100 * circ;
+  return (
+    <svg className="pl-ring" viewBox="0 0 80 80" width={92} height={92}>
+      <circle cx="40" cy="40" r={r} fill="none" stroke="var(--p-surface-2)" strokeWidth="8" />
+      <circle
+        cx="40" cy="40" r={r} fill="none" stroke="var(--p-accent)" strokeWidth="8"
+        strokeLinecap="round" strokeDasharray={`${filled} ${circ - filled}`}
+        transform="rotate(-90 40 40)"
+      />
+      <text x="40" y="45" textAnchor="middle" className="pl-ring-text">{value}%</text>
+    </svg>
+  );
+}
+
+function StatusSection({ status }: { status: PortalStatus }) {
+  const healthCls = status.health === 'on_track' ? 'green' : status.health === 'at_risk' ? 'amber' : 'red';
+  return (
+    <div className="pl-card">
+      <h2 className="pl-h2">Статус проекта</h2>
+      <p className="pl-sub">Общее состояние проекта, ключевые метрики и ближайший шаг.</p>
+
+      <div className="pl-status-hero">
+        <ProgressRing value={status.progress} />
+        <div className="pl-status-hero-main">
+          <span className={`pl-pill pl-pill-${healthCls}`}><span className="led" />{status.health_label}</span>
+          <b>{status.headline}</b>
+          <p>{status.summary}</p>
+        </div>
+      </div>
+
+      <div className="pl-metrics">
+        {status.metrics.map((m, i) => (
+          <div key={i} className="pl-metric">
+            <span className="pl-metric-label">{m.label}</span>
+            <b className="pl-metric-value">{m.value}</b>
+            <span className={`pl-metric-delta ${m.positive ? 'pos' : 'neg'}`}>
+              <PlIcon name={m.dir === 'down' ? 'arrowDown' : 'arrowUp'} size={13} />{m.delta}
+            </span>
+          </div>
+        ))}
+      </div>
+
+      {status.next_step && (
+        <div className="pl-next">
+          <span className="pl-next-ic"><PlIcon name="target" size={18} /></span>
+          <div className="pl-next-body">
+            <span className="pl-next-kicker">Ближайший шаг</span>
+            <b>{status.next_step.title}</b>
+          </div>
+          <span className="pl-next-due">{status.next_step.due}</span>
+        </div>
+      )}
+
+      {status.focus.length > 0 && (
+        <div className="pl-focus">
+          <h3 className="pl-block-title">В фокусе сейчас</h3>
+          <ul className="pl-focus-list">
+            {status.focus.map((f, i) => (
+              <li key={i}><PlIcon name="spark" size={15} /><span>{f}</span></li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── События: лента обновлений ────────────────────────────────────────────────
+const EVENT_ICON: Record<string, string> = {
+  milestone: 'flag', meeting: 'chat', update: 'spark', document: 'documents',
+};
+
+function EventsSection({ events }: { events: PortalEvents }) {
+  return (
+    <div className="pl-card">
+      <h2 className="pl-h2">События</h2>
+      <p className="pl-sub">Хроника проекта: важные вехи, встречи и обновления.</p>
+      <div className="pl-feed">
+        {events.items.map((e, i) => (
+          <article key={i} className={`pl-feed-item ${e.type}`}>
+            <span className="pl-feed-ic"><PlIcon name={EVENT_ICON[e.type] || 'spark'} size={17} /></span>
+            <div className="pl-feed-body">
+              <div className="pl-feed-head">
+                <b>{e.title}</b>
+                <span className="pl-feed-date">{e.date}</span>
+              </div>
+              <p>{e.text}</p>
+            </div>
+          </article>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Информация: команда + факты + вопросы ────────────────────────────────────
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase();
+}
+
+function InfoSection({ info }: { info: PortalInfo }) {
+  return (
+    <div className="pl-card">
+      <h2 className="pl-h2">Информация</h2>
+      <p className="pl-sub">Команда проекта, ключевые сведения и ответы на частые вопросы.</p>
+
+      {info.team.length > 0 && (
+        <div className="pl-info-block">
+          <h3 className="pl-block-title">Команда проекта</h3>
+          <div className="pl-team">
+            {info.team.map((m, i) => (
+              <div key={i} className="pl-team-card">
+                <span className="pl-team-av">{initials(m.name)}</span>
+                <div className="pl-team-main">
+                  <b>{m.name}</b>
+                  <span className="pl-team-role">{m.role}</span>
+                  <a className="pl-team-contact" href={`mailto:${m.contact}`}>
+                    <PlIcon name="mail" size={14} />{m.contact}
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {info.facts.length > 0 && (
+        <div className="pl-info-block">
+          <h3 className="pl-block-title">О проекте</h3>
+          <dl className="pl-facts">
+            {info.facts.map((f, i) => (
+              <div key={i} className="pl-fact"><dt>{f.label}</dt><dd>{f.value}</dd></div>
+            ))}
+          </dl>
+        </div>
+      )}
+
+      {info.faq.length > 0 && (
+        <div className="pl-info-block">
+          <h3 className="pl-block-title">Частые вопросы</h3>
+          <div className="pl-faq">
+            {info.faq.map((q, i) => (
+              <details key={i} className="pl-faq-item">
+                <summary>
+                  <span className="pl-faq-q"><PlIcon name="help" size={16} />{q.q}</span>
+                  <PlIcon name="chevron" size={15} />
+                </summary>
+                <p>{q.a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

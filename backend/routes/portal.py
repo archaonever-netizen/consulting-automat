@@ -19,6 +19,7 @@ from ..schemas.auth import LoginRequest, TokenResponse
 from ..schemas.portal_users import PORTAL_SECTIONS
 from ..services import client_documents as docs_service
 from ..services import portal_auth
+from ..services import portal_demo
 from ..services import portal_requests as requests_service
 from ..services import projects as project_service
 
@@ -97,23 +98,29 @@ async def portal_data(
     """Данные всех разрешённых разделов одним ответом (упрощает фронт портала).
 
     Разделы, которых ещё нет в модели (статус/этапы/события/информация), —
-    скелет: возвращаем пусто, портал показывает заглушку. Будет дорабатываться.
+    скелет: обычному клиенту возвращаем пусто, портал показывает заглушку.
+    Для клиента-витрины (`portal_demo.DEMO_CLIENT_NAME`) эти разделы наполняются
+    демонстрационными данными — показать, как выглядит наполненный портал.
     """
+    from ..models import Client
+    client = await db.get(Client, identity.client_id)
+    demo = portal_demo.is_demo_client(client)
+
     out: dict = {}
     if identity.can("project"):
-        out["project"] = await project_service.list_portal_projects(
-            db, client_id=identity.client_id
-        )
+        projects = await project_service.list_portal_projects(db, client_id=identity.client_id)
+        out["project"] = projects or (portal_demo.demo_projects() if demo else [])
     if identity.can("stages"):
-        out["stages"] = []
+        out["stages"] = portal_demo.demo_stages() if demo else []
     if identity.can("status"):
-        out["status"] = None
+        out["status"] = portal_demo.demo_status() if demo else None
     if identity.can("events"):
-        out["events"] = []
+        out["events"] = portal_demo.demo_events() if demo else None
     if identity.can("info"):
-        out["info"] = None
+        out["info"] = portal_demo.demo_info() if demo else None
     if identity.can("documents"):
-        out["documents"] = await docs_service.list_documents(db, identity.client_id)
+        docs = await docs_service.list_documents(db, identity.client_id)
+        out["documents"] = docs or (portal_demo.demo_documents() if demo else [])
     return out
 
 
@@ -182,6 +189,20 @@ async def portal_download(
 ):
     if not identity.can("documents"):
         raise HTTPException(status_code=403, detail="Раздел недоступен")
+
+    # Демо-документы клиента-витрины: строк в БД нет, отдаём сгенерированный PDF.
+    if portal_demo.is_demo_doc(doc_id):
+        from ..models import Client
+        client = await db.get(Client, identity.client_id)
+        generated = portal_demo.demo_document_pdf(doc_id) if portal_demo.is_demo_client(client) else None
+        if generated is None:
+            raise HTTPException(status_code=404, detail="Документ не найден")
+        filename, content_type, data = generated
+        from urllib.parse import quote
+        disposition = f"attachment; filename*=UTF-8''{quote(filename)}"
+        return Response(content=data, media_type=content_type,
+                        headers={"Content-Disposition": disposition})
+
     doc = await docs_service.get_document(db, identity.client_id, doc_id)
     if doc is None:
         raise HTTPException(status_code=404, detail="Документ не найден")
