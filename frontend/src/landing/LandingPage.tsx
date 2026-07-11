@@ -146,6 +146,32 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
         .lp-details > summary { list-style: none; cursor: pointer; }
         .lp-details > summary::-webkit-details-marker { display: none; }
         .lp-details[open] .lp-chev { transform: rotate(45deg); }
+
+        /* Вертикальный «план»: точки, соединённые синей линией (как режим
+           планирования в ИИ-чатах). Линия — сплошная var(--accent), рисуется
+           псевдоэлементом рельса и стыкуется между пунктами. */
+        .lp-plan { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; }
+        .lp-plan-item { display: flex; gap: 12px; align-items: stretch; }
+        .lp-plan-rail { position: relative; flex: 0 0 10px; }
+        .lp-plan-rail::before {
+          content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
+          width: 2px; transform: translateX(-50%);
+          background: var(--accent); border-radius: 2px;
+        }
+        /* Обрезаем линию до центра крайних точек, чтобы не торчала сверху/снизу. */
+        .lp-plan-item:first-child .lp-plan-rail::before { top: 10px; }
+        .lp-plan-item:last-child .lp-plan-rail::before { bottom: calc(100% - 10px); }
+        .lp-plan-item:only-child .lp-plan-rail::before { display: none; }
+        .lp-plan-dot {
+          position: relative; z-index: 1; display: block; margin: 6px auto 0;
+          width: 9px; height: 9px; border-radius: 50%;
+          background: var(--accent); box-shadow: 0 0 0 3px var(--bg);
+        }
+        .lp-plan-text {
+          padding-bottom: 12px; font-size: 14.5px; line-height: 1.5;
+          color: var(--text-secondary);
+        }
+        .lp-plan-item:last-child .lp-plan-text { padding-bottom: 0; }
       `}</style>
 
       {/* ===== Sticky bar ===== */}
@@ -304,18 +330,37 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
             <span className="eyebrow">{c.how.eyebrow}</span>
             <h2 style={h2Style}>{c.how.title}</h2>
           </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '40px 32px' }}>
-            {c.how.steps.map((step, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, color: 'var(--accent-ink)', letterSpacing: '-.01em' }}>
-                  {step.week}
-                </span>
-                <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 19, letterSpacing: '-.03em', lineHeight: 1.15 }}>
-                  {step.title}
-                </h3>
-                <p style={cardTextStyle}>{step.text}</p>
-              </div>
-            ))}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: '40px 32px' }}>
+            {c.how.steps.map((step, i) => {
+              // Пункты этапа. Fallback на легаси-абзац text (старые сохранения из
+              // БД могут не иметь points), чтобы рендер не падал.
+              const points =
+                step.points && step.points.length > 0
+                  ? step.points
+                  : step.text
+                  ? [step.text]
+                  : [];
+              return (
+                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, color: 'var(--accent-ink)', letterSpacing: '-.01em' }}>
+                    {step.week}
+                  </span>
+                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 19, letterSpacing: '-.03em', lineHeight: 1.15 }}>
+                    {step.title}
+                  </h3>
+                  <ul className="lp-plan">
+                    {points.map((point, j) => (
+                      <li key={j} className="lp-plan-item">
+                        <span className="lp-plan-rail">
+                          <span className="lp-plan-dot" />
+                        </span>
+                        <span className="lp-plan-text">{point}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
         </div>
       </section>

@@ -33,6 +33,25 @@ function deepClone<T>(v: T): T {
   return JSON.parse(JSON.stringify(v)) as T;
 }
 
+// Легаси-миграция шагов «Как это работает»: раньше шаг хранил абзац text, теперь
+// список points. Сохранённый в БД контент может прийти в старой форме — переносим
+// text в первый пункт (и выбрасываем легаси-ключ), чтобы редактор показал текст,
+// а не пустой список. Публичный рендер тоже умеет fallback на text (страховка).
+function normalizeHowSteps(content: LandingContent): LandingContent {
+  const steps = content.how?.steps as unknown[] | undefined;
+  if (!Array.isArray(steps)) return content;
+  let changed = false;
+  const next = steps.map((raw) => {
+    const s = raw as { week?: string; title?: string; points?: string[]; text?: string };
+    const hasPoints = Array.isArray(s.points) && s.points.length > 0;
+    if (!('text' in s)) return s;
+    changed = true;
+    const { text, ...rest } = s;
+    return hasPoints ? rest : { ...rest, points: text?.trim() ? [text] : [''] };
+  });
+  return changed ? ({ ...content, how: { ...content.how, steps: next } } as LandingContent) : content;
+}
+
 // ── Примитивные поля ──
 function TextInput({
   label,
@@ -206,6 +225,71 @@ function ObjectListEditor({
   );
 }
 
+// ── Шаги «Как это работает»: неделя + заголовок + список пунктов ──
+// Отдельный редактор (не ObjectListEditor): у шага есть вложенный список points,
+// который правится через StringListEditor.
+function HowStepsEditor({
+  value,
+  onChange,
+}: {
+  value: { week: string; title: string; points: string[] }[];
+  onChange: (v: { week: string; title: string; points: string[] }[]) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span className="form-label" style={{ margin: 0 }}>Шаги (недели)</span>
+      {value.map((item, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 8,
+            padding: 12,
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            background: 'var(--surface-2)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>#{i + 1}</span>
+            <RowControls
+              index={i}
+              count={value.length}
+              onMove={(from, to) => onChange(moveItem(value, from, to))}
+              onRemove={(idx) => onChange(value.filter((_, j) => j !== idx))}
+            />
+          </div>
+          <TextInput
+            label="Неделя"
+            value={item.week}
+            onChange={(v) => onChange(value.map((it, j) => (j === i ? { ...it, week: v } : it)))}
+          />
+          <TextInput
+            label="Заголовок"
+            value={item.title}
+            onChange={(v) => onChange(value.map((it, j) => (j === i ? { ...it, title: v } : it)))}
+          />
+          <StringListEditor
+            label="Пункты"
+            value={item.points ?? []}
+            onChange={(v) => onChange(value.map((it, j) => (j === i ? { ...it, points: v } : it)))}
+          />
+        </div>
+      ))}
+      <div>
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm"
+          onClick={() => onChange([...value, { week: '', title: '', points: [''] }])}
+        >
+          <Icon name="plus" size={14} /> Добавить
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ── Таблица метрик: строка = подпись + значения по неделям ──
 function MetricsEditor({
   value,
@@ -315,7 +399,7 @@ export default function LandingEditorPage() {
 
   useEffect(() => {
     if (data !== undefined) {
-      setForm(deepClone(mergeLandingContent(defaultLandingContent, data?.data)));
+      setForm(deepClone(normalizeHowSteps(mergeLandingContent(defaultLandingContent, data?.data))));
     }
   }, [data]);
 
@@ -442,15 +526,7 @@ export default function LandingEditorPage() {
         <Section title="Как это работает (недели)">
           <TextInput label="Надзаголовок" {...bind(['how', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['how', 'title'])} multiline />
-          <ObjectListEditor
-            label="Шаги"
-            {...bind(['how', 'steps'])}
-            fields={[
-              { key: 'week', label: 'Неделя' },
-              { key: 'title', label: 'Заголовок' },
-              { key: 'text', label: 'Текст', multiline: true },
-            ]}
-          />
+          <HowStepsEditor {...bind(['how', 'steps'])} />
         </Section>
 
         <Section title="Продукт">
