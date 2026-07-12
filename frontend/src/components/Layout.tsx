@@ -92,7 +92,7 @@ export default function Layout() {
       <aside className={'sidebar' + (sidebarCollapsed ? ' sb-collapsed' : '')}>
         <div className="sb-logo">
           <ShefWordmark className="sb-mark" />
-          <span className="tag">ИИ-консалтинг</span>
+          <span className="tag">Бизнес-консалтинг</span>
         </div>
 
         <button className="sb-newchat" onClick={() => navigate('/chat')}>
