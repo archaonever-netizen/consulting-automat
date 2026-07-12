@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, desc
+from sqlalchemy import select, desc, delete
 from sqlalchemy.orm import selectinload
-from ..models import Client, Brief
+from ..models import Client, Brief, OrchestrationRun, AIAnalysisCache
 from ..schemas.clients import ClientCreate, ClientUpdate
 
 # Спокойные приглушённые сланцевые тона (не яркие/разноцветные): аватары мягкие,
@@ -169,6 +169,11 @@ async def delete_client(db: AsyncSession, client_id: int) -> bool:
     client = await get_client(db, client_id)
     if client is None:
         return False
+    # Эти таблицы ссылаются на clients.id без ondelete=CASCADE и не входят в
+    # ORM-каскад Client, поэтому DELETE клиента иначе падает по внешнему ключу.
+    # FunctionAnalysis удалится каскадом БД от orchestration_runs.
+    await db.execute(delete(OrchestrationRun).where(OrchestrationRun.client_id == client_id))
+    await db.execute(delete(AIAnalysisCache).where(AIAnalysisCache.client_id == client_id))
     await db.delete(client)
     await db.commit()
     return True
