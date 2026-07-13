@@ -5,6 +5,7 @@ import Icon from '../components/Icon';
 import {
   defaultLandingContent,
   mergeLandingContent,
+  type HideableSection,
   type LandingContent,
 } from '../landing/content';
 
@@ -364,22 +365,93 @@ function MetricsEditor({
 }
 
 // Секция-«гармошка».
-function Section({ title, children, open }: { title: string; children: ReactNode; open?: boolean }) {
+// Если передан onToggleHidden — в заголовке появляется кнопка «Убрать с сайта»/
+// «Вернуть на сайт». Скрытая секция сворачивается, помечается бейджем и не
+// показывает поля (текст не теряется — его можно вернуть той же кнопкой).
+function Section({
+  title,
+  children,
+  open,
+  hidden,
+  onToggleHidden,
+}: {
+  title: string;
+  children: ReactNode;
+  open?: boolean;
+  hidden?: boolean;
+  onToggleHidden?: () => void;
+}) {
   return (
-    <details open={open} style={{ border: '1px solid var(--border)', borderRadius: 12, background: 'var(--card-bg)' }}>
+    <details
+      open={hidden ? false : open}
+      style={{
+        border: '1px solid var(--border)',
+        borderRadius: 12,
+        background: 'var(--card-bg)',
+        opacity: hidden ? 0.6 : 1,
+      }}
+    >
       <summary
+        className="le-summary"
         style={{
           cursor: 'pointer',
           padding: '14px 18px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
           fontFamily: 'var(--font-display)',
           fontWeight: 800,
           fontSize: 16,
           letterSpacing: '-.02em',
         }}
       >
-        {title}
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          {title}
+          {hidden && (
+            <span
+              style={{
+                fontFamily: 'var(--font-body)',
+                fontWeight: 700,
+                fontSize: 11,
+                letterSpacing: '.04em',
+                textTransform: 'uppercase',
+                color: 'var(--ink-3)',
+                border: '1px solid var(--border)',
+                borderRadius: 999,
+                padding: '2px 8px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Скрыт с сайта
+            </span>
+          )}
+        </span>
+        {onToggleHidden && (
+          <button
+            type="button"
+            className="btn btn-ghost btn-sm"
+            style={{ flexShrink: 0, color: hidden ? undefined : 'var(--danger)' }}
+            // Клик по кнопке не должен раскрывать/сворачивать <details>.
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleHidden();
+            }}
+          >
+            {hidden ? (
+              'Вернуть на сайт'
+            ) : (
+              <>
+                <Icon name="trash" size={14} /> Убрать с сайта
+              </>
+            )}
+          </button>
+        )}
       </summary>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '4px 18px 20px' }}>{children}</div>
+      {!hidden && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '4px 18px 20px' }}>{children}</div>
+      )}
     </details>
   );
 }
@@ -411,6 +483,11 @@ export default function LandingEditorPage() {
     };
   }
 
+  // Переключить видимость раздела на публичном лендинге (скрыть/вернуть).
+  function toggleHidden(key: HideableSection) {
+    setForm((f) => (f ? { ...f, hidden: { ...f.hidden, [key]: !f.hidden?.[key] } } : f));
+  }
+
   async function save() {
     if (!form) return;
     setSaving(true);
@@ -433,6 +510,12 @@ export default function LandingEditorPage() {
 
   return (
     <div className="page">
+      {/* flex-заголовок у <summary> убирает нативный треугольник-маркер — гасим
+          его и в WebKit, чтобы кнопка «Убрать с сайта» встала ровно справа. */}
+      <style>{`
+        .le-summary { list-style: none; }
+        .le-summary::-webkit-details-marker { display: none; }
+      `}</style>
       <div
         className="page-head rise"
         style={{
@@ -447,7 +530,10 @@ export default function LandingEditorPage() {
       >
         <div>
           <h1>Лендинг</h1>
-          <p>Текст публичного лендинга. Сохранение сразу меняет текст на сайте — без пересборки и деплоя.</p>
+          <p>
+            Текст публичного лендинга. Сохранение сразу меняет текст на сайте — без пересборки и деплоя.
+            Ненужный раздел можно убрать с сайта кнопкой в его заголовке (текст сохранится — раздел можно вернуть).
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
           <a className="btn btn-ghost" href="/" target="_blank" rel="noopener noreferrer">Открыть лендинг</a>
@@ -481,7 +567,7 @@ export default function LandingEditorPage() {
           <TextInput label="Кнопка «Оставить заявку» (в шапке)" {...bind(['nav', 'cta'])} />
         </Section>
 
-        <Section title="Первый экран (Hero)">
+        <Section title="Первый экран (Hero)" hidden={c.hidden.hero} onToggleHidden={() => toggleHidden('hero')}>
           <TextInput label="Надзаголовок" {...bind(['hero', 'eyebrow'])} multiline />
           <TextInput label="Заголовок" {...bind(['hero', 'title'])} multiline />
           <TextInput label="Подзаголовок 1" {...bind(['hero', 'subtitle1'])} multiline />
@@ -490,7 +576,7 @@ export default function LandingEditorPage() {
           <TextInput label="Примечание под кнопкой" {...bind(['hero', 'ctaNote'])} multiline />
         </Section>
 
-        <Section title="Боль клиента">
+        <Section title="Боль клиента" hidden={c.hidden.pain} onToggleHidden={() => toggleHidden('pain')}>
           <TextInput label="Надзаголовок" {...bind(['pain', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['pain', 'title'])} multiline />
           <TextInput label="Вступление" {...bind(['pain', 'intro'])} multiline />
@@ -499,7 +585,7 @@ export default function LandingEditorPage() {
           <TextInput label="Вывод (обычный)" {...bind(['pain', 'outroText'])} multiline />
         </Section>
 
-        <Section title="Рабочая неделя">
+        <Section title="Рабочая неделя" hidden={c.hidden.week} onToggleHidden={() => toggleHidden('week')}>
           <TextInput label="Надзаголовок" {...bind(['week', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['week', 'title'])} multiline />
           <ObjectListEditor
@@ -513,7 +599,7 @@ export default function LandingEditorPage() {
           <TextInput label="Вывод" {...bind(['week', 'outro'])} multiline />
         </Section>
 
-        <Section title="Подход / решение">
+        <Section title="Подход / решение" hidden={c.hidden.solution} onToggleHidden={() => toggleHidden('solution')}>
           <TextInput label="Надзаголовок" {...bind(['solution', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['solution', 'title'])} multiline />
           <TextInput label="Абзац 1" {...bind(['solution', 'text1'])} multiline />
@@ -523,13 +609,13 @@ export default function LandingEditorPage() {
           <StringListEditor label="Пункты результата" {...bind(['solution', 'resultItems'])} />
         </Section>
 
-        <Section title="Как это работает (недели)">
+        <Section title="Как это работает (недели)" hidden={c.hidden.how} onToggleHidden={() => toggleHidden('how')}>
           <TextInput label="Надзаголовок" {...bind(['how', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['how', 'title'])} multiline />
           <HowStepsEditor {...bind(['how', 'steps'])} />
         </Section>
 
-        <Section title="Продукт">
+        <Section title="Продукт" hidden={c.hidden.product} onToggleHidden={() => toggleHidden('product')}>
           <TextInput label="Надзаголовок" {...bind(['product', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['product', 'title'])} multiline />
           <TextInput label="Вступление" {...bind(['product', 'intro'])} multiline />
@@ -547,7 +633,7 @@ export default function LandingEditorPage() {
           <StringListEditor label="Что входит" {...bind(['product', 'included'])} multiline />
         </Section>
 
-        <Section title="Первые блоки">
+        <Section title="Первые блоки" hidden={c.hidden.blocks} onToggleHidden={() => toggleHidden('blocks')}>
           <TextInput label="Надзаголовок" {...bind(['blocks', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['blocks', 'title'])} multiline />
           <ObjectListEditor
@@ -562,7 +648,7 @@ export default function LandingEditorPage() {
           <TextInput label="Текст «Инструменты продукта»" {...bind(['blocks', 'toolsText'])} multiline />
         </Section>
 
-        <Section title="Почему это работает">
+        <Section title="Почему это работает" hidden={c.hidden.why} onToggleHidden={() => toggleHidden('why')}>
           <TextInput label="Надзаголовок" {...bind(['why', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['why', 'title'])} multiline />
           <ObjectListEditor
@@ -580,7 +666,7 @@ export default function LandingEditorPage() {
           <StringListEditor label="Список-столбик (справа)" {...bind(['why', 'afterLines'])} />
         </Section>
 
-        <Section title="Измеримость / метрики">
+        <Section title="Измеримость / метрики" hidden={c.hidden.proof} onToggleHidden={() => toggleHidden('proof')}>
           <TextInput label="Надзаголовок" {...bind(['proof', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['proof', 'title'])} multiline />
           <TextInput label="Вступление" {...bind(['proof', 'intro'])} multiline />
@@ -597,7 +683,7 @@ export default function LandingEditorPage() {
           />
         </Section>
 
-        <Section title="Ситуации">
+        <Section title="Ситуации" hidden={c.hidden.situations} onToggleHidden={() => toggleHidden('situations')}>
           <TextInput label="Надзаголовок" {...bind(['situations', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['situations', 'title'])} multiline />
           <ObjectListEditor
@@ -615,7 +701,7 @@ export default function LandingEditorPage() {
           <TextInput label="Кейсы — правая колонка" {...bind(['situations', 'casesRight'])} multiline />
         </Section>
 
-        <Section title="Возражения">
+        <Section title="Возражения" hidden={c.hidden.objections} onToggleHidden={() => toggleHidden('objections')}>
           <TextInput label="Надзаголовок" {...bind(['objections', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['objections', 'title'])} multiline />
           <ObjectListEditor
@@ -628,7 +714,7 @@ export default function LandingEditorPage() {
           />
         </Section>
 
-        <Section title="FAQ">
+        <Section title="FAQ" hidden={c.hidden.faq} onToggleHidden={() => toggleHidden('faq')}>
           <TextInput label="Надзаголовок" {...bind(['faq', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['faq', 'title'])} />
           <ObjectListEditor
@@ -641,7 +727,7 @@ export default function LandingEditorPage() {
           />
         </Section>
 
-        <Section title="Финальный блок и форма">
+        <Section title="Финальный блок и форма" hidden={c.hidden.cta} onToggleHidden={() => toggleHidden('cta')}>
           <TextInput label="Надзаголовок" {...bind(['cta', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['cta', 'title'])} multiline />
           <TextInput label="Текст" {...bind(['cta', 'text'])} multiline />

@@ -1,5 +1,14 @@
-import { useEffect, useState, type CSSProperties, type FormEvent } from 'react';
+import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { defaultLandingContent, mergeLandingContent, type LandingContent } from './content';
+
+/**
+ * Обёртка раздела: возвращает null, когда раздел скрыт в редакторе
+ * (content.hidden[...] === true). Скрытый раздел не попадает в DOM — не просто
+ * прячется через display:none, а полностью исключается из вёрстки.
+ */
+function Hideable({ hidden, children }: { hidden?: boolean; children: ReactNode }) {
+  return hidden ? null : <>{children}</>;
+}
 
 /**
  * Публичный лендинг «Модуль устранения потерь».
@@ -235,6 +244,7 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
       )}
 
       {/* ===== Hero ===== */}
+      <Hideable hidden={c.hidden.hero}>
       <section style={{ padding: '120px 24px 96px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
           <span className="eyebrow">{c.hero.eyebrow}</span>
@@ -270,8 +280,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Pain ===== */}
+      <Hideable hidden={c.hidden.pain}>
       <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 28 }}>
           <span className="eyebrow">{c.pain.eyebrow}</span>
@@ -296,8 +308,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Week scenes ===== */}
+      <Hideable hidden={c.hidden.week}>
       <section style={{ padding: '96px 24px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -317,8 +331,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </p>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Solution ===== */}
+      <Hideable hidden={c.hidden.solution}>
       <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 56, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -346,8 +362,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== How it works ===== */}
+      <Hideable hidden={c.hidden.how}>
       <section style={{ padding: '96px 24px' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -388,8 +406,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Product ===== */}
+      <Hideable hidden={c.hidden.product}>
       <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 700 }}>
@@ -433,8 +453,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Blocks to implement ===== */}
+      <Hideable hidden={c.hidden.blocks}>
       <section style={{ padding: '96px 24px' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -459,8 +481,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Why it works ===== */}
+      <Hideable hidden={c.hidden.why}>
       <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -513,8 +537,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Proof ===== */}
+      <Hideable hidden={c.hidden.proof}>
       <section style={{ padding: '96px 24px' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 700 }}>
@@ -558,8 +584,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Situations ===== */}
+      <Hideable hidden={c.hidden.situations}>
       <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -593,8 +621,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Objections ===== */}
+      <Hideable hidden={c.hidden.objections}>
       <section style={{ padding: '96px 24px' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -611,8 +641,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== FAQ ===== */}
+      <Hideable hidden={c.hidden.faq}>
       <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 36 }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -643,8 +675,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       {/* ===== Final CTA ===== */}
+      <Hideable hidden={c.hidden.cta}>
       <section id="lead" style={{ padding: '110px 24px 130px' }}>
         <div style={{ maxWidth: 780, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 56, alignItems: 'start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -720,6 +754,7 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           </div>
         </div>
       </section>
+      </Hideable>
 
       <footer style={{ borderTop: '1px solid var(--border)', padding: '28px 24px' }}>
         <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>

@@ -53,6 +53,27 @@ export interface MetricRow {
   values: string[];
 }
 
+/**
+ * Разделы публичного лендинга, которые можно скрыть из редактора (кнопка
+ * «Убрать с сайта»). Набор ключей фиксирован намеренно: карта видимости лежит в
+ * LandingContent.hidden, а deepMerge при загрузке сохраняет только те ключи,
+ * что есть в дефолте, — поэтому список задаётся здесь явно.
+ */
+export type HideableSection =
+  | 'hero'
+  | 'pain'
+  | 'week'
+  | 'solution'
+  | 'how'
+  | 'product'
+  | 'blocks'
+  | 'why'
+  | 'proof'
+  | 'situations'
+  | 'objections'
+  | 'faq'
+  | 'cta';
+
 export interface LandingContent {
   brand: string;
   nav: { login: string; cta: string };
@@ -176,6 +197,11 @@ export interface LandingContent {
     brand: string;
     tagline: string;
   };
+  /**
+   * Видимость разделов на публичной странице: true = раздел скрыт (убран с
+   * сайта в редакторе). Текст скрытого раздела не удаляется — его можно вернуть.
+   */
+  hidden: Record<HideableSection, boolean>;
 }
 
 export const defaultLandingContent: LandingContent = {
@@ -551,6 +577,21 @@ export const defaultLandingContent: LandingContent = {
   footer: {
     brand: 'Модуль устранения потерь',
     tagline: 'Проект для собственников МСБ · 1 месяц · один управленческий блок',
+  },
+  hidden: {
+    hero: false,
+    pain: false,
+    week: false,
+    solution: false,
+    how: false,
+    product: false,
+    blocks: false,
+    why: false,
+    proof: false,
+    situations: false,
+    objections: false,
+    faq: false,
+    cta: false,
   },
 };
 
