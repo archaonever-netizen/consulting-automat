@@ -84,6 +84,11 @@ export interface LandingContent {
     subtitle2: string;
     ctaButton: string;
     ctaNote: string;
+    // Стеклянная стат-карточка в героe (рядом с subtitle1). Рендерится только
+    // если statValue непустой — очистка значения убирает карточку.
+    statLabel: string;
+    statValue: string;
+    statUnit: string;
   };
   pain: {
     eyebrow: string;
@@ -216,6 +221,9 @@ export const defaultLandingContent: LandingContent = {
       'Интегрируем найденные улучшения в работу команды и сопроводим изменения — с гарантией результата.',
     ctaButton: 'Оставить заявку на разбор',
     ctaNote: 'За 60 минут разберём, есть ли у вас блок, который стоит разобрать глубже.',
+    statLabel: 'Потенциальные потери',
+    statValue: 'до 29 млн ₽',
+    statUnit: '/ год',
   },
   pain: {
     eyebrow: 'Знакомая картина',

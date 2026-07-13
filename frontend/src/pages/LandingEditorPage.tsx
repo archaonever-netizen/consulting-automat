@@ -574,6 +574,11 @@ export default function LandingEditorPage() {
           <TextInput label="Подзаголовок 2" {...bind(['hero', 'subtitle2'])} multiline />
           <TextInput label="Кнопка" {...bind(['hero', 'ctaButton'])} />
           <TextInput label="Примечание под кнопкой" {...bind(['hero', 'ctaNote'])} multiline />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12 }}>
+            <TextInput label="Стат-карточка — подпись" {...bind(['hero', 'statLabel'])} />
+            <TextInput label="Стат-карточка — значение" {...bind(['hero', 'statValue'])} />
+            <TextInput label="Стат-карточка — единица" {...bind(['hero', 'statUnit'])} />
+          </div>
         </Section>
 
         <Section title="Боль клиента" hidden={c.hidden.pain} onToggleHidden={() => toggleHidden('pain')}>

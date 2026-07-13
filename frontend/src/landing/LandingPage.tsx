@@ -1,5 +1,15 @@
-import { useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 import { defaultLandingContent, mergeLandingContent, type LandingContent } from './content';
+import Icon from '../components/Icon';
+import { mountHeroNetworkCanvas } from './heroNetworkCanvas';
+import { mountScrollReveal } from './scrollReveal';
 
 /**
  * Обёртка раздела: возвращает null, когда раздел скрыт в редакторе
@@ -17,19 +27,25 @@ function Hideable({ hidden, children }: { hidden?: boolean; children: ReactNode 
  * собранный dist/landing.html на корне домена, а SPA живёт под /app
  * (BrowserRouter basename="/app"). Поэтому App.tsx этот компонент не роутит.
  *
- * Текст: весь редактируемый текст вынесен в ./content.ts. На старте показываем
- * вшитые дефолты (defaultLandingContent), затем подтягиваем сохранённый текст
- * из GET /api/landing/content и сливаем поверх дефолтов (mergeLandingContent).
- * Если запрос не удался — остаёмся на дефолтах, страница не «белеет». Правится
- * текст из приложения (раздел «Лендинг», src/pages/LandingEditorPage.tsx).
+ * Дизайн: тёмный анимированный герой (canvas-«плата», см. heroNetworkCanvas.ts)
+ * + карточные секции дизайн-системы ШЕФ (icon-tile карточки, таймлайн, roadmap,
+ * FAQ-гармошка, финальный CTA с формой). Появление секций — scroll-reveal
+ * (scrollReveal.ts), с уважением к prefers-reduced-motion.
  *
- * Стили: использует существующие глобальные классы из styles.css
- * (.eyebrow, .btn/.btn-primary/.btn-sm, .form-input/.form-textarea/.form-label,
- * .pill/.pill-green, .clients-table/.ct-row) + инлайн-стили на переменных
- * дизайн-системы (var(--*)) для остального разметки, специфичной для лендинга.
+ * Текст: весь редактируемый текст вынесен в ./content.ts и НЕ хардкодится здесь.
+ * На старте показываем вшитые дефолты (defaultLandingContent), затем подтягиваем
+ * сохранённый текст из GET /api/landing/content и сливаем поверх дефолтов
+ * (mergeLandingContent). Если запрос не удался — остаёмся на дефолтах, страница
+ * не «белеет». Правится текст из приложения (src/pages/LandingEditorPage.tsx).
+ * Иконки на карточках — чисто презентационный слой (в контенте их нет): берутся
+ * из фиксированных наборов по индексу пункта (циклично, устойчиво к числу
+ * пунктов).
  *
- * showPrice / stickyBar — единственные два переключателя, которые раньше были
- * "тумблерами" в дизайн-инструменте; здесь это обычные пропсы с дефолтом true.
+ * Стили: токены дизайн-системы (var(--*)) уже есть в styles.css; здесь только
+ * лендинг-специфичные классы .lp-* в одном <style>-блоке + глобальные классы
+ * (.eyebrow, .btn*, .form-*, .pill*).
+ *
+ * showPrice / stickyBar — обычные пропсы с дефолтом true (раньше «тумблеры»).
  */
 
 interface LandingPageProps {
@@ -37,42 +53,58 @@ interface LandingPageProps {
   stickyBar?: boolean;
 }
 
-const h2Style: CSSProperties = {
-  fontFamily: 'var(--font-display)',
-  fontWeight: 800,
-  fontSize: 'clamp(28px, 3.6vw, 40px)',
-  letterSpacing: '-.035em',
-  lineHeight: 1.05,
-  margin: 0,
-};
+// Наборы иконок по секциям — презентационные, не редактируются (в контенте
+// иконок нет). Берём циклично по индексу: at(icons, i).
+const PAIN_ICONS = ['help', 'chat', 'chart', 'users', 'gear', 'clock'];
+const OUTCOME_ICONS = ['users', 'check', 'chart', 'trendUp', 'gear', 'sparkle'];
+const INCLUDE_ICONS = ['search', 'chart', 'bolt', 'check', 'gear', 'clock', 'trendUp'];
+const BLOCK_ICONS = ['chart', 'users', 'gear', 'sparkle', 'trendUp', 'bolt'];
+const CHANGE_ICONS = ['users', 'check', 'chart', 'book', 'arrowRight'];
+
+const at = (arr: string[], i: number) => arr[i % arr.length];
+
+// Инлайн-стиль stagger-задержки для scroll-reveal (--d читает CSS правило
+// [data-reveal].is-visible). Кастомную CSS-переменную TS в CSSProperties не
+// пускает — каст обязателен.
+const revealDelay = (i: number, step = 0.07): CSSProperties =>
+  ({ ['--d']: `${(i * step).toFixed(2)}s` } as CSSProperties);
+
+// Версия (редакция) политики обработки ПДн, с которой соглашается пользователь.
+// ВАЖНО: держать в синхроне с датой редакции в frontend/public/privacy.html.
+const PRIVACY_POLICY_VERSION = '2026-07-07';
+
 const cardTitleStyle: CSSProperties = {
   margin: 0,
   fontFamily: 'var(--font-display)',
   fontWeight: 800,
-  fontSize: 18,
+  fontSize: 17,
   letterSpacing: '-.02em',
-  lineHeight: 1.2,
+  lineHeight: 1.25,
 };
-const cardTextStyle: CSSProperties = { margin: 0, fontSize: 15, lineHeight: 1.6, color: 'var(--text-secondary)' };
-
-const factLabelStyle: CSSProperties = {
-  fontSize: 13,
-  fontWeight: 700,
-  letterSpacing: '.06em',
-  textTransform: 'uppercase',
-  color: 'var(--ink-3)',
+const cardTextStyle: CSSProperties = {
+  margin: 0,
+  fontSize: 14.5,
+  lineHeight: 1.6,
+  color: 'var(--text-secondary)',
 };
-const factValueStyle: CSSProperties = {
-  fontFamily: 'var(--font-display)',
-  fontWeight: 800,
-  fontSize: 19,
-  letterSpacing: '-.02em',
+const proseStyle: CSSProperties = {
+  margin: '16px 0 0',
+  fontSize: 16,
+  lineHeight: 1.65,
+  color: 'var(--text-secondary)',
 };
 
-// Версия (редакция) политики обработки ПДн, с которой соглашается пользователь.
-// ВАЖНО: держать в синхроне с датой редакции в frontend/public/privacy.html.
-// При каждом изменении текста политики — обновлять здесь и там.
-const PRIVACY_POLICY_VERSION = '2026-07-07';
+// Icon-tile строка чек-листа (.lp-feat): плитка с иконкой + текст.
+function FeatRow({ icon, text, index }: { icon: string; text: string; index: number }) {
+  return (
+    <div className="lp-feat" data-reveal style={revealDelay(index, 0.06)}>
+      <div className="lp-tile" style={{ width: 34, height: 34, borderRadius: 10 }}>
+        <Icon name={icon} size={16} />
+      </div>
+      <p style={{ fontSize: 15.5, lineHeight: 1.55, color: 'var(--text-primary)' }}>{text}</p>
+    </div>
+  );
+}
 
 export default function LandingPage({ showPrice = true, stickyBar = true }: LandingPageProps) {
   const [content, setContent] = useState<LandingContent>(defaultLandingContent);
@@ -80,6 +112,9 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
   const [agreed, setAgreed] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const heroSectionRef = useRef<HTMLElement>(null);
+  const heroCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Подтягиваем сохранённый текст лендинга и сливаем поверх дефолтов. Любая
   // ошибка (нет текста, сеть, БД недоступна) — тихо остаёмся на дефолтах.
@@ -101,6 +136,26 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
 
   const c = content;
 
+  // Анимированный canvas-фон героя. Пересобираем при смене видимости героя
+  // (скрыт в редакторе → размонтирован → refs null → dispose). reduced-motion:
+  // модуль рисует один статичный кадр без RAF-цикла.
+  useEffect(() => {
+    if (c.hidden.hero) return;
+    const canvas = heroCanvasRef.current;
+    const section = heroSectionRef.current;
+    if (!canvas || !section) return;
+    const reduced =
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    return mountHeroNetworkCanvas(canvas, section, { reducedMotion: reduced });
+  }, [c.hidden.hero]);
+
+  // Scroll-reveal. Перезапускаем при смене контента: после мерджа из БД React
+  // может добавить/убрать [data-reveal]-узлы — новый observer охватит текущие.
+  useEffect(() => {
+    return mountScrollReveal();
+  }, [content]);
+
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     // Согласие на обработку ПДн обязательно (152-ФЗ): без него не отправляем.
@@ -112,14 +167,10 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
       name: val('lead-name').trim(),
       contact: val('lead-phone').trim(),
       note: val('lead-note').trim() || null,
-      // Фиксация согласия: факт, время клика и версия политики, с которой
-      // согласился пользователь — сохраняется в БД вместе с заявкой.
       consent: true,
       consent_at: new Date().toISOString(),
       policy_version: PRIVACY_POLICY_VERSION,
       source: typeof window !== 'undefined' ? window.location.pathname : null,
-      // Honeypot: скрытое поле, которое заполняют только боты (реальные
-      // пользователи его не видят и оставляют пустым).
       website: val('lead-website'),
     };
     setSending(true);
@@ -140,6 +191,21 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
     }
   }
 
+  // Строка стат-полосы «Продукт» (формат/стоимость/для кого/результат).
+  const facts = [
+    { icon: 'clock', label: c.product.formatLabel, value: c.product.formatValue, accent: false },
+    showPrice
+      ? { icon: 'chart', label: c.product.priceLabel, value: c.product.priceValue, accent: false }
+      : null,
+    { icon: 'users', label: c.product.audienceLabel, value: c.product.audienceValue, accent: false },
+    { icon: 'trendUp', label: c.product.resultLabel, value: c.product.resultValue, accent: true },
+  ].filter(Boolean) as { icon: string; label: string; value: string; accent: boolean }[];
+
+  const metricCols = `minmax(0,2.2fr) repeat(${Math.max(
+    c.proof.metricsHead.length - 1,
+    1,
+  )}, minmax(0,1fr))`;
+
   return (
     <div
       style={{
@@ -147,620 +213,825 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
         color: 'var(--text-primary)',
         background: 'var(--bg)',
         minHeight: '100vh',
+        position: 'relative',
+        // Мягкие радиальные подсветки фона страницы (как в референсе).
+        backgroundImage:
+          'radial-gradient(900px 460px at 82% 0%, rgba(37,99,235,.06), transparent 60%), radial-gradient(700px 420px at 8% 4%, rgba(37,99,235,.045), transparent 55%)',
       }}
     >
       <style>{`
-        .lp-row { border-bottom: 1px solid var(--border); }
-        .lp-row:last-child { border-bottom: none; }
-        .lp-details > summary { list-style: none; cursor: pointer; }
-        .lp-details > summary::-webkit-details-marker { display: none; }
-        .lp-details[open] .lp-chev { transform: rotate(45deg); }
+        .lp-wrap { max-width: 900px; margin: 0 auto; padding: 0 32px; }
+        .lp-wide { max-width: 1180px; margin: 0 auto; padding: 0 32px; }
+        .lp-h2 { font-family: var(--font-display); font-weight: 800; letter-spacing: -.032em; line-height: 1.08; font-size: clamp(28px, 3vw, 38px); color: var(--text-primary); margin: 14px 0 0; }
+        .lp-card { background: #fff; border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); transition: var(--transition-spring); will-change: transform; }
+        .lp-card.is-hoverable:hover { box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        .lp-num { font-family: var(--font-display); font-weight: 800; font-size: 34px; letter-spacing: -.03em; color: var(--accent); line-height: 1; }
+        .lp-tile { flex: none; width: 44px; height: 44px; border-radius: 13px; background: var(--accent-weak); color: var(--accent); display: grid; place-items: center; }
 
-        /* Вертикальный «план»: точки, соединённые синей линией (как режим
-           планирования в ИИ-чатах). Линия — сплошная var(--accent), рисуется
-           псевдоэлементом рельса и стыкуется между пунктами. */
-        .lp-plan { list-style: none; margin: 6px 0 0; padding: 0; display: flex; flex-direction: column; }
-        .lp-plan-item { display: flex; gap: 12px; align-items: stretch; }
-        .lp-plan-rail { position: relative; flex: 0 0 10px; }
-        .lp-plan-rail::before {
-          content: ''; position: absolute; left: 50%; top: 0; bottom: 0;
-          width: 2px; transform: translateX(-50%);
-          background: var(--accent); border-radius: 2px;
-        }
-        /* Обрезаем линию до центра крайних точек, чтобы не торчала сверху/снизу. */
-        .lp-plan-item:first-child .lp-plan-rail::before { top: 10px; }
-        .lp-plan-item:last-child .lp-plan-rail::before { bottom: calc(100% - 10px); }
-        .lp-plan-item:only-child .lp-plan-rail::before { display: none; }
-        .lp-plan-dot {
-          position: relative; z-index: 1; display: block; margin: 6px auto 0;
-          width: 9px; height: 9px; border-radius: 50%;
-          background: var(--accent); box-shadow: 0 0 0 3px var(--bg);
-        }
-        .lp-plan-text {
-          padding-bottom: 12px; font-size: 14.5px; line-height: 1.5;
-          color: var(--text-secondary);
-        }
-        .lp-plan-item:last-child .lp-plan-text { padding-bottom: 0; }
+        .lp-feat { display: flex; gap: 16px; align-items: flex-start; padding: 4px 0; }
+        .lp-feat p { margin: 0; padding-top: 5px; }
 
-        /* «Как это работает»: 4 этапа строго в один ряд. Неделя, заголовок и
-           план — три общих строки grid'а; карточки берут их через subgrid,
-           поэтому первая точка каждого этапа начинается на одной линии
-           независимо от длины заголовка (заголовки выравниваются по высоте
-           самого длинного). Без subgrid карточка деградирует в обычный
-           grid-столбец — плана это не ломает, только не выравнивает. */
-        .lp-how-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 44px 28px;
-        }
-        .lp-how-card {
-          display: grid;
-          grid-template-rows: subgrid;
-          grid-row: span 3;
-          row-gap: 12px;
-        }
+        .lp-band { background: linear-gradient(180deg, var(--surface-2), #fff 82%); }
+
+        /* Таймлайн «Одна рабочая неделя» */
+        .lp-tl { position: relative; padding-left: 34px; }
+        .lp-tl::before { content: ''; position: absolute; left: 8px; top: 6px; bottom: 6px; width: 2px; background: var(--border-2); }
+        .lp-tl-item { position: relative; padding: 0 0 36px; }
+        .lp-tl-item:last-child { padding-bottom: 0; }
+        .lp-tl-dot { position: absolute; left: -34px; top: 3px; width: 18px; height: 18px; border-radius: 6px; background: #fff; border: 2px solid var(--accent); display: grid; place-items: center; }
+        .lp-tl-dot::after { content: ''; width: 6px; height: 6px; border-radius: 2px; background: var(--accent); }
+
+        /* Roadmap «Как это работает»: пунктирный коннектор за карточками */
+        .lp-roadmap { position: relative; }
+        .lp-roadmap::before { content: ''; position: absolute; left: 6%; right: 6%; top: 23px; height: 2px; background: repeating-linear-gradient(90deg, var(--border-2) 0 8px, transparent 8px 14px); z-index: 0; }
+        .lp-week-badge { position: relative; z-index: 1; width: 46px; height: 46px; border-radius: 14px; background: var(--text-primary); color: #fff; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 17px; box-shadow: var(--shadow-sm); }
+
+        /* Большая декоративная кавычка «Честный разговор» */
+        .lp-quote-mark { font-family: var(--font-display); font-weight: 800; font-size: 64px; line-height: 1; color: var(--accent-weak); position: absolute; top: 6px; left: 20px; }
+
+        /* FAQ-гармошка */
+        details.lp-faq { border-bottom: 1px solid var(--border); }
+        details.lp-faq:first-child { border-top: 1px solid var(--border); }
+        details.lp-faq > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 4px; font-family: var(--font-display); font-weight: 700; font-size: 17px; color: var(--text-primary); }
+        details.lp-faq > summary::-webkit-details-marker { display: none; }
+        details.lp-faq .lp-plus { flex: none; width: 26px; height: 26px; border-radius: 8px; background: var(--surface-2); display: grid; place-items: center; position: relative; transition: var(--transition); }
+        details.lp-faq .lp-plus::before, details.lp-faq .lp-plus::after { content: ''; position: absolute; background: var(--text-primary); border-radius: 2px; }
+        details.lp-faq .lp-plus::before { width: 12px; height: 2px; }
+        details.lp-faq .lp-plus::after { width: 2px; height: 12px; transition: transform .2s var(--ease-out); }
+        details.lp-faq[open] .lp-plus::after { transform: rotate(90deg); opacity: 0; }
+        details.lp-faq[open] .lp-plus { background: var(--accent-weak); }
+        details.lp-faq .lp-a { margin: -6px 0 24px; padding-right: 46px; font-size: 15.5px; line-height: 1.65; color: var(--text-secondary); }
+
+        /* Таблица метрик «Измеримость» */
+        .lp-metric-row { display: grid; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
+        .lp-metric-row:first-child { border-top: none; }
+
+        /* scroll-reveal (парно с scrollReveal.ts) */
+        [data-reveal] { opacity: 0; }
+        [data-reveal].is-visible { animation: fadeInUp .7s var(--ease-out) both; animation-delay: var(--d, 0s); }
+        @media (prefers-reduced-motion: reduce) { [data-reveal] { opacity: 1; animation: none; } }
+
+        /* Десктоп-first дизайн: аккуратные схлопывания сеток на узких экранах */
         @media (max-width: 900px) {
-          .lp-how-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+          .lp-split { grid-template-columns: 1fr !important; gap: 40px !important; }
+          .lp-grid-4 { grid-template-columns: repeat(2, 1fr) !important; }
+          .lp-grid-3 { grid-template-columns: 1fr !important; }
+          .lp-grid-2 { grid-template-columns: 1fr !important; }
+          .lp-facts { grid-template-columns: repeat(2, 1fr) !important; row-gap: 24px; }
+          .lp-facts > div { border-left: none !important; padding-left: 0 !important; }
+          .lp-roadmap::before { display: none; }
         }
         @media (max-width: 560px) {
-          .lp-how-grid { grid-template-columns: 1fr; }
+          .lp-grid-4 { grid-template-columns: 1fr !important; }
+          .lp-facts { grid-template-columns: 1fr !important; }
+          .lp-wrap, .lp-wide { padding: 0 20px; }
         }
       `}</style>
 
-      {/* ===== Sticky bar ===== */}
+      {/* ===== Nav (sticky, стекло) ===== */}
       {stickyBar && (
-        <div
+        <nav
           style={{
             position: 'sticky',
             top: 0,
-            zIndex: 50,
-            background: 'rgba(255,255,255,.72)',
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+            zIndex: 30,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            padding: '16px 32px',
+            background: 'rgba(255,255,255,.78)',
+            backdropFilter: 'blur(18px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(18px) saturate(180%)',
             borderBottom: '1px solid var(--border)',
           }}
         >
-          <div
-            style={{
-              maxWidth: 880,
-              margin: '0 auto',
-              padding: '14px 24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              gap: 16,
-            }}
-          >
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 15, letterSpacing: '-.02em' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 9,
+                background: 'var(--text-primary)',
+                clipPath: 'polygon(0 0, 78% 0, 100% 22%, 100% 100%, 0 100%)',
+                display: 'grid',
+                placeItems: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: 9,
+                  height: 9,
+                  background: 'var(--accent)',
+                  clipPath: 'polygon(30% 0, 100% 0, 70% 100%, 0 100%)',
+                }}
+              />
+            </div>
+            <span
+              style={{
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: 15.5,
+                letterSpacing: '-.01em',
+                color: 'var(--text-primary)',
+              }}
+            >
               {c.brand}
             </span>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              {/* Вход в приложение: SPA живёт под /app (см. backend serve_spa). */}
-              <a href="/app" style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-secondary)' }}>{c.nav.login}</a>
-              <a href="#lead" className="btn btn-primary btn-sm">{c.nav.cta}</a>
-            </div>
           </div>
-        </div>
-      )}
-
-      {/* ===== Hero ===== */}
-      <Hideable hidden={c.hidden.hero}>
-      <section style={{ padding: '120px 24px 96px' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
-          <span className="eyebrow">{c.hero.eyebrow}</span>
-          <h1
-            style={{
-              fontFamily: 'var(--font-display)',
-              fontWeight: 800,
-              fontSize: 'clamp(38px, 5.4vw, 60px)',
-              lineHeight: 0.98,
-              letterSpacing: '-.045em',
-              margin: 0,
-            }}
-          >
-            {c.hero.title}
-          </h1>
-          <p style={{ fontSize: 20, lineHeight: 1.6, color: 'var(--text-secondary)', margin: 0, maxWidth: 640, textWrap: 'pretty' } as CSSProperties}>
-            {c.hero.subtitle1}
-          </p>
-          <p style={{ fontSize: 20, lineHeight: 1.6, margin: 0, maxWidth: 640, textWrap: 'pretty' } as CSSProperties}>
-            {c.hero.subtitle2}
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, alignItems: 'flex-start', marginTop: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 22 }}>
+            {/* Вход в приложение: SPA живёт под /app (см. backend serve_spa). */}
+            <a href="/app" style={{ fontSize: 14.5, fontWeight: 600, color: 'var(--text-secondary)' }}>
+              {c.nav.login}
+            </a>
             <a
               href="#lead"
-              className="btn btn-primary"
-              style={{ padding: '16px 28px', fontSize: 17, borderRadius: 14, boxShadow: '0 8px 24px -8px rgba(37,99,235,.45)' }}
+              className="btn btn-primary btn-sm"
+              style={{ boxShadow: 'var(--shadow-blue)' }}
             >
-              {c.hero.ctaButton}
+              {c.nav.cta}
             </a>
-            <span style={{ fontSize: 14, color: 'var(--ink-3)' }}>
-              {c.hero.ctaNote}
-            </span>
           </div>
-        </div>
-      </section>
+        </nav>
+      )}
+
+      {/* ===== Hero (тёмный, анимированный canvas-фон) ===== */}
+      <Hideable hidden={c.hidden.hero}>
+        <section ref={heroSectionRef} style={{ position: 'relative', overflow: 'hidden', background: '#12141B' }}>
+          {/* Слой сетки */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage:
+                'linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px)',
+              backgroundSize: '132px 132px',
+              pointerEvents: 'none',
+            }}
+          />
+          {/* Анимированная «плата» */}
+          <canvas ref={heroCanvasRef} style={{ position: 'absolute', inset: 0, display: 'block' }} />
+          {/* Затемнение к низу */}
+          <div
+            style={{
+              position: 'absolute',
+              inset: 0,
+              background: 'linear-gradient(180deg, transparent 45%, #12141B 100%)',
+              pointerEvents: 'none',
+            }}
+          />
+
+          <div className="lp-wrap" style={{ position: 'relative', zIndex: 1, padding: '108px 32px 96px' }}>
+            <div className="eyebrow" style={{ color: 'rgba(255,255,255,.55)' }}>
+              {c.hero.eyebrow}
+            </div>
+            <h1
+              style={{
+                margin: '22px 0 0',
+                maxWidth: 820,
+                color: '#fff',
+                fontFamily: 'var(--font-display)',
+                fontWeight: 800,
+                fontSize: 'clamp(38px, 5vw, 60px)',
+                lineHeight: 0.98,
+                letterSpacing: '-.045em',
+              }}
+            >
+              {c.hero.title}
+            </h1>
+            {/* Стеклянная стат-карточка + поддерживающий абзац (subtitle1) в
+                один ряд. Карточку прячем, если значение пустое (правится в
+                редакторе). */}
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'flex-end',
+                gap: 28,
+                flexWrap: 'wrap',
+                marginTop: 34,
+              }}
+            >
+              {c.hero.statValue && (
+                <div
+                  style={{
+                    padding: '22px 26px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 4,
+                    minWidth: 260,
+                    background: 'rgba(255,255,255,.06)',
+                    backdropFilter: 'blur(18px) saturate(160%)',
+                    WebkitBackdropFilter: 'blur(18px) saturate(160%)',
+                    border: '1px solid rgba(255,255,255,.12)',
+                    borderRadius: 'var(--radius-lg)',
+                    boxShadow: '0 24px 60px -24px rgba(0,0,0,.6)',
+                  }}
+                >
+                  <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'rgba(255,255,255,.5)' }}>
+                    {c.hero.statLabel}
+                  </span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 34, letterSpacing: '-.03em', color: '#fff' }}>
+                    {c.hero.statValue}
+                    {c.hero.statUnit && (
+                      <span style={{ color: 'rgba(255,255,255,.55)', fontWeight: 700, fontSize: 16 }}>
+                        {' '}
+                        {c.hero.statUnit}
+                      </span>
+                    )}
+                  </span>
+                </div>
+              )}
+              <p
+                style={{
+                  margin: 0,
+                  maxWidth: 480,
+                  fontSize: 17,
+                  lineHeight: 1.65,
+                  color: 'rgba(255,255,255,.66)',
+                  fontWeight: 500,
+                }}
+              >
+                {c.hero.subtitle1}
+              </p>
+            </div>
+            <p
+              style={{
+                margin: '28px 0 0',
+                maxWidth: 620,
+                fontSize: 17,
+                lineHeight: 1.65,
+                color: 'rgba(255,255,255,.62)',
+                fontWeight: 500,
+              }}
+            >
+              {c.hero.subtitle2}
+            </p>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 18,
+                flexWrap: 'wrap',
+                marginTop: 34,
+              }}
+            >
+              <a
+                href="#lead"
+                className="btn btn-primary"
+                style={{
+                  padding: '0.95rem 1.9rem',
+                  fontSize: '1rem',
+                  borderRadius: 'var(--radius-md)',
+                  boxShadow: 'var(--shadow-blue)',
+                }}
+              >
+                {c.hero.ctaButton}
+              </a>
+              <span
+                style={{
+                  fontSize: 13.5,
+                  maxWidth: 340,
+                  lineHeight: 1.5,
+                  color: 'rgba(255,255,255,.45)',
+                }}
+              >
+                {c.hero.ctaNote}
+              </span>
+            </div>
+          </div>
+        </section>
       </Hideable>
 
-      {/* ===== Pain ===== */}
+      {/* ===== Знакомая картина (боль) ===== */}
       <Hideable hidden={c.hidden.pain}>
-      <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 28 }}>
-          <span className="eyebrow">{c.pain.eyebrow}</span>
-          <h2 style={h2Style}>{c.pain.title}</h2>
-          <p style={{ margin: 0, fontSize: 17, color: 'var(--text-secondary)' }}>
+        <section className="lp-wrap" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.pain.eyebrow}</div>
+          <h2 className="lp-h2">{c.pain.title}</h2>
+          <p style={{ margin: '22px 0 0', fontSize: 16, color: 'var(--text-secondary)', fontWeight: 500 }}>
             {c.pain.intro}
           </p>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+          <div
+            className="lp-grid-2"
+            style={{ marginTop: 32, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px 24px' }}
+          >
             {c.pain.points.map((text, i) => (
-              <p key={i} className="lp-row" style={{ margin: 0, padding: '16px 0', fontSize: 17, lineHeight: 1.55 }}>
-                {text}
-              </p>
-            ))}
-          </div>
-          <div style={{ marginTop: 8 }}>
-            <p style={{ margin: '0 0 10px', fontSize: 19, fontWeight: 700, letterSpacing: '-.01em' }}>
-              {c.pain.outroBold}
-            </p>
-            <p style={{ margin: 0, fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              {c.pain.outroText}
-            </p>
-          </div>
-        </div>
-      </section>
-      </Hideable>
-
-      {/* ===== Week scenes ===== */}
-      <Hideable hidden={c.hidden.week}>
-      <section style={{ padding: '96px 24px' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <span className="eyebrow">{c.week.eyebrow}</span>
-            <h2 style={h2Style}>{c.week.title}</h2>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {c.week.scenes.map((scene, i) => (
-              <div key={i} className="lp-row" style={{ display: 'grid', gridTemplateColumns: '190px 1fr', gap: 24, padding: '20px 0' }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent-ink)', letterSpacing: '-.01em' }}>{scene.day}</span>
-                <p style={{ margin: 0, fontSize: 16, lineHeight: 1.6 }}>{scene.text}</p>
+              <div
+                key={i}
+                className="lp-card is-hoverable"
+                data-reveal
+                style={{ ...revealDelay(i), padding: '22px 20px', display: 'flex', gap: 16, alignItems: 'flex-start' }}
+              >
+                <div className="lp-tile">
+                  <Icon name={at(PAIN_ICONS, i)} size={20} />
+                </div>
+                <p style={{ margin: 0, paddingTop: 3, fontSize: 15.5, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                  {text}
+                </p>
               </div>
             ))}
           </div>
-          <p style={{ margin: '8px 0 0', fontSize: 19, lineHeight: 1.5, fontWeight: 700, letterSpacing: '-.01em' }}>
-            {c.week.outro}
+          <p style={{ margin: '40px 0 0', fontSize: 20, fontWeight: 700, lineHeight: 1.5, color: 'var(--text-primary)', maxWidth: 720 }}>
+            {c.pain.outroBold}
           </p>
-        </div>
-      </section>
+          <p style={{ margin: '10px 0 0', fontSize: 15, color: 'var(--text-secondary)' }}>{c.pain.outroText}</p>
+        </section>
       </Hideable>
 
-      {/* ===== Solution ===== */}
-      <Hideable hidden={c.hidden.solution}>
-      <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))', gap: 56, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            <span className="eyebrow">{c.solution.eyebrow}</span>
-            <h2 style={h2Style}>{c.solution.title}</h2>
-            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.65, color: 'var(--text-secondary)' }}>
-              {c.solution.text1}
-            </p>
-            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.65 }}>
-              {c.solution.text2}
-            </p>
-            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.65 }}>{c.solution.text3}</p>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <p style={{ margin: 0, fontSize: 16, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              {c.solution.resultIntro}
-            </p>
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' }}>
-              {c.solution.resultItems.map((item, i, arr) => (
-                <li key={i} className={i < arr.length - 1 ? 'lp-row' : undefined} style={{ padding: '14px 0', fontSize: 17, lineHeight: 1.5 }}>
-                  {item}
-                </li>
+      {/* ===== Одна рабочая неделя (таймлайн) ===== */}
+      <Hideable hidden={c.hidden.week}>
+        <section className="lp-band" style={{ padding: '128px 0 96px', marginTop: 128 }}>
+          <div className="lp-wrap">
+            <div className="eyebrow">{c.week.eyebrow}</div>
+            <h2 className="lp-h2">{c.week.title}</h2>
+
+            <div className="lp-tl" style={{ marginTop: 44 }}>
+              {c.week.scenes.map((scene, i) => (
+                <div key={i} className="lp-tl-item" data-reveal style={revealDelay(i, 0.08)}>
+                  <span className="lp-tl-dot" />
+                  <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.02em', color: 'var(--accent)' }}>
+                    {scene.day}
+                  </span>
+                  <p style={{ margin: '8px 0 0', fontSize: 16.5, lineHeight: 1.65, color: 'var(--text-primary)', maxWidth: 700 }}>
+                    {scene.text}
+                  </p>
+                </div>
               ))}
-            </ul>
+            </div>
+
+            <div className="lp-card" style={{ marginTop: 12, padding: '26px 28px', background: '#fff' }}>
+              <p style={{ margin: 0, fontSize: 18, fontWeight: 700, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                {c.week.outro}
+              </p>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      {/* ===== How it works ===== */}
-      <Hideable hidden={c.hidden.how}>
-      <section style={{ padding: '96px 24px' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <span className="eyebrow">{c.how.eyebrow}</span>
-            <h2 style={h2Style}>{c.how.title}</h2>
+      {/* ===== Подход (2 колонки: проза + чек-лист) ===== */}
+      <Hideable hidden={c.hidden.solution}>
+        <section className="lp-wide" style={{ padding: '128px 32px 0' }}>
+          <div className="lp-split" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, alignItems: 'start' }}>
+            <div>
+              <div className="eyebrow">{c.solution.eyebrow}</div>
+              <h2 className="lp-h2">{c.solution.title}</h2>
+              <p style={{ ...proseStyle, margin: '22px 0 0' }}>{c.solution.text1}</p>
+              <p style={proseStyle}>{c.solution.text2}</p>
+              <p style={proseStyle}>{c.solution.text3}</p>
+            </div>
+            <div>
+              <p style={{ margin: '0 0 20px', fontSize: 16, lineHeight: 1.65, color: 'var(--text-secondary)' }}>
+                {c.solution.resultIntro}
+              </p>
+              <div className="lp-card" style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {c.solution.resultItems.map((text, i) => (
+                  <FeatRow key={i} icon={at(OUTCOME_ICONS, i)} text={text} index={i} />
+                ))}
+              </div>
+            </div>
           </div>
-          <div className="lp-how-grid">
+        </section>
+      </Hideable>
+
+      {/* ===== Как это работает (roadmap) ===== */}
+      <Hideable hidden={c.hidden.how}>
+        <section className="lp-wide" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.how.eyebrow}</div>
+          <h2 className="lp-h2" style={{ maxWidth: 900 }}>
+            {c.how.title}
+          </h2>
+
+          <div
+            className="lp-roadmap lp-grid-4"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 22, marginTop: 44 }}
+          >
             {c.how.steps.map((step, i) => {
-              // Пункты этапа. Fallback на легаси-абзац text (старые сохранения из
-              // БД могут не иметь points), чтобы рендер не падал.
-              const points =
-                step.points && step.points.length > 0
-                  ? step.points
-                  : step.text
-                  ? [step.text]
-                  : [];
+              const points = step.points && step.points.length > 0 ? step.points : step.text ? [step.text] : [];
               return (
-                <div key={i} className="lp-how-card">
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, color: 'var(--accent-ink)', letterSpacing: '-.01em' }}>
+                <div
+                  key={i}
+                  className="lp-card is-hoverable"
+                  data-reveal
+                  style={{ ...revealDelay(i, 0.09), padding: '22px 22px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}
+                >
+                  <div className="lp-week-badge">{i + 1}</div>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                     {step.week}
                   </span>
-                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 19, letterSpacing: '-.03em', lineHeight: 1.15 }}>
-                    {step.title}
-                  </h3>
-                  <ul className="lp-plan">
+                  <h3 style={{ ...cardTitleStyle, fontSize: 18 }}>{step.title}</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 2 }}>
                     {points.map((point, j) => (
-                      <li key={j} className="lp-plan-item">
-                        <span className="lp-plan-rail">
-                          <span className="lp-plan-dot" />
-                        </span>
-                        <span className="lp-plan-text">{point}</span>
-                      </li>
+                      <div key={j} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+                        <span style={{ flex: 'none', width: 6, height: 6, marginTop: 7, borderRadius: '50%', background: 'var(--accent)' }} />
+                        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{point}</p>
+                      </div>
                     ))}
-                  </ul>
+                  </div>
                 </div>
               );
             })}
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      {/* ===== Product ===== */}
+      {/* ===== Продукт (стат-полоса + что входит) ===== */}
       <Hideable hidden={c.hidden.product}>
-      <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 700 }}>
-            <span className="eyebrow">{c.product.eyebrow}</span>
-            <h2 style={h2Style}>{c.product.title}</h2>
-            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.65, color: 'var(--text-secondary)', textWrap: 'pretty' } as CSSProperties}>
-              {c.product.intro}
-            </p>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 32 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 20, borderLeft: '2px solid var(--border-2)' }}>
-              <span style={factLabelStyle}>{c.product.formatLabel}</span>
-              <span style={factValueStyle}>{c.product.formatValue}</span>
-            </div>
-            {showPrice && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 20, borderLeft: '2px solid var(--border-2)' }}>
-                <span style={factLabelStyle}>{c.product.priceLabel}</span>
-                <span style={factValueStyle}>{c.product.priceValue}</span>
+        <section className="lp-wrap" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.product.eyebrow}</div>
+          <h2 className="lp-h2">{c.product.title}</h2>
+          <p style={{ margin: '22px 0 0', maxWidth: 680, fontSize: 17, lineHeight: 1.65, color: 'var(--text-secondary)', fontWeight: 500 }}>
+            {c.product.intro}
+          </p>
+
+          <div
+            className="lp-card lp-facts"
+            style={{ marginTop: 32, padding: '30px 32px', display: 'grid', gridTemplateColumns: `repeat(${facts.length}, 1fr)`, gap: 8 }}
+          >
+            {facts.map((f, i) => (
+              <div
+                key={i}
+                style={{
+                  padding: i === 0 ? '0 20px 0 0' : '0 20px',
+                  borderLeft: i === 0 ? 'none' : '1px solid var(--border)',
+                }}
+              >
+                <div className="lp-tile" style={{ width: 34, height: 34, borderRadius: 10, marginBottom: 12 }}>
+                  <Icon name={f.icon} size={16} />
+                </div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: f.accent ? 'var(--accent)' : 'var(--ink-3)' }}>
+                  {f.label}
+                </div>
+                <div style={{ marginTop: 8, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 18, color: f.accent ? 'var(--accent)' : 'var(--text-primary)' }}>
+                  {f.value}
+                </div>
               </div>
-            )}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 20, borderLeft: '2px solid var(--border-2)' }}>
-              <span style={factLabelStyle}>{c.product.audienceLabel}</span>
-              <span style={factValueStyle}>{c.product.audienceValue}</span>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingLeft: 20, borderLeft: '2px solid var(--accent)' }}>
-              <span style={{ ...factLabelStyle, color: 'var(--accent-ink)' }}>{c.product.resultLabel}</span>
-              <span style={{ ...factValueStyle, color: 'var(--accent-ink)' }}>
-                {c.product.resultValue}
-              </span>
-            </div>
+            ))}
           </div>
-          <div style={{ maxWidth: 780 }}>
-            <h3 style={{ margin: '0 0 14px', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>{c.product.includedTitle}</h3>
-            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column' }}>
-              {c.product.included.map((item, i, arr) => (
-                <li key={i} className={i < arr.length - 1 ? 'lp-row' : undefined} style={{ padding: '14px 0', fontSize: 17, lineHeight: 1.5 }}>
-                  {item}
-                </li>
-              ))}
-            </ul>
+
+          <h3 style={{ margin: '44px 0 0', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
+            {c.product.includedTitle}
+          </h3>
+          <div className="lp-card" style={{ marginTop: 18, padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            {c.product.included.map((text, i) => (
+              <FeatRow key={i} icon={at(INCLUDE_ICONS, i)} text={text} index={i} />
+            ))}
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      {/* ===== Blocks to implement ===== */}
+      {/* ===== Первый блок (3-колоночные карточки + инструменты) ===== */}
       <Hideable hidden={c.hidden.blocks}>
-      <section style={{ padding: '96px 24px' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <span className="eyebrow">{c.blocks.eyebrow}</span>
-            <h2 style={h2Style}>{c.blocks.title}</h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '32px 40px' }}>
+        <section className="lp-wide" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.blocks.eyebrow}</div>
+          <h2 className="lp-h2">{c.blocks.title}</h2>
+
+          <div
+            className="lp-grid-3"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 22, marginTop: 44 }}
+          >
             {c.blocks.items.map((block, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div
+                key={i}
+                className="lp-card is-hoverable"
+                data-reveal
+                style={{ ...revealDelay(i), padding: '26px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}
+              >
+                <div className="lp-tile">
+                  <Icon name={at(BLOCK_ICONS, i)} size={20} />
+                </div>
                 <h3 style={cardTitleStyle}>{block.title}</h3>
                 <p style={cardTextStyle}>{block.text}</p>
               </div>
             ))}
           </div>
-          <div style={{ maxWidth: 780, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
-            <h3 style={{ margin: '0 0 8px', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, letterSpacing: '-.02em', paddingTop: 32 }}>
-              {c.blocks.toolsTitle}
-            </h3>
-            <p style={{ margin: 0, fontSize: 15, color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+
+          <div className="lp-card" style={{ marginTop: 28, padding: '28px 30px', background: 'var(--surface-2)', border: 'none' }}>
+            <h3 style={cardTitleStyle}>{c.blocks.toolsTitle}</h3>
+            <p style={{ margin: '10px 0 0', fontSize: 15.5, lineHeight: 1.65, color: 'var(--text-secondary)', maxWidth: 800 }}>
               {c.blocks.toolsText}
             </p>
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      {/* ===== Why it works ===== */}
+      {/* ===== Почему это работает (принципы + что меняется) ===== */}
       <Hideable hidden={c.hidden.why}>
-      <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <span className="eyebrow">{c.why.eyebrow}</span>
-            <h2 style={h2Style}>{c.why.title}</h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 32 }}>
+        <section className="lp-wide" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.why.eyebrow}</div>
+          <h2 className="lp-h2">{c.why.title}</h2>
+
+          <div
+            className="lp-grid-4"
+            style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 32, marginTop: 44 }}
+          >
             {c.why.items.map((item, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30, color: 'var(--accent)', letterSpacing: '-.03em', lineHeight: 1 }}>
-                  {item.num}
-                </span>
-                <h3 style={cardTitleStyle}>{item.title}</h3>
-                <p style={cardTextStyle}>{item.text}</p>
+              <div key={i}>
+                <div className="lp-num">{item.num}</div>
+                <h3 style={{ ...cardTitleStyle, margin: '14px 0 0' }}>{item.title}</h3>
+                <p style={{ ...cardTextStyle, margin: '10px 0 0' }}>{item.text}</p>
               </div>
             ))}
           </div>
+
           <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(340px, 1fr))',
-              gap: 56,
-              alignItems: 'start',
-              marginTop: 8,
-              paddingTop: 40,
-              borderTop: '1px solid var(--border)',
-            }}
+            className="lp-split"
+            style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, marginTop: 72, paddingTop: 56, borderTop: '1px solid var(--border)', alignItems: 'start' }}
           >
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 24, letterSpacing: '-.03em', lineHeight: 1.1 }}>
+            <div>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
                 {c.why.afterTitle}
               </h3>
-              <p style={{ margin: 0, fontSize: 16, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                {c.why.afterText1}
-              </p>
-              <p style={{ margin: '8px 0 0', fontSize: 16, lineHeight: 1.6 }}>
-                {c.why.afterText2}
-              </p>
+              <p style={proseStyle}>{c.why.afterText1}</p>
+              <p style={{ ...proseStyle, margin: '14px 0 0' }}>{c.why.afterText2}</p>
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              <p style={{ margin: 0, fontSize: 16, lineHeight: 2 }}>
-                {c.why.afterLines.map((line, i) => (
-                  <span key={i}>
-                    {line}
-                    <br />
-                  </span>
-                ))}
-              </p>
+            <div className="lp-card" style={{ padding: '20px 22px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {c.why.afterLines.map((text, i) => (
+                <FeatRow key={i} icon={at(CHANGE_ICONS, i)} text={text} index={i} />
+              ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      {/* ===== Proof ===== */}
+      {/* ===== Измеримость / метрики ===== */}
       <Hideable hidden={c.hidden.proof}>
-      <section style={{ padding: '96px 24px' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 700 }}>
-            <span className="eyebrow">{c.proof.eyebrow}</span>
-            <h2 style={h2Style}>{c.proof.title}</h2>
-            <p style={{ margin: 0, fontSize: 17, color: 'var(--text-secondary)' }}>
-              {c.proof.intro}
-            </p>
-          </div>
-          <div className="clients-table">
-            <div className="ct-row head" style={{ gridTemplateColumns: '2.3fr .8fr .8fr .8fr .8fr' }}>
+        <section className="lp-wrap" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.proof.eyebrow}</div>
+          <h2 className="lp-h2">{c.proof.title}</h2>
+          <p style={{ margin: '22px 0 0', fontSize: 16, color: 'var(--text-secondary)' }}>{c.proof.intro}</p>
+
+          <div className="lp-card" style={{ marginTop: 32, overflow: 'hidden' }}>
+            <div
+              className="lp-metric-row"
+              style={{ gridTemplateColumns: metricCols, background: 'var(--surface-2)' }}
+            >
               {c.proof.metricsHead.map((h, i) => (
-                <span key={i}>{h}</span>
+                <span
+                  key={i}
+                  style={{
+                    fontSize: 11.5,
+                    fontWeight: 700,
+                    letterSpacing: '.04em',
+                    textTransform: 'uppercase',
+                    color: 'var(--ink-3)',
+                    textAlign: i === 0 ? 'left' : 'right',
+                  }}
+                >
+                  {h}
+                </span>
               ))}
             </div>
             {c.proof.metricsRows.map((row, ri) => (
-              <div key={ri} className="ct-row" style={{ gridTemplateColumns: '2.3fr .8fr .8fr .8fr .8fr', cursor: 'default' }}>
-                <span>{row.label}</span>
-                {row.values.map((v, i) =>
-                  i === row.values.length - 1 ? (
-                    <span key={i} style={{ fontWeight: 700, color: 'var(--success)' }}>{v}</span>
-                  ) : (
-                    <span key={i}>{v}</span>
-                  )
-                )}
+              <div key={ri} className="lp-metric-row" style={{ gridTemplateColumns: metricCols }}>
+                <span style={{ fontSize: 14.5, color: 'var(--text-primary)' }}>{row.label}</span>
+                {row.values.map((v, i) => (
+                  <span
+                    key={i}
+                    style={{
+                      fontSize: 14.5,
+                      textAlign: 'right',
+                      fontVariantNumeric: 'tabular-nums',
+                      fontWeight: i === row.values.length - 1 ? 700 : 500,
+                      color: i === row.values.length - 1 ? 'var(--success)' : 'var(--text-secondary)',
+                    }}
+                  >
+                    {v}
+                  </span>
+                ))}
               </div>
             ))}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20, paddingTop: 24, borderTop: '1px solid var(--border)' }}>
+
+          <div style={{ marginTop: 32, paddingTop: 24, borderTop: '1px solid var(--border)' }}>
             <p style={{ margin: 0, fontSize: 16, fontWeight: 700 }}>{c.proof.groupsIntro}</p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 28 }}>
+            <div
+              className="lp-grid-4"
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 28, marginTop: 20 }}
+            >
               {c.proof.groups.map((g, i) => (
-                <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 13, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent-ink)' }}>
+                <div key={i}>
+                  <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                     {g.title}
                   </span>
-                  <p style={{ margin: 0, fontSize: 15, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{g.text}</p>
+                  <p style={{ margin: '8px 0 0', fontSize: 14.5, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{g.text}</p>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      {/* ===== Situations ===== */}
+      {/* ===== С чем приходят (ситуации) ===== */}
       <Hideable hidden={c.hidden.situations}>
-      <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <span className="eyebrow">{c.situations.eyebrow}</span>
-            <h2 style={h2Style}>{c.situations.title}</h2>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '32px 40px' }}>
-            {c.situations.items.map((s, i) => (
-              <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, color: 'var(--ink-3)' }}>{s.num}</span>
-                <h3 style={cardTitleStyle}>{s.title}</h3>
-                <p style={cardTextStyle}>{s.text}</p>
+        <section className="lp-band" style={{ padding: '128px 0 96px', marginTop: 128 }}>
+          <div className="lp-wide">
+            <div className="eyebrow">{c.situations.eyebrow}</div>
+            <h2 className="lp-h2">{c.situations.title}</h2>
+
+            <div
+              className="lp-grid-2"
+              style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 20, marginTop: 44 }}
+            >
+              {c.situations.items.map((s, i) => (
+                <div
+                  key={i}
+                  className="lp-card is-hoverable"
+                  data-reveal
+                  style={{ ...revealDelay(i, 0.08), padding: '26px', display: 'flex', gap: 20, alignItems: 'flex-start', background: '#fff' }}
+                >
+                  <div className="lp-num" style={{ fontSize: 26, color: 'var(--ink-4)' }}>
+                    {s.num}
+                  </div>
+                  <div>
+                    <h3 style={cardTitleStyle}>{s.title}</h3>
+                    <p style={{ ...cardTextStyle, margin: '10px 0 0', fontSize: 15 }}>{s.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div
+              className="lp-split"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, marginTop: 64, paddingTop: 48, borderTop: '1px solid var(--border)', alignItems: 'start' }}
+            >
+              <div>
+                <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
+                  {c.situations.casesTitle}
+                </h3>
+                <p style={proseStyle}>{c.situations.casesText1}</p>
+                <p style={{ margin: '16px 0 0', fontSize: 17, fontWeight: 700, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                  {c.situations.casesText2}
+                </p>
               </div>
-            ))}
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 48, alignItems: 'start', paddingTop: 32, borderTop: '1px solid var(--border)' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, letterSpacing: '-.03em' }}>{c.situations.casesTitle}</h3>
-              <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.65, color: 'var(--text-secondary)' }}>
-                {c.situations.casesText1}
-              </p>
-              <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.65, fontWeight: 600 }}>
-                {c.situations.casesText2}
-              </p>
-            </div>
-            <div>
-              <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.85, color: 'var(--text-secondary)' }}>
-                {c.situations.casesRight}
-              </p>
+              <div>
+                <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.85, color: 'var(--text-secondary)' }}>
+                  {c.situations.casesRight}
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      {/* ===== Objections ===== */}
+      {/* ===== Честный разговор (возражения) ===== */}
       <Hideable hidden={c.hidden.objections}>
-      <section style={{ padding: '96px 24px' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 40 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <span className="eyebrow">{c.objections.eyebrow}</span>
-            <h2 style={h2Style}>{c.objections.title}</h2>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <section className="lp-wrap" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.objections.eyebrow}</div>
+          <h2 className="lp-h2">{c.objections.title}</h2>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 40 }}>
             {c.objections.items.map((o, i) => (
-              <div key={i} className="lp-row" style={{ padding: '24px 0' }}>
-                <p style={{ margin: '0 0 8px', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 17, letterSpacing: '-.01em' }}>{o.q}</p>
-                <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.65, color: 'var(--text-secondary)' }}>{o.a}</p>
+              <div
+                key={i}
+                className="lp-card is-hoverable"
+                data-reveal
+                style={{ ...revealDelay(i), padding: '30px 30px 26px', position: 'relative', overflow: 'hidden' }}
+              >
+                <span className="lp-quote-mark">&ldquo;</span>
+                <p style={{ margin: 0, paddingLeft: 34, fontSize: 17.5, fontWeight: 700, lineHeight: 1.5, color: 'var(--text-primary)' }}>
+                  {o.q}
+                </p>
+                <p style={{ margin: '14px 0 0', paddingLeft: 34, fontSize: 15.5, lineHeight: 1.65, color: 'var(--text-secondary)' }}>
+                  {o.a}
+                </p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
       {/* ===== FAQ ===== */}
       <Hideable hidden={c.hidden.faq}>
-      <section style={{ padding: '96px 24px', background: 'var(--surface-2)', borderTop: '1px solid var(--border)', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 36 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <span className="eyebrow">{c.faq.eyebrow}</span>
-            <h2 style={h2Style}>{c.faq.title}</h2>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <section className="lp-wrap" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.faq.eyebrow}</div>
+          <h2 className="lp-h2" style={{ fontSize: 'clamp(32px, 3.4vw, 42px)' }}>
+            {c.faq.title}
+          </h2>
+
+          <div style={{ marginTop: 32 }}>
             {c.faq.items.map((item, i) => (
-              <details key={i} className="lp-row lp-details" style={{ padding: '18px 0' }}>
-                <summary
-                  style={{
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    alignItems: 'center',
-                    gap: 16,
-                    fontFamily: 'var(--font-display)',
-                    fontWeight: 800,
-                    fontSize: 16.5,
-                    letterSpacing: '-.02em',
-                  }}
-                >
-                  {item.q}
-                  <span className="lp-chev" style={{ color: 'var(--accent)', fontSize: 20, fontWeight: 400, transition: 'transform .2s', lineHeight: 1 }}>+</span>
+              <details key={i} className="lp-faq">
+                <summary>
+                  <span>{item.q}</span>
+                  <span className="lp-plus" />
                 </summary>
-                <p style={{ margin: '12px 0 0', fontSize: 15, lineHeight: 1.65, color: 'var(--text-secondary)' }}>{item.a}</p>
+                <p className="lp-a">{item.a}</p>
               </details>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      {/* ===== Final CTA ===== */}
+      {/* ===== Финальный CTA + форма заявки ===== */}
       <Hideable hidden={c.hidden.cta}>
-      <section id="lead" style={{ padding: '110px 24px 130px' }}>
-        <div style={{ maxWidth: 780, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 56, alignItems: 'start' }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-            <span className="eyebrow">{c.cta.eyebrow}</span>
-            <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(30px, 4vw, 44px)', letterSpacing: '-.04em', lineHeight: 1.02, margin: 0 }}>
-              {c.cta.title}
-            </h2>
-            <p style={{ margin: 0, fontSize: 17, lineHeight: 1.65, color: 'var(--text-secondary)', textWrap: 'pretty' } as CSSProperties}>
-              {c.cta.text}
-            </p>
-            <p style={{ margin: 0, fontSize: 14, color: 'var(--ink-3)' }}>{c.cta.note}</p>
-          </div>
-          <div style={{ border: '1px solid var(--border-2)', borderRadius: 22, padding: 28, background: 'var(--card-bg)', boxShadow: 'var(--shadow-md)' }}>
-            {!sent ? (
-              <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label className="form-label" htmlFor="lead-name" style={{ margin: 0 }}>{c.cta.nameLabel}</label>
-                  <input className="form-input" id="lead-name" type="text" placeholder={c.cta.namePlaceholder} required />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label className="form-label" htmlFor="lead-phone" style={{ margin: 0 }}>{c.cta.phoneLabel}</label>
-                  <input className="form-input" id="lead-phone" type="text" placeholder={c.cta.phonePlaceholder} required />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <label className="form-label" htmlFor="lead-note" style={{ margin: 0 }}>{c.cta.noteLabel}</label>
-                  <textarea className="form-textarea" id="lead-note" placeholder={c.cta.notePlaceholder} style={{ minHeight: 88 }} />
-                </div>
-                {/* Honeypot: скрыт от людей, приманка для ботов. Не удалять. */}
-                <input
-                  type="text"
-                  id="lead-website"
-                  name="website"
-                  tabIndex={-1}
-                  autoComplete="off"
-                  aria-hidden="true"
-                  style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
-                />
-                <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                  <input
-                    type="checkbox"
-                    checked={agreed}
-                    onChange={(e) => setAgreed(e.target.checked)}
-                    style={{ marginTop: 2, width: 16, height: 16, flexShrink: 0, accentColor: 'var(--accent)', cursor: 'pointer' }}
-                  />
-                  <span>
-                    {c.cta.consentPrefix}
-                    <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-ink)', textDecoration: 'underline' }}>
-                      {c.cta.consentLink}
-                    </a>
-                    {c.cta.consentSuffix}
-                  </span>
-                </label>
-                <button
-                  className="btn btn-primary"
-                  type="submit"
-                  disabled={!agreed || sending}
-                  style={{ padding: '14px 24px', fontSize: 16, borderRadius: 14, opacity: agreed && !sending ? 1 : 0.5, cursor: agreed && !sending ? 'pointer' : 'not-allowed' }}
-                >
-                  {sending ? c.cta.submitSending : c.cta.submit}
-                </button>
-                {error && (
-                  <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--danger, #e23d32)' }}>{error}</p>
-                )}
-              </form>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 0' }}>
-                <span className="pill pill-green"><span className="led" />{c.cta.successTitle}</span>
-                <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                  {c.cta.successText}
-                </p>
+        <section id="lead" className="lp-wide" style={{ padding: '140px 32px 0', scrollMarginTop: 80 }}>
+          <div
+            style={{
+              position: 'relative',
+              borderRadius: 'var(--radius-xl)',
+              overflow: 'hidden',
+              padding: '56px 48px',
+              background:
+                'radial-gradient(720px 360px at 50% 0%, rgba(37,99,235,.10), transparent 65%), var(--surface-2)',
+              boxShadow: 'var(--shadow-md)',
+            }}
+          >
+            <div
+              className="lp-split"
+              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 56, alignItems: 'start' }}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div className="eyebrow">{c.cta.eyebrow}</div>
+                <h2 style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(28px, 3vw, 40px)', letterSpacing: '-.035em', lineHeight: 1.05, margin: 0 }}>
+                  {c.cta.title}
+                </h2>
+                <p style={{ margin: 0, fontSize: 16, lineHeight: 1.65, color: 'var(--text-secondary)' }}>{c.cta.text}</p>
+                <p style={{ margin: 0, fontSize: 14, color: 'var(--ink-3)' }}>{c.cta.note}</p>
               </div>
-            )}
+
+              <div
+                style={{
+                  border: '1px solid var(--border-2)',
+                  borderRadius: 'var(--radius-lg)',
+                  padding: 28,
+                  background: 'var(--card-bg)',
+                  boxShadow: 'var(--shadow-md)',
+                }}
+              >
+                {!sent ? (
+                  <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label className="form-label" htmlFor="lead-name" style={{ margin: 0 }}>
+                        {c.cta.nameLabel}
+                      </label>
+                      <input className="form-input" id="lead-name" type="text" placeholder={c.cta.namePlaceholder} required />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label className="form-label" htmlFor="lead-phone" style={{ margin: 0 }}>
+                        {c.cta.phoneLabel}
+                      </label>
+                      <input className="form-input" id="lead-phone" type="text" placeholder={c.cta.phonePlaceholder} required />
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      <label className="form-label" htmlFor="lead-note" style={{ margin: 0 }}>
+                        {c.cta.noteLabel}
+                      </label>
+                      <textarea className="form-textarea" id="lead-note" placeholder={c.cta.notePlaceholder} style={{ minHeight: 88 }} />
+                    </div>
+                    {/* Honeypot: скрыт от людей, приманка для ботов. Не удалять. */}
+                    <input
+                      type="text"
+                      id="lead-website"
+                      name="website"
+                      tabIndex={-1}
+                      autoComplete="off"
+                      aria-hidden="true"
+                      style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
+                    />
+                    <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={agreed}
+                        onChange={(e) => setAgreed(e.target.checked)}
+                        style={{ marginTop: 2, width: 16, height: 16, flexShrink: 0, accentColor: 'var(--accent)', cursor: 'pointer' }}
+                      />
+                      <span>
+                        {c.cta.consentPrefix}
+                        <a href="/privacy" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent-ink)', textDecoration: 'underline' }}>
+                          {c.cta.consentLink}
+                        </a>
+                        {c.cta.consentSuffix}
+                      </span>
+                    </label>
+                    <button
+                      className="btn btn-primary"
+                      type="submit"
+                      disabled={!agreed || sending}
+                      style={{ padding: '14px 24px', fontSize: 16, borderRadius: 'var(--radius-md)', opacity: agreed && !sending ? 1 : 0.5, cursor: agreed && !sending ? 'pointer' : 'not-allowed' }}
+                    >
+                      {sending ? c.cta.submitSending : c.cta.submit}
+                    </button>
+                    {error && <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--danger, #e23d32)' }}>{error}</p>}
+                  </form>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '12px 0' }}>
+                    <span className="pill pill-green">
+                      <span className="led" />
+                      {c.cta.successTitle}
+                    </span>
+                    <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.6, color: 'var(--text-secondary)' }}>{c.cta.successText}</p>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
       </Hideable>
 
-      <footer style={{ borderTop: '1px solid var(--border)', padding: '28px 24px' }}>
-        <div style={{ maxWidth: 1000, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, letterSpacing: '-.01em' }}>{c.footer.brand}</span>
-          <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{c.footer.tagline}</span>
-        </div>
+      <footer
+        className="lp-wide"
+        style={{ marginTop: 88, padding: '32px 32px 48px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap', borderTop: '1px solid var(--border)' }}
+      >
+        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, color: 'var(--text-primary)' }}>{c.footer.brand}</span>
+        <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{c.footer.tagline}</span>
       </footer>
     </div>
   );
