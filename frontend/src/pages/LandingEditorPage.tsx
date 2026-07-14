@@ -608,7 +608,11 @@ export default function LandingEditorPage() {
           <TextInput label="Надзаголовок" {...bind(['solution', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['solution', 'title'])} multiline />
           <TextInput label="Абзац 1" {...bind(['solution', 'text1'])} multiline />
-          <TextInput label="Абзац 2" {...bind(['solution', 'text2'])} multiline />
+          <TextInput
+            label="Абзац 2 (каждая строка с новой — отдельный пункт; слова «не», «нет», «без», «никаких» подсветятся красным)"
+            {...bind(['solution', 'text2'])}
+            multiline
+          />
           <TextInput label="Абзац 3" {...bind(['solution', 'text3'])} multiline />
           <TextInput label="Вступление к списку" {...bind(['solution', 'resultIntro'])} multiline />
           <StringListEditor label="Пункты результата" {...bind(['solution', 'resultItems'])} />

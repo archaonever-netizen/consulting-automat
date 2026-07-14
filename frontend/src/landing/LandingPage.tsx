@@ -106,6 +106,67 @@ function FeatRow({ icon, text, index }: { icon: string; text: string; index: num
   );
 }
 
+// ── «Манифест Подхода»: пункты + красные слова-отрицания ──
+// Слова, обозначающие отсутствие/отказ («никаких», «нет», «без», «не» …),
+// подсвечиваем красным (просьба клиента). Список закрытый, сопоставление по
+// нижнему регистру, исходный регистр слова сохраняется.
+const NEGATION_WORDS = new Set([
+  'никаких', 'никакой', 'никакие', 'никак', 'нет', 'без', 'не',
+  'невозможно', 'невозможен', 'невозможна', 'невозможны',
+]);
+
+// Границу слова считаем по букве Юникода: \b в JS для кириллицы ненадёжен, а
+// lookbehind не поддерживается в старых Safari. Поэтому идём по совпадениям слов
+// через exec и сами склеиваем красные и обычные сегменты.
+const WORD_RE = /\p{L}+/gu;
+
+function highlightNegations(text: string): ReactNode[] {
+  const out: ReactNode[] = [];
+  let last = 0;
+  let key = 0;
+  WORD_RE.lastIndex = 0;
+  let m: RegExpExecArray | null;
+  while ((m = WORD_RE.exec(text)) !== null) {
+    const word = m[0];
+    if (!NEGATION_WORDS.has(word.toLowerCase())) continue;
+    // «не один год» — устойчивый оборот «много лет», а не отрицание: не красим.
+    const rest = text.slice(m.index + word.length);
+    if (word.toLowerCase() === 'не' && /^\s+один(?!\p{L})/iu.test(rest)) continue;
+    if (m.index > last) out.push(text.slice(last, m.index));
+    out.push(
+      <span key={key++} className="lp-neg">
+        {word}
+      </span>,
+    );
+    last = m.index + word.length;
+  }
+  if (last < text.length) out.push(text.slice(last));
+  return out;
+}
+
+// Абзац «Подхода», где каждый перенос строки — отдельный пункт списка, а слова-
+// отрицания подсвечены красным. Одна строка (нет переносов) — обычный абзац,
+// поэтому вшитый дефолт content.ts (текст без \n) выглядит как раньше.
+function ManifestoProse({ text }: { text: string }) {
+  const lines = text
+    .split('\n')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (lines.length < 2) {
+    return <p style={proseStyle}>{highlightNegations(text)}</p>;
+  }
+  return (
+    <ul className="lp-manifesto">
+      {lines.map((line, i) => (
+        <li key={i}>
+          <span className="lp-manifesto-dot" aria-hidden />
+          <span>{highlightNegations(line)}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export default function LandingPage({ showPrice = true, stickyBar = true }: LandingPageProps) {
   const [content, setContent] = useState<LandingContent>(defaultLandingContent);
   const [sent, setSent] = useState(false);
@@ -230,6 +291,12 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
 
         .lp-feat { display: flex; gap: 16px; align-items: flex-start; padding: 4px 0; }
         .lp-feat p { margin: 0; padding-top: 5px; }
+
+        /* «Манифест Подхода»: пункты с акцентной точкой + красные слова-отрицания */
+        .lp-manifesto { margin: 16px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
+        .lp-manifesto li { display: flex; gap: 12px; align-items: flex-start; margin: 0; font-size: 16px; line-height: 1.65; color: var(--text-secondary); }
+        .lp-manifesto-dot { flex: none; width: 6px; height: 6px; margin-top: 9px; border-radius: 50%; background: var(--accent); }
+        .lp-neg { color: var(--danger); font-weight: 700; }
 
         .lp-band { background: linear-gradient(180deg, var(--surface-2), #fff 82%); }
 
@@ -574,7 +641,7 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
               <div className="eyebrow">{c.solution.eyebrow}</div>
               <h2 className="lp-h2">{c.solution.title}</h2>
               <p style={{ ...proseStyle, margin: '22px 0 0' }}>{c.solution.text1}</p>
-              <p style={proseStyle}>{c.solution.text2}</p>
+              <ManifestoProse text={c.solution.text2} />
               <p style={proseStyle}>{c.solution.text3}</p>
             </div>
             <div>
