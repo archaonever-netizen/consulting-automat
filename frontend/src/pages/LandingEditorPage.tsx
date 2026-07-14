@@ -700,6 +700,21 @@ export default function LandingEditorPage() {
               { key: 'text', label: 'Текст', multiline: true },
             ]}
           />
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+          <TextInput label="Кейсы «было/стало» — заголовок блока" {...bind(['situations', 'casesRowTitle'])} />
+          <TextInput label="Кейсы «было/стало» — вступление" {...bind(['situations', 'casesRowIntro'])} multiline />
+          <ObjectListEditor
+            label="Карточки кейсов (было/стало)"
+            {...bind(['situations', 'casesItems'])}
+            fields={[
+              { key: 'industry', label: 'Отрасль (пилюля)' },
+              { key: 'before', label: 'Было', multiline: true },
+              { key: 'after', label: 'Стало', multiline: true },
+              { key: 'metric', label: 'Метрика (напр. –80%)' },
+              { key: 'metricLabel', label: 'Подпись метрики' },
+            ]}
+          />
+          <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
           <TextInput label="Заголовок «Если нужны кейсы»" {...bind(['situations', 'casesTitle'])} />
           <TextInput label="Кейсы — абзац 1" {...bind(['situations', 'casesText1'])} multiline />
           <TextInput label="Кейсы — абзац 2" {...bind(['situations', 'casesText2'])} multiline />

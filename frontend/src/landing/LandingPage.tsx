@@ -848,6 +848,67 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
               ))}
             </div>
 
+            {/* Кейсы: было / стало — карточки с отраслью и метрикой.
+                Блок скрыт целиком, если все кейсы удалены в редакторе. */}
+            {c.situations.casesItems.length > 0 && (
+              <div style={{ marginTop: 64, paddingTop: 48, borderTop: '1px solid var(--border)' }}>
+                <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
+                  {c.situations.casesRowTitle}
+                </h3>
+                {c.situations.casesRowIntro && (
+                  <p style={{ margin: '16px 0 0', maxWidth: 680, fontSize: 16, lineHeight: 1.65, color: 'var(--text-secondary)' }}>
+                    {c.situations.casesRowIntro}
+                  </p>
+                )}
+                <div
+                  className="lp-grid-3"
+                  style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 20, marginTop: 32 }}
+                >
+                  {c.situations.casesItems.map((cs, i) => (
+                    <div
+                      key={i}
+                      className="lp-card is-hoverable"
+                      data-reveal
+                      style={{ ...revealDelay(i, 0.08), padding: '26px 24px', display: 'flex', flexDirection: 'column', gap: 18, background: '#fff' }}
+                    >
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          alignSelf: 'flex-start',
+                          padding: '6px 12px',
+                          borderRadius: 999,
+                          background: 'var(--accent-weak)',
+                          color: 'var(--accent)',
+                          fontSize: 12.5,
+                          fontWeight: 700,
+                        }}
+                      >
+                        {cs.industry}
+                      </span>
+                      <div>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+                          Было
+                        </div>
+                        <p style={{ margin: '6px 0 0', fontSize: 15, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{cs.before}</p>
+                      </div>
+                      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+                        <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+                          Стало
+                        </div>
+                        <p style={{ margin: '6px 0 0', fontSize: 15, lineHeight: 1.55, color: 'var(--text-primary)', fontWeight: 600 }}>{cs.after}</p>
+                      </div>
+                      {(cs.metric || cs.metricLabel) && (
+                        <div style={{ marginTop: 'auto', paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                          <span className="lp-num" style={{ fontSize: 22 }}>{cs.metric}</span>
+                          <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{cs.metricLabel}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
             <div
               className="lp-split"
               style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, marginTop: 64, paddingTop: 48, borderTop: '1px solid var(--border)', alignItems: 'start' }}

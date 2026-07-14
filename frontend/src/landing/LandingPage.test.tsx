@@ -16,6 +16,11 @@ describe('LandingPage', () => {
     expect(html).toContain(d.product.priceValue);
     expect(html).toContain(d.proof.metricsRows[0].label);
     expect(html).toContain(d.objections.items[0].q);
+    // Блок «Кейсы: было / стало» (отрасль-пилюля + «Было» + метрика).
+    expect(html).toContain(d.situations.casesRowTitle);
+    expect(html).toContain(d.situations.casesItems[0].industry);
+    expect(html).toContain(d.situations.casesItems[0].before);
+    expect(html).toContain(d.situations.casesItems[0].metricLabel);
     expect(html).toContain(d.faq.items[0].q);
     expect(html).toContain(d.cta.submit);
     expect(html).toContain(d.footer.tagline);
