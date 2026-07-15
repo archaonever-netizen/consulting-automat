@@ -106,6 +106,33 @@ function FeatRow({ icon, text, index }: { icon: string; text: string; index: num
   );
 }
 
+// «Было»/«Стало» в карточке-кейсе. Текст правится в редакторе как многострочный
+// (textarea), поэтому пункты разделены переводами строк. В обычном <p> переводы
+// схлопываются в пробел и всё сливается в сплошной текст — здесь режем по строкам
+// и рендерим как визуальные пункты. Одна строка → обычный абзац; несколько →
+// маркированный список. Ведущие маркеры («—», «•», «-», «*», «1.»), если их ввели
+// вручную, срезаем, чтобы не задваивать буллеты.
+function CaseText({ text, color, strong }: { text: string; color: string; strong?: boolean }) {
+  const lines = text
+    .split('\n')
+    .map((l) => l.replace(/^\s*(?:[-–—•*·]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean);
+  const base: CSSProperties = { fontSize: 15, lineHeight: 1.55, color, fontWeight: strong ? 600 : undefined };
+  if (lines.length <= 1) {
+    return <p style={{ margin: '6px 0 0', ...base }}>{lines[0] ?? text}</p>;
+  }
+  return (
+    <ul style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 7 }}>
+      {lines.map((line, i) => (
+        <li key={i} style={{ display: 'flex', gap: 9, ...base }}>
+          <span aria-hidden style={{ color: 'var(--accent)', flexShrink: 0, lineHeight: 1.55 }}>•</span>
+          <span>{line}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 // ── «Манифест Подхода»: пункты + красные слова-отрицания ──
 // Слова, обозначающие отсутствие/отказ («никаких», «нет», «без», «не» …),
 // подсвечиваем красным (просьба клиента). Список закрытый, сопоставление по
@@ -956,13 +983,13 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
                         <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
                           Было
                         </div>
-                        <p style={{ margin: '6px 0 0', fontSize: 15, lineHeight: 1.55, color: 'var(--text-secondary)' }}>{cs.before}</p>
+                        <CaseText text={cs.before} color="var(--text-secondary)" />
                       </div>
                       <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
                         <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent)' }}>
                           Стало
                         </div>
-                        <p style={{ margin: '6px 0 0', fontSize: 15, lineHeight: 1.55, color: 'var(--text-primary)', fontWeight: 600 }}>{cs.after}</p>
+                        <CaseText text={cs.after} color="var(--text-primary)" strong />
                       </div>
                       {(cs.metric || cs.metricLabel) && (
                         <div style={{ marginTop: 'auto', paddingTop: 14, borderTop: '1px solid var(--border)', display: 'flex', alignItems: 'baseline', gap: 8 }}>
