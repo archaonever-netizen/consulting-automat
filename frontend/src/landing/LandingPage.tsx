@@ -94,6 +94,15 @@ const proseStyle: CSSProperties = {
   color: 'var(--text-secondary)',
 };
 
+// Заголовок колонки кейса («Было» / «Что изменили» / «Результат…»).
+const caseColHead = (color: string): CSSProperties => ({
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: '.06em',
+  textTransform: 'uppercase',
+  color,
+});
+
 // Icon-tile строка чек-листа (.lp-feat): плитка с иконкой + текст.
 function FeatRow({ icon, text, index }: { icon: string; text: string; index: number }) {
   return (
@@ -127,6 +136,58 @@ function CaseText({ text, color, strong }: { text: string; color: string; strong
         <li key={i} style={{ display: 'flex', gap: 9, ...base }}>
           <span aria-hidden style={{ color: 'var(--accent)', flexShrink: 0, lineHeight: 1.55 }}>•</span>
           <span>{line}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Список пунктов кейса («Кейсы клиентов»): маркированный список с акцентной
+// точкой. Пустые строки отсекаем (страховка от «хвостов» из редактора).
+function CasePointList({ points, color, strong }: { points: string[]; color: string; strong?: boolean }) {
+  return (
+    <ul style={{ margin: '12px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {points.filter((p) => p.trim()).map((p, i) => (
+        <li key={i} style={{ display: 'flex', gap: 9, fontSize: 14.5, lineHeight: 1.5, color, fontWeight: strong ? 600 : undefined }}>
+          <span aria-hidden style={{ color: 'var(--accent)', flexShrink: 0, lineHeight: 1.5 }}>•</span>
+          <span>{p}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Абзацы вступления блока «Диагностика»: каждая непустая строка (перенос в
+// редакторе) — отдельный абзац. Пустые строки отсекаем.
+function DiagProse({ text }: { text: string }) {
+  const lines = text.split('\n').map((s) => s.trim()).filter(Boolean);
+  if (lines.length === 0) return null;
+  return (
+    <>
+      {lines.map((line, i) => (
+        <p
+          key={i}
+          style={{ margin: i === 0 ? 0 : '10px 0 0', fontSize: 15, lineHeight: 1.6, color: 'var(--text-secondary)' }}
+        >
+          {line}
+        </p>
+      ))}
+    </>
+  );
+}
+
+// Список пунктов блока «Диагностика»: маркированный список в две колонки
+// (схлопывается в одну на узких экранах через .lp-diag-points). Пустые пункты
+// отсекаем — страховка от «хвостов» из редактора.
+function DiagBullets({ items }: { items: string[] }) {
+  const clean = items.map((s) => s.trim()).filter(Boolean);
+  if (clean.length === 0) return null;
+  return (
+    <ul className="lp-diag-points" style={{ margin: '12px 0 0', padding: 0, listStyle: 'none' }}>
+      {clean.map((p, i) => (
+        <li key={i} style={{ display: 'flex', gap: 9, fontSize: 14.5, lineHeight: 1.5, color: 'var(--text-secondary)' }}>
+          <span aria-hidden style={{ color: 'var(--accent)', flexShrink: 0, lineHeight: 1.5 }}>•</span>
+          <span>{p}</span>
         </li>
       ))}
     </ul>
@@ -356,6 +417,20 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
         details.lp-faq[open] .lp-plus { background: var(--accent-weak); }
         details.lp-faq .lp-a { margin: -6px 0 24px; padding-right: 46px; font-size: 15.5px; line-height: 1.65; color: var(--text-secondary); }
 
+        /* «Диагностика»: выпадающие смысловые блоки (карточка-аккордеон) */
+        details.lp-diag { border: 1px solid var(--border); border-radius: var(--radius-md); background: #fff; margin-top: 12px; box-shadow: var(--shadow-sm); transition: var(--transition); }
+        details.lp-diag[open] { box-shadow: var(--shadow-md); }
+        details.lp-diag > summary { list-style: none; cursor: pointer; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 20px 22px; font-family: var(--font-display); font-weight: 700; font-size: 16.5px; letter-spacing: -.01em; color: var(--text-primary); }
+        details.lp-diag > summary::-webkit-details-marker { display: none; }
+        details.lp-diag .lp-plus { flex: none; width: 26px; height: 26px; border-radius: 8px; background: var(--surface-2); display: grid; place-items: center; position: relative; transition: var(--transition); }
+        details.lp-diag .lp-plus::before, details.lp-diag .lp-plus::after { content: ''; position: absolute; background: var(--text-primary); border-radius: 2px; }
+        details.lp-diag .lp-plus::before { width: 12px; height: 2px; }
+        details.lp-diag .lp-plus::after { width: 2px; height: 12px; transition: transform .2s var(--ease-out); }
+        details.lp-diag[open] .lp-plus::after { transform: rotate(90deg); opacity: 0; }
+        details.lp-diag[open] .lp-plus { background: var(--accent-weak); }
+        details.lp-diag .lp-diag-body { padding: 4px 22px 24px; }
+        .lp-diag-points { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+
         /* Таблица метрик «Измеримость» */
         .lp-metric-row { display: grid; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
         .lp-metric-row:first-child { border-top: none; }
@@ -378,6 +453,7 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
         @media (max-width: 560px) {
           .lp-grid-4 { grid-template-columns: 1fr !important; }
           .lp-facts { grid-template-columns: 1fr !important; }
+          .lp-diag-points { grid-template-columns: 1fr !important; }
           .lp-wrap, .lp-wide { padding: 0 20px; }
         }
       `}</style>
@@ -771,6 +847,104 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
         </section>
       </Hideable>
 
+      {/* ===== Диагностика и описание (выпадающие смысловые блоки) ===== */}
+      <Hideable hidden={c.hidden.diagnostics}>
+        <section className="lp-wrap" style={{ padding: '128px 32px 0' }}>
+          <div className="eyebrow">{c.diagnostics.eyebrow}</div>
+          <h2 className="lp-h2">{c.diagnostics.title}</h2>
+
+          {/* Стоимость + срок */}
+          <div className="lp-card" style={{ marginTop: 32, padding: '28px 30px' }}>
+            <div className="lp-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+              <div>
+                <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+                  {c.diagnostics.priceLabel}
+                </div>
+                <div style={{ marginTop: 8, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 34, letterSpacing: '-.03em', color: 'var(--accent)' }}>
+                  {c.diagnostics.priceValue}
+                </div>
+              </div>
+              <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 24 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+                  {c.diagnostics.termLabel}
+                </div>
+                <div style={{ marginTop: 8, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, color: 'var(--text-primary)' }}>
+                  {c.diagnostics.termValue}
+                </div>
+              </div>
+            </div>
+            {c.diagnostics.priceNote && (
+              <p style={{ margin: '20px 0 0', paddingTop: 18, borderTop: '1px solid var(--border)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                {c.diagnostics.priceNote}
+              </p>
+            )}
+          </div>
+
+          {/* Цель диагностики */}
+          <div style={{ marginTop: 40 }}>
+            <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
+              {c.diagnostics.goalTitle}
+            </h3>
+            <p style={proseStyle}>{c.diagnostics.goalText1}</p>
+            <p style={{ ...proseStyle, margin: '14px 0 0' }}>{c.diagnostics.goalText2}</p>
+          </div>
+
+          {/* Что входит — выпадающие блоки */}
+          <h3 style={{ margin: '44px 0 0', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
+            {c.diagnostics.includedTitle}
+          </h3>
+          <div style={{ marginTop: 18 }}>
+            {c.diagnostics.items.map((item, i) => {
+              const resultLines = item.result.split('\n').map((s) => s.trim()).filter(Boolean);
+              return (
+                <details key={i} className="lp-diag" data-reveal style={revealDelay(i, 0.04)}>
+                  <summary>
+                    <span>{item.title}</span>
+                    <span className="lp-plus" />
+                  </summary>
+                  <div className="lp-diag-body">
+                    <DiagProse text={item.intro} />
+                    <DiagBullets items={item.points} />
+                    {item.subIntro && (
+                      <p style={{ margin: '16px 0 0', fontSize: 15, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                        {item.subIntro}
+                      </p>
+                    )}
+                    {item.subPoints && item.subPoints.length > 0 && <DiagBullets items={item.subPoints} />}
+                    {item.note && (
+                      <p style={{ margin: '16px 0 0', fontSize: 14.5, lineHeight: 1.6, color: 'var(--text-primary)', fontWeight: 600 }}>
+                        {item.note}
+                      </p>
+                    )}
+                    {resultLines.length > 0 && (
+                      <div style={{ marginTop: 18, padding: '14px 16px', borderRadius: 12, background: 'var(--accent-weak)', borderLeft: '3px solid var(--accent)' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+                          {c.diagnostics.resultLabel}
+                        </span>
+                        {resultLines.length > 1 ? (
+                          <ul style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                            {resultLines.map((line, j) => (
+                              <li key={j} style={{ display: 'flex', gap: 9, fontSize: 14.5, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                                <span aria-hidden style={{ color: 'var(--accent)', flexShrink: 0, lineHeight: 1.55 }}>•</span>
+                                <span>{line}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <p style={{ margin: '6px 0 0', fontSize: 14.5, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                            {resultLines[0]}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </details>
+              );
+            })}
+          </div>
+        </section>
+      </Hideable>
+
       {/* ===== Первый блок (3-колоночные карточки + инструменты) ===== */}
       <Hideable hidden={c.hidden.blocks}>
         <section className="lp-wide" style={{ padding: '128px 32px 0' }}>
@@ -942,9 +1116,11 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
               ))}
             </div>
 
-            {/* Кейсы: было / стало — карточки с отраслью и метрикой.
-                Блок скрыт целиком, если все кейсы удалены в редакторе. */}
-            {c.situations.casesItems.length > 0 && (
+            {/* Легаси-блок «Кейсы: было / стало» — карточки с отраслью и метрикой.
+                По умолчанию скрыт (hidden.legacyCases), заменён развёрнутым блоком
+                «Кейсы клиентов» ниже. Текст остаётся правимым в конструкторе.
+                Скрыт также, если все кейсы удалены в редакторе. */}
+            {!c.hidden.legacyCases && c.situations.casesItems.length > 0 && (
               <div style={{ marginTop: 64, paddingTop: 48, borderTop: '1px solid var(--border)' }}>
                 <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
                   {c.situations.casesRowTitle}
@@ -1003,25 +1179,75 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
               </div>
             )}
 
-            <div
-              className="lp-split"
-              style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, marginTop: 64, paddingTop: 48, borderTop: '1px solid var(--border)', alignItems: 'start' }}
-            >
-              <div>
-                <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
-                  {c.situations.casesTitle}
-                </h3>
-                <p style={proseStyle}>{c.situations.casesText1}</p>
-                <p style={{ margin: '16px 0 0', fontSize: 17, fontWeight: 700, lineHeight: 1.55, color: 'var(--text-primary)' }}>
-                  {c.situations.casesText2}
-                </p>
+            {/* Легаси «Если нужны кейсы» — под тем же флагом legacyCases. */}
+            {!c.hidden.legacyCases && (
+              <div
+                className="lp-split"
+                style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 64, marginTop: 64, paddingTop: 48, borderTop: '1px solid var(--border)', alignItems: 'start' }}
+              >
+                <div>
+                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
+                    {c.situations.casesTitle}
+                  </h3>
+                  <p style={proseStyle}>{c.situations.casesText1}</p>
+                  <p style={{ margin: '16px 0 0', fontSize: 17, fontWeight: 700, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                    {c.situations.casesText2}
+                  </p>
+                </div>
+                <div>
+                  <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.85, color: 'var(--text-secondary)' }}>
+                    {c.situations.casesRight}
+                  </p>
+                </div>
               </div>
-              <div>
-                <p style={{ margin: 0, fontSize: 15.5, lineHeight: 1.85, color: 'var(--text-secondary)' }}>
-                  {c.situations.casesRight}
-                </p>
+            )}
+          </div>
+        </section>
+      </Hideable>
+
+      {/* ===== Кейсы клиентов (было / что изменили / результат) ===== */}
+      <Hideable hidden={c.hidden.cases}>
+        <section className="lp-wide" style={{ padding: '120px 32px 0' }}>
+          <div className="eyebrow">{c.cases.eyebrow}</div>
+          <h2 className="lp-h2">{c.cases.title}</h2>
+          {c.cases.intro && (
+            <p style={{ ...proseStyle, maxWidth: 760 }}>{c.cases.intro}</p>
+          )}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24, marginTop: 44 }}>
+            {c.cases.items.map((cs, i) => (
+              <div
+                key={i}
+                className="lp-card"
+                data-reveal
+                style={{ ...revealDelay(i, 0.06), padding: '30px 30px 34px', background: '#fff' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+                  <span className="lp-num" style={{ fontSize: 22, color: 'var(--ink-4)' }}>
+                    {String(i + 1).padStart(2, '0')}
+                  </span>
+                  <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 22, letterSpacing: '-.03em' }}>
+                    {cs.title}
+                  </h3>
+                </div>
+                <div
+                  className="lp-grid-3"
+                  style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 28, marginTop: 24 }}
+                >
+                  <div style={{ borderTop: '2px solid var(--border-2)', paddingTop: 14 }}>
+                    <div style={caseColHead('var(--ink-3)')}>Было</div>
+                    <CasePointList points={cs.beforePoints} color="var(--text-secondary)" />
+                  </div>
+                  <div style={{ borderTop: '2px solid var(--border-2)', paddingTop: 14 }}>
+                    <div style={caseColHead('var(--text-primary)')}>Что изменили</div>
+                    <CasePointList points={cs.changedPoints} color="var(--text-primary)" />
+                  </div>
+                  <div style={{ borderTop: '2px solid var(--accent)', paddingTop: 14 }}>
+                    <div style={caseColHead('var(--accent)')}>{cs.resultTitle}</div>
+                    <CasePointList points={cs.resultPoints} color="var(--text-primary)" strong />
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </section>
       </Hideable>

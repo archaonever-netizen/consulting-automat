@@ -14,13 +14,23 @@ describe('LandingPage', () => {
     expect(html).toContain(d.pain.points[0]);
     expect(html).toContain(d.how.steps[0].title);
     expect(html).toContain(d.product.priceValue);
+    // Раздел «Диагностика»: заголовок, стоимость и первый выпадающий блок с пунктом.
+    expect(html).toContain(d.diagnostics.title);
+    expect(html).toContain(d.diagnostics.priceValue);
+    expect(html).toContain(d.diagnostics.items[0].title);
+    expect(html).toContain(d.diagnostics.items[0].points[0]);
     expect(html).toContain(d.proof.metricsRows[0].label);
     expect(html).toContain(d.objections.items[0].q);
-    // Блок «Кейсы: было / стало» (отрасль-пилюля + «Было» + метрика).
-    expect(html).toContain(d.situations.casesRowTitle);
-    expect(html).toContain(d.situations.casesItems[0].industry);
-    expect(html).toContain(d.situations.casesItems[0].before);
-    expect(html).toContain(d.situations.casesItems[0].metricLabel);
+    // Блок «Кейсы клиентов» (заголовок + название кейса + пункты + заголовок результата).
+    expect(html).toContain(d.cases.title);
+    expect(html).toContain(d.cases.items[0].title);
+    expect(html).toContain(d.cases.items[0].beforePoints[0]);
+    expect(html).toContain(d.cases.items[0].changedPoints[0]);
+    expect(html).toContain(d.cases.items[0].resultTitle);
+    expect(html).toContain(d.cases.items[0].resultPoints[0]);
+    // Легаси-блок «было/стало» по умолчанию скрыт с сайта (legacyCases=true).
+    expect(html).not.toContain(d.situations.casesRowTitle);
+    expect(html).not.toContain(d.situations.casesItems[0].industry);
     expect(html).toContain(d.faq.items[0].q);
     expect(html).toContain(d.cta.submit);
     expect(html).toContain(d.footer.tagline);

@@ -5,6 +5,8 @@ import Icon from '../components/Icon';
 import {
   defaultLandingContent,
   mergeLandingContent,
+  type CaseStudy,
+  type DiagnosticsItem,
   type HideableSection,
   type LandingContent,
 } from '../landing/content';
@@ -364,6 +366,166 @@ function MetricsEditor({
   );
 }
 
+// ── Кейсы клиентов: название + списки «Было» / «Что изменили» / «Результат» ──
+// Отдельный редактор (не ObjectListEditor): у кейса три вложенных списка,
+// правятся через StringListEditor.
+function CaseStudiesEditor({
+  value,
+  onChange,
+}: {
+  value: CaseStudy[];
+  onChange: (v: CaseStudy[]) => void;
+}) {
+  const empty: CaseStudy = {
+    title: '',
+    beforePoints: [''],
+    changedPoints: [''],
+    resultTitle: 'Результат',
+    resultPoints: [''],
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span className="form-label" style={{ margin: 0 }}>Кейсы</span>
+      {value.map((item, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            padding: 12,
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            background: 'var(--surface-2)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>#{i + 1}</span>
+            <RowControls
+              index={i}
+              count={value.length}
+              onMove={(from, to) => onChange(moveItem(value, from, to))}
+              onRemove={(idx) => onChange(value.filter((_, j) => j !== idx))}
+            />
+          </div>
+          <TextInput
+            label="Название (тип бизнеса)"
+            value={item.title}
+            onChange={(v) => onChange(value.map((it, j) => (j === i ? { ...it, title: v } : it)))}
+          />
+          <StringListEditor
+            label="Было"
+            value={item.beforePoints ?? []}
+            multiline
+            onChange={(v) => onChange(value.map((it, j) => (j === i ? { ...it, beforePoints: v } : it)))}
+          />
+          <StringListEditor
+            label="Что изменили"
+            value={item.changedPoints ?? []}
+            multiline
+            onChange={(v) => onChange(value.map((it, j) => (j === i ? { ...it, changedPoints: v } : it)))}
+          />
+          <TextInput
+            label="Заголовок результата (напр. «Результат за 5 месяцев»)"
+            value={item.resultTitle}
+            onChange={(v) => onChange(value.map((it, j) => (j === i ? { ...it, resultTitle: v } : it)))}
+          />
+          <StringListEditor
+            label="Результат"
+            value={item.resultPoints ?? []}
+            multiline
+            onChange={(v) => onChange(value.map((it, j) => (j === i ? { ...it, resultPoints: v } : it)))}
+          />
+        </div>
+      ))}
+      <div>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange([...value, { ...empty }])}>
+          <Icon name="plus" size={14} /> Добавить кейс
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Блоки «Диагностики»: заголовок + вступление + список пунктов + необязательные
+// второй список / примечание + результат. Отдельный редактор (не ObjectListEditor):
+// у блока вложенные списки points/subPoints, которые правятся StringListEditor.
+function DiagnosticsItemsEditor({
+  value,
+  onChange,
+}: {
+  value: DiagnosticsItem[];
+  onChange: (v: DiagnosticsItem[]) => void;
+}) {
+  const empty: DiagnosticsItem = { title: '', intro: '', points: [''], result: '' };
+  const patch = (i: number, next: Partial<DiagnosticsItem>) =>
+    onChange(value.map((it, j) => (j === i ? { ...it, ...next } : it)));
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <span className="form-label" style={{ margin: 0 }}>Смысловые блоки (выпадающие)</span>
+      {value.map((item, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 10,
+            padding: 12,
+            border: '1px solid var(--border)',
+            borderRadius: 10,
+            background: 'var(--surface-2)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink-3)' }}>#{i + 1}</span>
+            <RowControls
+              index={i}
+              count={value.length}
+              onMove={(from, to) => onChange(moveItem(value, from, to))}
+              onRemove={(idx) => onChange(value.filter((_, j) => j !== idx))}
+            />
+          </div>
+          <TextInput label="Заголовок" value={item.title} onChange={(v) => patch(i, { title: v })} />
+          <TextInput
+            label="Вступление (каждая строка с новой — отдельный абзац)"
+            value={item.intro}
+            multiline
+            onChange={(v) => patch(i, { intro: v })}
+          />
+          <StringListEditor label="Пункты" value={item.points ?? []} onChange={(v) => patch(i, { points: v })} />
+          <TextInput
+            label="Второй подзаголовок (необязательно, напр. «Исследуются:»)"
+            value={item.subIntro ?? ''}
+            onChange={(v) => patch(i, { subIntro: v })}
+          />
+          <StringListEditor
+            label="Второй список пунктов (необязательно)"
+            value={item.subPoints ?? []}
+            onChange={(v) => patch(i, { subPoints: v })}
+          />
+          <TextInput
+            label="Примечание (необязательно)"
+            value={item.note ?? ''}
+            multiline
+            onChange={(v) => patch(i, { note: v })}
+          />
+          <TextInput
+            label="Результат (каждая строка с новой — отдельный пункт; пусто — блок скрыт)"
+            value={item.result}
+            multiline
+            onChange={(v) => patch(i, { result: v })}
+          />
+        </div>
+      ))}
+      <div>
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange([...value, { ...empty }])}>
+          <Icon name="plus" size={14} /> Добавить блок
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Секция-«гармошка».
 // Если передан onToggleHidden — в заголовке появляется кнопка «Убрать с сайта»/
 // «Вернуть на сайт». Скрытая секция сворачивается, помечается бейджем и не
@@ -642,6 +804,24 @@ export default function LandingEditorPage() {
           <StringListEditor label="Что входит" {...bind(['product', 'included'])} multiline />
         </Section>
 
+        <Section title="Диагностика и описание" hidden={c.hidden.diagnostics} onToggleHidden={() => toggleHidden('diagnostics')}>
+          <TextInput label="Надзаголовок" {...bind(['diagnostics', 'eyebrow'])} />
+          <TextInput label="Заголовок" {...bind(['diagnostics', 'title'])} multiline />
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <TextInput label="Стоимость — подпись" {...bind(['diagnostics', 'priceLabel'])} />
+            <TextInput label="Стоимость — значение" {...bind(['diagnostics', 'priceValue'])} />
+            <TextInput label="Срок — подпись" {...bind(['diagnostics', 'termLabel'])} />
+            <TextInput label="Срок — значение" {...bind(['diagnostics', 'termValue'])} />
+          </div>
+          <TextInput label="Примечание к стоимости" {...bind(['diagnostics', 'priceNote'])} multiline />
+          <TextInput label="Заголовок «Цель диагностики»" {...bind(['diagnostics', 'goalTitle'])} />
+          <TextInput label="Цель — абзац 1" {...bind(['diagnostics', 'goalText1'])} multiline />
+          <TextInput label="Цель — абзац 2" {...bind(['diagnostics', 'goalText2'])} multiline />
+          <TextInput label="Заголовок «Что входит в услугу»" {...bind(['diagnostics', 'includedTitle'])} />
+          <TextInput label="Подпись блока «Результат»" {...bind(['diagnostics', 'resultLabel'])} />
+          <DiagnosticsItemsEditor {...bind(['diagnostics', 'items'])} />
+        </Section>
+
         <Section title="Первые блоки" hidden={c.hidden.blocks} onToggleHidden={() => toggleHidden('blocks')}>
           <TextInput label="Надзаголовок" {...bind(['blocks', 'eyebrow'])} />
           <TextInput label="Заголовок" {...bind(['blocks', 'title'])} multiline />
@@ -705,6 +885,45 @@ export default function LandingEditorPage() {
             ]}
           />
           <hr style={{ border: 'none', borderTop: '1px solid var(--border)', margin: '4px 0' }} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <span className="form-label" style={{ margin: 0, display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+              Старый блок «было/стало» и «Если нужны кейсы»
+              {c.hidden.legacyCases && (
+                <span
+                  style={{
+                    fontWeight: 700,
+                    fontSize: 11,
+                    letterSpacing: '.04em',
+                    textTransform: 'uppercase',
+                    color: 'var(--ink-3)',
+                    border: '1px solid var(--border)',
+                    borderRadius: 999,
+                    padding: '2px 8px',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  Скрыт с сайта
+                </span>
+              )}
+            </span>
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ flexShrink: 0, color: c.hidden.legacyCases ? undefined : 'var(--danger)' }}
+              onClick={() => toggleHidden('legacyCases')}
+            >
+              {c.hidden.legacyCases ? (
+                'Вернуть на сайт'
+              ) : (
+                <>
+                  <Icon name="trash" size={14} /> Убрать с сайта
+                </>
+              )}
+            </button>
+          </div>
+          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-3)' }}>
+            Этот блок скрыт с сайта, но остаётся здесь для редактирования. Новые кейсы правятся в разделе «Кейсы клиентов» ниже.
+          </p>
           <TextInput label="Кейсы «было/стало» — заголовок блока" {...bind(['situations', 'casesRowTitle'])} />
           <TextInput label="Кейсы «было/стало» — вступление" {...bind(['situations', 'casesRowIntro'])} multiline />
           <ObjectListEditor
@@ -723,6 +942,13 @@ export default function LandingEditorPage() {
           <TextInput label="Кейсы — абзац 1" {...bind(['situations', 'casesText1'])} multiline />
           <TextInput label="Кейсы — абзац 2" {...bind(['situations', 'casesText2'])} multiline />
           <TextInput label="Кейсы — правая колонка" {...bind(['situations', 'casesRight'])} multiline />
+        </Section>
+
+        <Section title="Кейсы клиентов (было / что изменили / результат)" hidden={c.hidden.cases} onToggleHidden={() => toggleHidden('cases')}>
+          <TextInput label="Надзаголовок" {...bind(['cases', 'eyebrow'])} />
+          <TextInput label="Заголовок" {...bind(['cases', 'title'])} multiline />
+          <TextInput label="Вступление" {...bind(['cases', 'intro'])} multiline />
+          <CaseStudiesEditor {...bind(['cases', 'items'])} />
         </Section>
 
         <Section title="Возражения" hidden={c.hidden.objections} onToggleHidden={() => toggleHidden('objections')}>
