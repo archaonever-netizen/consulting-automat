@@ -261,6 +261,9 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
   const [agreed, setAgreed] = useState(false);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Модалка «Диагностика»: открывается кликом по интерактивной карточке
+  // «Диагностика и выбор управленческого блока» в разделе «Как это работает».
+  const [diagOpen, setDiagOpen] = useState(false);
 
   const heroSectionRef = useRef<HTMLElement>(null);
   const heroCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -304,6 +307,21 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
   useEffect(() => {
     return mountScrollReveal();
   }, [content]);
+
+  // Модалка «Диагностика»: закрытие по Escape + блокировка прокрутки фона.
+  useEffect(() => {
+    if (!diagOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDiagOpen(false);
+    };
+    document.addEventListener('keydown', onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [diagOpen]);
 
   async function handleSubmit(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -430,6 +448,23 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
         details.lp-diag[open] .lp-plus { background: var(--accent-weak); }
         details.lp-diag .lp-diag-body { padding: 4px 22px 24px; }
         .lp-diag-points { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 24px; }
+
+        /* Интерактивная карточка «Диагностика…» в roadmap */
+        .lp-diag-card { cursor: pointer; }
+        .lp-diag-card:hover { border-color: var(--accent); }
+        .lp-diag-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+        .lp-diag-cta { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; letter-spacing: -.01em; color: var(--accent); }
+        .lp-diag-card:hover .lp-diag-cta { gap: 9px; }
+
+        /* Модалка «Диагностика» */
+        @keyframes lpModalFade { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes lpModalRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+        .lp-modal-overlay { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-start; justify-content: center; padding: 40px 20px; background: rgba(10,12,18,.55); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); overflow-y: auto; animation: lpModalFade .2s var(--ease-out) both; }
+        .lp-modal { position: relative; width: 100%; max-width: 760px; margin: auto; background: #fff; border: 1px solid var(--border); border-radius: var(--radius-xl); box-shadow: 0 40px 100px -30px rgba(0,0,0,.55); padding: 40px 40px 40px; animation: lpModalRise .28s var(--ease-out) both; }
+        .lp-modal-close { position: absolute; top: 16px; right: 16px; width: 38px; height: 38px; border-radius: 10px; border: 1px solid var(--border); background: #fff; color: var(--text-secondary); display: grid; place-items: center; cursor: pointer; transition: var(--transition); }
+        .lp-modal-close:hover { background: var(--surface-2); color: var(--text-primary); }
+        @media (prefers-reduced-motion: reduce) { .lp-modal-overlay, .lp-modal { animation: none; } }
+        @media (max-width: 560px) { .lp-modal { padding: 34px 20px 32px; } }
 
         /* Таблица метрик «Измеримость» */
         .lp-metric-row { display: grid; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border); }
@@ -775,12 +810,37 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
           >
             {c.how.steps.map((step, i) => {
               const points = step.points && step.points.length > 0 ? step.points : step.text ? [step.text] : [];
+              // Первый шаг («Диагностика…») — интерактивная карточка: клик
+              // открывает модалку с подробностями диагностики. Остальные шаги
+              // статичны. Прячем интерактив, если раздел «Диагностика» убран.
+              const interactive = i === 0 && !c.hidden.diagnostics;
               return (
                 <div
                   key={i}
-                  className="lp-card is-hoverable"
+                  className={`lp-card is-hoverable${interactive ? ' lp-diag-card' : ''}`}
                   data-reveal
-                  style={{ ...revealDelay(i, 0.09), padding: '22px 22px 24px', display: 'flex', flexDirection: 'column', gap: 14 }}
+                  onClick={interactive ? () => setDiagOpen(true) : undefined}
+                  onKeyDown={
+                    interactive
+                      ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setDiagOpen(true);
+                          }
+                        }
+                      : undefined
+                  }
+                  role={interactive ? 'button' : undefined}
+                  tabIndex={interactive ? 0 : undefined}
+                  aria-haspopup={interactive ? 'dialog' : undefined}
+                  style={{
+                    ...revealDelay(i, 0.09),
+                    padding: '22px 22px 24px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 14,
+                    cursor: interactive ? 'pointer' : undefined,
+                  }}
                 >
                   <div className="lp-week-badge">{i + 1}</div>
                   <span style={{ fontSize: 12.5, fontWeight: 700, letterSpacing: '.04em', textTransform: 'uppercase', color: 'var(--accent)' }}>
@@ -795,6 +855,12 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
                       </div>
                     ))}
                   </div>
+                  {interactive && (
+                    <span className="lp-diag-cta" style={{ marginTop: 'auto', paddingTop: 4 }}>
+                      {c.diagnostics.cardCta}
+                      <Icon name="arrowRight" size={15} />
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -843,104 +909,6 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
             {c.product.included.map((text, i) => (
               <FeatRow key={i} icon={at(INCLUDE_ICONS, i)} text={text} index={i} />
             ))}
-          </div>
-        </section>
-      </Hideable>
-
-      {/* ===== Диагностика и описание (выпадающие смысловые блоки) ===== */}
-      <Hideable hidden={c.hidden.diagnostics}>
-        <section className="lp-wrap" style={{ padding: '128px 32px 0' }}>
-          <div className="eyebrow">{c.diagnostics.eyebrow}</div>
-          <h2 className="lp-h2">{c.diagnostics.title}</h2>
-
-          {/* Стоимость + срок */}
-          <div className="lp-card" style={{ marginTop: 32, padding: '28px 30px' }}>
-            <div className="lp-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
-              <div>
-                <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
-                  {c.diagnostics.priceLabel}
-                </div>
-                <div style={{ marginTop: 8, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 34, letterSpacing: '-.03em', color: 'var(--accent)' }}>
-                  {c.diagnostics.priceValue}
-                </div>
-              </div>
-              <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 24 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
-                  {c.diagnostics.termLabel}
-                </div>
-                <div style={{ marginTop: 8, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, color: 'var(--text-primary)' }}>
-                  {c.diagnostics.termValue}
-                </div>
-              </div>
-            </div>
-            {c.diagnostics.priceNote && (
-              <p style={{ margin: '20px 0 0', paddingTop: 18, borderTop: '1px solid var(--border)', fontSize: 14, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                {c.diagnostics.priceNote}
-              </p>
-            )}
-          </div>
-
-          {/* Цель диагностики */}
-          <div style={{ marginTop: 40 }}>
-            <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
-              {c.diagnostics.goalTitle}
-            </h3>
-            <p style={proseStyle}>{c.diagnostics.goalText1}</p>
-            <p style={{ ...proseStyle, margin: '14px 0 0' }}>{c.diagnostics.goalText2}</p>
-          </div>
-
-          {/* Что входит — выпадающие блоки */}
-          <h3 style={{ margin: '44px 0 0', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 20, letterSpacing: '-.03em' }}>
-            {c.diagnostics.includedTitle}
-          </h3>
-          <div style={{ marginTop: 18 }}>
-            {c.diagnostics.items.map((item, i) => {
-              const resultLines = item.result.split('\n').map((s) => s.trim()).filter(Boolean);
-              return (
-                <details key={i} className="lp-diag" data-reveal style={revealDelay(i, 0.04)}>
-                  <summary>
-                    <span>{item.title}</span>
-                    <span className="lp-plus" />
-                  </summary>
-                  <div className="lp-diag-body">
-                    <DiagProse text={item.intro} />
-                    <DiagBullets items={item.points} />
-                    {item.subIntro && (
-                      <p style={{ margin: '16px 0 0', fontSize: 15, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
-                        {item.subIntro}
-                      </p>
-                    )}
-                    {item.subPoints && item.subPoints.length > 0 && <DiagBullets items={item.subPoints} />}
-                    {item.note && (
-                      <p style={{ margin: '16px 0 0', fontSize: 14.5, lineHeight: 1.6, color: 'var(--text-primary)', fontWeight: 600 }}>
-                        {item.note}
-                      </p>
-                    )}
-                    {resultLines.length > 0 && (
-                      <div style={{ marginTop: 18, padding: '14px 16px', borderRadius: 12, background: 'var(--accent-weak)', borderLeft: '3px solid var(--accent)' }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--accent)' }}>
-                          {c.diagnostics.resultLabel}
-                        </span>
-                        {resultLines.length > 1 ? (
-                          <ul style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                            {resultLines.map((line, j) => (
-                              <li key={j} style={{ display: 'flex', gap: 9, fontSize: 14.5, lineHeight: 1.55, color: 'var(--text-primary)' }}>
-                                <span aria-hidden style={{ color: 'var(--accent)', flexShrink: 0, lineHeight: 1.55 }}>•</span>
-                                <span>{line}</span>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          <p style={{ margin: '6px 0 0', fontSize: 14.5, lineHeight: 1.55, color: 'var(--text-primary)' }}>
-                            {resultLines[0]}
-                          </p>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </details>
-              );
-            })}
           </div>
         </section>
       </Hideable>
@@ -1414,6 +1382,123 @@ export default function LandingPage({ showPrice = true, stickyBar = true }: Land
         <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 14, color: 'var(--text-primary)' }}>{c.footer.brand}</span>
         <span style={{ fontSize: 13, color: 'var(--ink-3)' }}>{c.footer.tagline}</span>
       </footer>
+
+      {/* ===== Модалка «Диагностика» — открывается из карточки «Как это работает» ===== */}
+      {diagOpen && !c.hidden.diagnostics && (
+        <div
+          className="lp-modal-overlay"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setDiagOpen(false);
+          }}
+        >
+          <div className="lp-modal" role="dialog" aria-modal="true" aria-label={c.diagnostics.title}>
+            <button type="button" className="lp-modal-close" onClick={() => setDiagOpen(false)} aria-label="Закрыть">
+              <Icon name="close" size={18} />
+            </button>
+
+            <div className="eyebrow">{c.diagnostics.eyebrow}</div>
+            <h2 style={{ margin: '12px 0 0', paddingRight: 40, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 'clamp(24px, 3vw, 30px)', letterSpacing: '-.03em', lineHeight: 1.12, color: 'var(--text-primary)' }}>
+              {c.diagnostics.title}
+            </h2>
+
+            {/* Стоимость + срок */}
+            <div className="lp-card" style={{ marginTop: 26, padding: '24px 26px', boxShadow: 'none' }}>
+              <div className="lp-grid-2" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 24 }}>
+                <div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+                    {c.diagnostics.priceLabel}
+                  </div>
+                  <div style={{ marginTop: 8, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 30, letterSpacing: '-.03em', color: 'var(--accent)' }}>
+                    {c.diagnostics.priceValue}
+                  </div>
+                </div>
+                <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: 24 }}>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--ink-3)' }}>
+                    {c.diagnostics.termLabel}
+                  </div>
+                  <div style={{ marginTop: 8, fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 22, color: 'var(--text-primary)' }}>
+                    {c.diagnostics.termValue}
+                  </div>
+                </div>
+              </div>
+              {c.diagnostics.priceNote && (
+                <p style={{ margin: '18px 0 0', paddingTop: 16, borderTop: '1px solid var(--border)', fontSize: 13.5, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                  {c.diagnostics.priceNote}
+                </p>
+              )}
+            </div>
+
+            {/* Цель диагностики */}
+            <div style={{ marginTop: 32 }}>
+              <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, letterSpacing: '-.03em' }}>
+                {c.diagnostics.goalTitle}
+              </h3>
+              <p style={{ ...proseStyle, fontSize: 15 }}>{c.diagnostics.goalText1}</p>
+              <p style={{ ...proseStyle, fontSize: 15, margin: '12px 0 0' }}>{c.diagnostics.goalText2}</p>
+            </div>
+
+            {/* Что входит — выпадающие блоки */}
+            <h3 style={{ margin: '32px 0 0', fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: 18, letterSpacing: '-.03em' }}>
+              {c.diagnostics.includedTitle}
+            </h3>
+            <div style={{ marginTop: 14 }}>
+              {c.diagnostics.items.map((item, i) => {
+                const resultLines = item.result.split('\n').map((s) => s.trim()).filter(Boolean);
+                return (
+                  <details key={i} className="lp-diag">
+                    <summary>
+                      <span>{item.title}</span>
+                      <span className="lp-plus" />
+                    </summary>
+                    <div className="lp-diag-body">
+                      <DiagProse text={item.intro} />
+                      <DiagBullets items={item.points} />
+                      {item.subIntro && (
+                        <p style={{ margin: '16px 0 0', fontSize: 15, lineHeight: 1.6, color: 'var(--text-secondary)' }}>
+                          {item.subIntro}
+                        </p>
+                      )}
+                      {item.subPoints && item.subPoints.length > 0 && <DiagBullets items={item.subPoints} />}
+                      {item.note && (
+                        <p style={{ margin: '16px 0 0', fontSize: 14.5, lineHeight: 1.6, color: 'var(--text-primary)', fontWeight: 600 }}>
+                          {item.note}
+                        </p>
+                      )}
+                      {resultLines.length > 0 && (
+                        <div style={{ marginTop: 18, padding: '14px 16px', borderRadius: 12, background: 'var(--accent-weak)', borderLeft: '3px solid var(--accent)' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.05em', textTransform: 'uppercase', color: 'var(--accent)' }}>
+                            {c.diagnostics.resultLabel}
+                          </span>
+                          {resultLines.length > 1 ? (
+                            <ul style={{ margin: '8px 0 0', padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                              {resultLines.map((line, j) => (
+                                <li key={j} style={{ display: 'flex', gap: 9, fontSize: 14.5, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                                  <span aria-hidden style={{ color: 'var(--accent)', flexShrink: 0, lineHeight: 1.55 }}>•</span>
+                                  <span>{line}</span>
+                                </li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <p style={{ margin: '6px 0 0', fontSize: 14.5, lineHeight: 1.55, color: 'var(--text-primary)' }}>
+                              {resultLines[0]}
+                            </p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </details>
+                );
+              })}
+            </div>
+
+            <div style={{ marginTop: 28, display: 'flex', justifyContent: 'flex-end' }}>
+              <a href="#lead" className="btn btn-primary btn-sm" onClick={() => setDiagOpen(false)} style={{ boxShadow: 'var(--shadow-blue)' }}>
+                {c.nav.cta}
+              </a>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

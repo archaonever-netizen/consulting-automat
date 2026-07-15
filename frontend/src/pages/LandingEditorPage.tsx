@@ -804,9 +804,15 @@ export default function LandingEditorPage() {
           <StringListEditor label="Что входит" {...bind(['product', 'included'])} multiline />
         </Section>
 
-        <Section title="Диагностика и описание" hidden={c.hidden.diagnostics} onToggleHidden={() => toggleHidden('diagnostics')}>
-          <TextInput label="Надзаголовок" {...bind(['diagnostics', 'eyebrow'])} />
-          <TextInput label="Заголовок" {...bind(['diagnostics', 'title'])} multiline />
+        <Section title="Диагностика (интерактивная карточка)" hidden={c.hidden.diagnostics} onToggleHidden={() => toggleHidden('diagnostics')}>
+          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--ink-3)' }}>
+            Не отдельный раздел: подробности открываются в модальном окне по клику на карточку
+            «Диагностика и выбор управленческого блока» в разделе «Как это работает». «Убрать с сайта»
+            отключает интерактив (карточка остаётся статичной).
+          </p>
+          <TextInput label="Надзаголовок (в модалке)" {...bind(['diagnostics', 'eyebrow'])} />
+          <TextInput label="Заголовок (в модалке)" {...bind(['diagnostics', 'title'])} multiline />
+          <TextInput label="Ссылка-CTA на карточке (напр. «Что входит в диагностику»)" {...bind(['diagnostics', 'cardCta'])} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
             <TextInput label="Стоимость — подпись" {...bind(['diagnostics', 'priceLabel'])} />
             <TextInput label="Стоимость — значение" {...bind(['diagnostics', 'priceValue'])} />

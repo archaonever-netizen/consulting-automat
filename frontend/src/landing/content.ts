@@ -188,6 +188,9 @@ export interface LandingContent {
   diagnostics: {
     eyebrow: string;
     title: string;
+    // Подпись-ссылка на интерактивной карточке «Как это работает» (шаг
+    // «Диагностика…»), открывающей подробности диагностики в модальном окне.
+    cardCta: string;
     priceLabel: string;
     priceValue: string;
     priceNote: string;
@@ -442,6 +445,7 @@ export const defaultLandingContent: LandingContent = {
   diagnostics: {
     eyebrow: 'Диагностика и описание',
     title: 'Комплексная диагностика системы управления, процессов и продаж',
+    cardCta: 'Что входит в диагностику',
     priceLabel: 'Стоимость услуги',
     priceValue: '890 000 ₽',
     priceNote:

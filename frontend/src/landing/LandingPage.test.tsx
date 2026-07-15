@@ -14,11 +14,12 @@ describe('LandingPage', () => {
     expect(html).toContain(d.pain.points[0]);
     expect(html).toContain(d.how.steps[0].title);
     expect(html).toContain(d.product.priceValue);
-    // Раздел «Диагностика»: заголовок, стоимость и первый выпадающий блок с пунктом.
-    expect(html).toContain(d.diagnostics.title);
-    expect(html).toContain(d.diagnostics.priceValue);
-    expect(html).toContain(d.diagnostics.items[0].title);
-    expect(html).toContain(d.diagnostics.items[0].points[0]);
+    // «Диагностика» — интерактивная карточка в «Как это работает»: в статической
+    // разметке виден CTA карточки; сама детализация открывается в модалке по клику,
+    // поэтому её текста в SSR-выводе быть не должно.
+    expect(html).toContain(d.diagnostics.cardCta);
+    expect(html).not.toContain(d.diagnostics.priceValue);
+    expect(html).not.toContain(d.diagnostics.items[0].points[0]);
     expect(html).toContain(d.proof.metricsRows[0].label);
     expect(html).toContain(d.objections.items[0].q);
     // Блок «Кейсы клиентов» (заголовок + название кейса + пункты + заголовок результата).
